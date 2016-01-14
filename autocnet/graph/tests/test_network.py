@@ -28,6 +28,12 @@ class TestCandidateGraph(unittest.TestCase):
         self.assertEqual(sorted(self.graph.nodes()), sorted(truth))
 
     def test_add_image_fail(self):
+        import numpy as np
+        import scipy.misc
+        print(dir(scipy.misc))
+        print(scipy.__version__)
+        scipy.misc.bytescale(np.arange(100).reshape(10,10))
+
         self.assertRaises(TypeError, self.graph.add_image, [1, 2, 3])
 
     def test_adjacency_to_json(self):
@@ -37,5 +43,5 @@ class TestCandidateGraph(unittest.TestCase):
     def tearDown(self):
         try:
             os.remove('test_adjacency_to_json.json')
-        except:
+        except FileExistsError:
             pass
