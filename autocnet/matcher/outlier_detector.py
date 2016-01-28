@@ -148,3 +148,34 @@ def compute_homography(kp1, kp2, outlier_algorithm=cv2.RANSAC, reproj_threshold=
                                                      reproj_threshold)
     mask = mask.astype(bool)
     return transformation_matrix, mask
+
+def homography_test(kp1, kp2, homography, threshold=3.0):
+    """
+    Utilize the transformation matrix (homography) to check whether
+    keypoint one (`kp1`) to keypoint two (`kp2`).  If the point is within
+    threshold units (where the unit is agnositic and a function of the
+    image pixel size) return true.
+
+    Parameters
+    ----------
+    kp1 : list
+          of x, y coordinates
+    kp2 : list
+          of x, y coordinates
+
+    homography : ndarray
+                 3x3 transformation matrix
+
+    threshold : float
+                The threshold within which true is returned
+
+    Returns
+    -------
+     : bool
+       True if within the threshold, else False
+    """
+    kp1 = kp1[::-1]
+    kp2 = kp2[::-1]
+    kp1 = np.array([*kp1, 1])
+    kp2 = np.array([*kp2, 1])
+    print(kp1, np.dot(kp1, homography), kp2)

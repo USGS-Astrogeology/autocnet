@@ -237,7 +237,6 @@ class CandidateGraph(nx.Graph):
 
             transformation_matrix, ransac_mask = od.compute_homography(s_coords,
                                                                        d_coords)
-
             ransac_mask = ransac_mask.ravel()
             # Convert the truncated RANSAC mask back into a full length mask
             if clean_keys:
@@ -245,6 +244,17 @@ class CandidateGraph(nx.Graph):
             else:
                 mask = ransac_mask
 
+            # Compute the error in the homography
+            s_trans = np.hstack((s_coords[::-1],np.ones(s_coords.shape[0]).reshape(-1,1))).T
+            s_trans = np.dot(transformation_matrix, s_trans).T
+
+            #Normalize the error
+            for i in range(3):
+                s_trans[i] /= s_trans[2]
+
+            d_trans = np.hstack((d_coords[::-1], np.ones(d_coords.shape[0]).reshape(-1,1)))
+
+            attributes['homography_error'] = np.sqrt(np.sum((d_trans - s_trans)**2, axis=1))
             attributes['homography'] = transformation_matrix
             attributes['ransac'] = mask
 
