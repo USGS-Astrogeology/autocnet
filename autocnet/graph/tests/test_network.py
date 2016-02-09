@@ -73,6 +73,6 @@ class TestNode(unittest.TestCase):
     def test_convex_hull_ratio_fail(self):
         # Convex hull computation is checked lower in the hull computation
         node = self.graph.node[0]
-        self.assertRaises(AttributeError,node.convex_hull_ratio)
+        self.assertRaises(AttributeError, node.coverage_ratio)
 
 

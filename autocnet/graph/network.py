@@ -3,6 +3,7 @@ import os
 import networkx as nx
 import pandas as pd
 import cv2
+from pysal.cg.shapes import Polygon
 import numpy as np
 
 from scipy.misc import bytescale
@@ -10,7 +11,7 @@ from scipy.misc import bytescale
 from autocnet.control.control import C
 from autocnet.fileio import io_json
 from autocnet.fileio.io_gdal import GeoDataset
-from autocnet.matcher import feature_extractor as fe # extract features from image
+from autocnet.matcher import feature_extractor as fe
 from autocnet.matcher import outlier_detector as od
 from autocnet.matcher import subpixel as sp
 from autocnet.cg.cg import convex_hull_ratio, overlapping_polygon_area
@@ -99,7 +100,7 @@ class Edge(object):
         if hasattr(self, 'matches'):
             matches = self.matches
         else:
-            raise(AttributeError, 'Matches have not been computed for this edge')
+            raise AttributeError('Matches have not been computed for this edge')
 
         if clean_keys:
             mask = np.prod([self._mask_arrays[i] for i in clean_keys], axis=0, dtype=np.bool)
@@ -192,13 +193,14 @@ class Edge(object):
                                                                              'correlation'])
         self.masks = ('subpixel', mask)
 
-    def convex_hull_coverage(self, clean_keys=[]):
+    def coverage_ratio(self, clean_keys=[]):
         """
         Compute the ratio $area_{convexhull} / area_{imageoverlap}$.
 
         Returns
         -------
         ratio : float
+                The ratio $area_{convexhull} / area_{imageoverlap}$
         """
         if self.homography is None:
             raise AttributeError('A homography has not been computed. Unable to determine image overlap.')
@@ -214,10 +216,10 @@ class Edge(object):
         if len(keypoints) < 3:
             raise ValueError('Convex hull computation requires at least 3 measures.')
 
-        # TODO: Ideal area is mocked in
-        ideal_area = self.compute_homography_overlap()
+        source_geom, proj_geom, ideal_area = self.compute_homography_overlap()
 
         ratio = convex_hull_ratio(keypoints, ideal_area)
+        return ratio
 
     def compute_homography_overlap(self):
         """
@@ -226,13 +228,34 @@ class Edge(object):
 
         Returns
         -------
+        source_geom : object
+                      PySAL Polygon object of the source pixel bounding box
+
+        projected_geom : object
+                         PySAL Polygon object of the destination geom projected
+                         into the source reference system using the current
+                         homography
+
         area : float
                The estimated area
         """
-        return 1.0
 
-    def plot(self, clean_keys=[], **kwargs):
-        return plot_edge(self, clean_keys=clean_keys, **kwargs)
+        source_geom = self.source.handle.pixel_polygon
+        destination_geom = self.destination.handle.pixel_polygon
+
+        # Project using the homography
+        vertices_to_project = destination_geom.vertices
+        for i, v in enumerate(vertices_to_project):
+            vertices_to_project[i] = tuple(np.array([v[0], v[1], 1]).dot(self.homography)[:2])
+        projected_geom = Polygon(vertices_to_project)
+
+        # Estimate the overlapping area
+        area = overlapping_polygon_area([source_geom, projected_geom])
+
+        return source_geom, projected_geom, area
+
+    def plot(self, ax=None, clean_keys=[], **kwargs):
+        return plot_edge(self, ax=ax, clean_keys=clean_keys, **kwargs)
 
     def update(self, *args):
         # Added for NetworkX
@@ -329,7 +352,7 @@ class Node(object):
         mask = od.adaptive_non_max_suppression(self.keypoints,nfeatures,robust)
         self.masks = ('anms', mask)
 
-    def convex_hull_ratio(self, clean_keys=[]):
+    def coverage_ratio(self, clean_keys=[]):
         """
         Compute the ratio $area_{convexhull} / area_{total}$
 

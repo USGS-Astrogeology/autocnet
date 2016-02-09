@@ -1,5 +1,6 @@
 import os
 
+from pysal.cg.shapes import Polygon
 import numpy as np
 import gdal
 import osr
@@ -205,6 +206,25 @@ class GeoDataset(object):
             self._xy_extent = [(minx, miny), (maxx, maxy)]
 
         return self._xy_extent
+
+    @property
+    def pixel_polygon(self):
+        """
+        A bounding polygon in pixel space
+
+        Returns
+        -------
+        : object
+          A PySAL Polygon object
+        """
+        if not getattr(self, '_pixel_polygon', None):
+            (minx, miny), (maxx, maxy) = self.xy_extent
+            ul = maxx, miny
+            ll = minx, miny
+            lr = minx, maxy
+            ur = maxx, maxy
+            self._pixel_polygon = Polygon([ul, ll, lr, ur, ul])
+        return self._pixel_polygon
 
     @property
     def pixel_area(self):

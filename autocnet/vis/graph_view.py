@@ -1,11 +1,10 @@
-import autocnet
-import math # plotAdjacencyGraphFeatures
-import matplotlib # plotting
-import numpy as np # plotFeatures
+import math
+import numpy as np
 
-from autocnet.examples import get_path # get file path
-from autocnet.fileio.io_gdal import GeoDataset # set handle, get image as array
-from matplotlib import pyplot as plt # plotting 
+from autocnet.examples import get_path
+from autocnet.fileio.io_gdal import GeoDataset
+from matplotlib import pyplot as plt
+from matplotlib.patches import Polygon as mplPolygon
 
 
 def plot_node(node, ax=None, clean_keys=[], **kwargs):
@@ -25,6 +24,12 @@ def plot_node(node, ax=None, clean_keys=[], **kwargs):
 
     kwargs : dict
              of MatPlotLib plotting options
+
+    Returns
+    -------
+    ax : object
+         A MatPlotLib axes object.  Either the argument passed in
+         or a new object
     """
 
     if ax is None:
@@ -93,6 +98,12 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
 
     image_kwargs : dict
                    of MatPlotLib arguments to be applied to the image rendering
+
+    Returns
+    -------
+    ax : object
+         A MatPlotLib axes object.  Either the argument passed in
+         or a new object
     """
 
     if ax is None:
@@ -171,7 +182,6 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
         ax.plot((l[0][0], l[1][0]), (l[0][1], l[1][1]), color=color, **line_kwargs)
 
     return ax
-
 
 def plotAdjacencyGraphFeatures(graph, pointColorAndHatch='b.', featurePointSize=7):
     """

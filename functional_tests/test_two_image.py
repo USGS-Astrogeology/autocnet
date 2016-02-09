@@ -53,7 +53,7 @@ class TestTwoImageMatching(unittest.TestCase):
         truth_ratios = [0.95351579,
                         0.93595664]
         for i, node in cg.nodes_iter(data=True):
-            ratio = node.convex_hull_ratio()
+            ratio = node.coverage_ratio()
             self.assertIn(round(ratio,8), truth_ratios)
         # Step: apply Adaptive non-maximal suppression
         for i, node in cg.nodes_iter(data=True):
@@ -83,6 +83,10 @@ class TestTwoImageMatching(unittest.TestCase):
 
         # Step: Compute the homographies and apply RANSAC
         cg.compute_homographies(clean_keys=['symmetry', 'ratio'])
+
+        # Step: Compute the overlap ratio and coverage ratio
+        for s, d, edge in cg.edges_iter(data=True):
+            ratio = edge.coverage_ratio(clean_keys=['symmetry', 'ratio'])
 
         # Step: Compute subpixel offsets for candidate points
         cg.compute_subpixel_offsets(clean_keys=['ransac'])

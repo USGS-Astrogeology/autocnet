@@ -2,6 +2,7 @@ numpy>=1.10.0
 scipy>=0.17.0
 gdal>=2.0
 pvl>=0.2.0
+pysal>=1.11.0
 protobuf==3.0.0b2
 networkx
 pandas

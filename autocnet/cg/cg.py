@@ -1,5 +1,7 @@
+import json
 import ogr
 from scipy.spatial import ConvexHull
+
 
 def convex_hull_ratio(points, ideal_area):
     """
@@ -23,9 +25,23 @@ def convex_hull_ratio(points, ideal_area):
 
 
 def overlapping_polygon_area(polys):
-    intersection = ogr.CreateGeometryFromWkt(polys[0])
-    for p in polys[1:]:
-        geom = ogr.CreateGeometryFromWkt(p)
-        intersection = intersection.Intersection(geom).ExportToWkt()
+    """
 
+    Parameters
+    ----------
+    polys : list
+            of polygon object with a __geo_interface__
+
+    Returns
+    -------
+    area : float
+           The area of the intersecting polygons
+    """
+    geom = json.dumps(polys[0].__geo_interface__)
+    intersection = ogr.CreateGeometryFromJson(geom)
+    for p in polys[1:]:
+        geom = json.dumps(p.__geo_interface__)
+        geom = ogr.CreateGeometryFromJson(geom)
+        intersection = intersection.Intersection(geom)
     area = intersection.GetArea()
+    return area
