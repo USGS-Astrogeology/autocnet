@@ -1,0 +1,20 @@
+{
+	"apollo15": {
+		"metric": "apollo15MetricSerialNumber.trn",
+		"panoramic": "apollo15PanoramicSerialNumber.trn"
+	},
+	"apollo16": {
+		"metric": "apollo16MetricSerialNumber.trn",
+		"panoramic": "apollo16PanoramicSerialNumber.trn"
+	},
+	"apollo17": {
+		"metric": "apollo17MetricSerialNumber.trn",
+		"panoramic": "apollo17PanoramicSerialNumber.trn"
+	},
+	"clementine1": {
+		"hires": "clementine1HiresSerialNumber.trn",
+		"lwir": "clementine1LwirSerialNumber.trn",
+		"nir": "clementine1NirSerialNumber.trn",
+		"uvvis": "clementine1UvvisSerialNumber.trn"
+	}
+}
