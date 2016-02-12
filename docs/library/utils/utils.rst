@@ -8,3 +8,7 @@ The :mod:`utils.utils` module includes a collection of utility functions
 .. automodule:: autocnet.utils.utils
    :synopsis:
    :members:
+
+.. automodule:: autocnet.utils.serial_numbers
+   :synopsis:
+   :members:

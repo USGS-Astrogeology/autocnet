@@ -27,21 +27,21 @@ def lookup_sn_translation_file(cube_obj):
     Returns
     -------
      : str
-       The base file name for the default translation table (with extension).
+       The full file name (with absolute path) for the default translation table.
 
     Raises
     ------
-     : NotImplementedError
+    NotImplementedError
        This error is raised when a matching (SpacecraftName, InstrumentId) combination is not
        found in the JSON look up file.
     """
     try:
         inst_group = utils.find_in_dict(cube_obj, 'Instrument')
         sc_name    = inst_group['SpacecraftName']
-        inst_id    = str(inst_group['InstrumentId'])
+        inst_id    = inst_group['InstrumentId']
         spacecraft = sc_name.lower().strip().replace("_","").replace(" ","")
         instrument = inst_id.lower().strip().replace("_","").replace(" ","")
-        return SN_TRANSLATION_FILE_LOOKUP[spacecraft][instrument]
+        return get_path(SN_TRANSLATION_FILE_LOOKUP[spacecraft][instrument])
     except:
         raise NotImplementedError("Unable to find matching (SpacecraftName, InstrumentId) in "
                                   "the translation file lookup dict. This cube requires a "
@@ -65,14 +65,15 @@ class SerialNumberDecoder(PVLDecoder):
         return value.decode('utf-8')
 
 
-def get_serial_number(cube_file, translation_file='None'):
+def get_serial_number(label_file, translation_file='None'):
     """
-    Retrieves the serial number for the given ISIS cube file.
+    Retrieves the serial number for the given ISIS cube.
 
     Parameters
     ----------
-    cube_file : str
-                Full path to the ISIS cube file.
+    label_file : str
+                Full path to the file containing a valid ISIS cube label. 
+                This may be a cube or detached label.
 
     translation_file: str
                       Name of the ISIS serial number translation file to be used. If 'None' is 
@@ -85,23 +86,33 @@ def get_serial_number(cube_file, translation_file='None'):
      : str
        The ISIS compliant serial number associated with the given cube.
 
+
+    Raises
+    ------
+    ValueError
+       This error occurs when the translation file has keywords that don't exist in the 
+       specified location (InputGroup) of the given ISIS cube.
     """
 
-    label = pvl.load(cube_file, cls=SerialNumberDecoder)
+    label = pvl.load(label_file, cls=SerialNumberDecoder)
     cube_obj = utils.find_in_dict(label, 'IsisCube')
 
     if translation_file == 'None':
         translation_file = lookup_sn_translation_file(cube_obj)
 
-    translation = pvl.load(get_path(translation_file))
+    translation = pvl.load(translation_file)
     sn = []
     for sn_group in translation:
         input_group = utils.find_in_dict(sn_group[1], 'InputGroup')
         group_location = input_group.split(',')
         label_group = utils.find_in_dict(cube_obj, group_location[-1])
-
         input_key = utils.find_in_dict(sn_group[1], 'InputKey')
         label_value = utils.find_in_dict(label_group, input_key)
+        if not isinstance(label_value, str):
+            raise ValueError("Invalid ISIS cube label or translation file. Serial number "
+                             "translation file keyword [" + input_key + "] was not found in "
+                             "the ISIS cube label.")
+             
         sn_keyword_name = sn_group[0]
         keywords = sn_group[1]
         for keyword in keywords:
