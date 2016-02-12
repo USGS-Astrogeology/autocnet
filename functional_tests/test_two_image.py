@@ -64,6 +64,7 @@ class TestTwoImageMatching(unittest.TestCase):
         cg.match_features(k=5)
 
         for source, destination, edge in cg.edges_iter(data=True):
+
             # Perform the symmetry check
             edge.symmetry_check()
             self.assertIn(edge._mask_arrays['symmetry'].sum(), range(430, 461))
@@ -87,7 +88,7 @@ class TestTwoImageMatching(unittest.TestCase):
 
         # Step: Create a fromlist to go with the cnet and write it to a file
         filelist = cg.to_filelist()
-        write_filelist(filelist)
+        write_filelist(filelist, path="fromlis.lis")
 
         # Step update the serial numbers
         nid_to_serial = {}
