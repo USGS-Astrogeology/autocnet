@@ -112,7 +112,7 @@ pygments_style = 'sphinx'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'default'
+html_theme = 'classic'
 
 # Theme options are theme-specific and customize the look and feel of a
 # theme further.  For a list of options available for each theme, see the
@@ -294,8 +294,37 @@ class Mock(MagicMock):
         return Mock()
 
 # All imported libraries should be added to this mock modules list.
-MOCK_MODULES = ['proj4', 'numpy', 'pandas', 'scipy', 'osgeo', 'cv2',
-                'scikit-image', 'skimage', 'skimage.feature', 'scipy', 'scipy.misc']
+MOCK_MODULES = ['cv2',
+                'numpy',
+                'numpy.linalg',
+                'numpy.random',
+                'osgeo',
+                'osgeo.gdal',
+                'osgeo.osr',
+                'pandas',
+                'proj4',
+                'scikit-image',
+                'skimage',
+                'skimage.feature', 
+                'scipy',
+                'scipy.cluster',
+                'scipy.cluster.vq',
+                'scipy.constants',
+                'scipy.io',
+                'scipy.misc',
+                'scipy.ndimage',
+                'scipy.ndimage.interpolation',
+                'scipy.optimize',
+                'scipy.sparse',
+                'scipy.sparse.csr',
+                'scipy.sparse.linalg',
+                'scipy.spatial',
+                'scipy.spatial.distance',
+                'scipy.special',
+                'scipy.stats',
+                'scipy.stats.mstats',
+                'scipy.stats.stats'
+               ]
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
 
 # NumpyDoc Options
