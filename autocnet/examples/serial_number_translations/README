@@ -1,0 +1,24 @@
+In this directory:
+
+sn_translation_file_lookup.json
+    Created 2016/02/10 - Jeannie Backer
+    This JSON file is used to find the appropriate default ISIS translation file for a given
+    (SpacecraftName, InstrumentId) combination. When appending this dictionary, the SpacecraftName
+    and InstrumentId should be a modified version of the expected values for these keywords in an
+    ISIS cube. The modifications are added in an attempt to simplify look up, since variations
+    exist for some missions and instruments. The modifications are: (1) all lowercase
+    (2) all spaces and underscores removed. 
+
+
+serial_numbers.py
+    Created 2016/02/10 - Jeannie Backer
+    This script is used to copy the highest version of ISIS translation files from the ISIS data
+    area to the autocnet area. The copied files are renamed to include the mission directory name
+    and to exclude the original version number so the JSON dictionary doesn't have to be updated
+    every time a translation file version is increased. These files have also been modified from
+    the orginals by removing the 'Auto' flags since they are not needed and the python pvl reader
+    does not know how to parse them.
+
+
+serial number translation files
+    Last updated 2016/02/10 - Jeannie Backer
