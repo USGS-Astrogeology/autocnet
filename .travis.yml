@@ -50,7 +50,6 @@ after_success:
   - coveralls
 
 notifications:
-<<<<<<< Updated upstream
   webhooks:
     urls:
       - https://webhooks.gitter.im/e/6cbe4b65fff6764ed80f
@@ -66,7 +65,6 @@ notifications:
           - acpaquette@usgs.gov
       on_success: always
       on_failure: always
-=======
     email:
         recipients:
             - jlaura@usgs.gov
@@ -76,4 +74,3 @@ notifications:
             - acpaquette@usgs.gov
         on_success: always
         on_failure: always
->>>>>>> Stashed changes
