@@ -1,9 +1,9 @@
-from osgeo import gdal
 from osgeo import osr
 
 import_options = ['ImportFromWkt', 'ImportFromProj4',
                   'ImportFromEPSG', 'ImportFromUSGS',
                   'ImportFromXML']
+
 
 def extract_projstring(proj_string):
     """
@@ -30,10 +30,11 @@ def extract_projstring(proj_string):
         except:
             pass
 
-    #Morph through ESRI so that we can get a proj4 string out.
+    # Morph through ESRI so that we can get a proj4 string out.
     srs.MorphToESRI()
     srs.MorphFromESRI()
     return srs
+
 
 def get_standard_parallels(srs):
     """
@@ -52,8 +53,10 @@ def get_standard_parallels(srs):
 
     parallels = [None, None]
     for i in range(2):
-        parallels[i] = srs.GetProjParm('Standard_Parallel_{}'.format(i+1), 0.0)
+        parallels[i] = srs.GetProjParm(
+            'Standard_Parallel_{}'.format(i + 1), 0.0)
     return parallels
+
 
 def get_central_meridian(srs):
     """
@@ -71,6 +74,7 @@ def get_central_meridian(srs):
     """
 
     return srs.GetProjParm('central_meridian', 0.0)
+
 
 def get_spheroid(srs):
     """
@@ -93,6 +97,7 @@ def get_spheroid(srs):
     invflattening = srs.GetInvFlattening()
     return semimajor, semiminor, invflattening
 
+
 def get_projection_name(srs):
     """
     Extract the projection name from a
@@ -110,6 +115,7 @@ def get_projection_name(srs):
     """
     proj_name = srs.GetAttrValue("PROJECTION", 0)
     return proj_name
+
 
 def get_false_easting(srs):
     """
@@ -129,6 +135,7 @@ def get_false_easting(srs):
 
     return srs.GetProjParm('False_Easting', 0)
 
+
 def get_false_northing(srs):
     """
     Extract the false northing parameter from a
@@ -147,6 +154,7 @@ def get_false_northing(srs):
 
     return srs.GetProjParm('False_Northing', 0)
 
+
 def get_scale_factor(srs):
     """
     Extract the scale factor, k, from a spatial reference system (if present)
@@ -163,6 +171,7 @@ def get_scale_factor(srs):
     """
 
     return srs.GetProjParm('scale_factor', 1.0)
+
 
 def get_latitude_of_origin(srs):
     """
@@ -181,5 +190,3 @@ def get_latitude_of_origin(srs):
     """
 
     return srs.GetProjParm('latitude_of_origin', 90.0)
-
-

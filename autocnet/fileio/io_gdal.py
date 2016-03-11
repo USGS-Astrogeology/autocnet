@@ -16,16 +16,16 @@ from autocnet.fileio import extract_metadata
 gdal.UseExceptions()
 
 NP2GDAL_CONVERSION = {
-  "uint8": 1,
-  "int8": 1,
-  "uint16": 2,
-  "int16": 3,
-  "uint32": 4,
-  "int32": 5,
-  "float32": 6,
-  "float64": 7,
-  "complex64": 10,
-  "complex128": 11,
+    "uint8": 1,
+    "int8": 1,
+    "uint16": 2,
+    "int16": 3,
+    "uint32": 4,
+    "int32": 5,
+    "float32": 6,
+    "float64": 7,
+    "complex64": 10,
+    "complex128": 11,
 }
 
 GDAL2NP_CONVERSION = {}
@@ -55,7 +55,7 @@ class GeoDataset(object):
                  The bounding box of the image in lat/lon space
 
     geotransform : object
-                   Geotransform reference OGR object as an array of size 6 containing the affine 
+                   Geotransform reference OGR object as an array of size 6 containing the affine
                    transformation coefficients for transforming from raw sample/line to projected x/y.
                    xproj = geotransform[0] + sample * geotransform[1] + line * geotransform[2]
                    yproj = geotransform[3] + sample * geotransform[4] + line * geotransform[5]
@@ -64,7 +64,7 @@ class GeoDataset(object):
                                    Geospatial coordinate system OSR object.
 
     latlon_extent : list
-                    of two tuples containing the latitide/longitude boundaries. 
+                    of two tuples containing the latitide/longitude boundaries.
                     This list is in the form [(lowerlat, lowerlon), (upperlat, upperlon)].
 
     pixel_width : float
@@ -90,9 +90,9 @@ class GeoDataset(object):
                 Note: This is the third value geotransform array.
 
     xy_extent : list
-                of two tuples containing the sample/line boundaries. 
-                The first value is the upper left corner of the upper left pixel and 
-                the second value is the lower right corner of the lower right pixel. 
+                of two tuples containing the sample/line boundaries.
+                The first value is the upper left corner of the upper left pixel and
+                the second value is the lower right corner of the lower right pixel.
                 This list is in the form [(minx, miny), (maxx, maxy)].
 
     y_rotation : float
@@ -100,26 +100,26 @@ class GeoDataset(object):
                  Note: This is the fifth value geotransform array.
 
     coordinate_transformation : object
-                                The coordinate transformation from the spatial reference system to 
+                                The coordinate transformation from the spatial reference system to
                                 the geospatial coordinate system.
-        
+
     inverse_coordinate_transformation : object
-                                        The coordinate transformation from the geospatial 
+                                        The coordinate transformation from the geospatial
                                         coordinate system to the spatial reference system.
-        
+
     scale : tuple
-            The name and value of the linear projection units of the spatial reference system. 
+            The name and value of the linear projection units of the spatial reference system.
             This tuple is of type string/float of the form (unit name, value).
             To transform a linear distance to meters, multiply by this value.
             If no units are available ("Meters", 1) will be returned.
-                 
+
     spheroid : tuple
-               The spheroid found in the metadata using the spatial reference system. 
+               The spheroid found in the metadata using the spatial reference system.
                This is of the form (semi-major, semi-minor, inverse flattening).
 
     raster_size : tuple
                   The dimensions of the raster, i.e. (number of samples, number of lines).
-        
+
     central_meridian : float
                        The central meridian of the map projection from the metadata.
 
@@ -133,6 +133,7 @@ class GeoDataset(object):
                 An OGR footprint object
 
     """
+
     def __init__(self, file_name):
         """
         Initialization method to set the file name and open the file using GDAL.
@@ -146,15 +147,16 @@ class GeoDataset(object):
         self.file_name = file_name
         self.dataset = gdal.Open(file_name)
         if self.dataset is None:
-          raise IOError('File not found :', file_name)
-    
+            raise IOError('File not found :', file_name)
+
     def __repr__(self):
         return os.path.basename(self.file_name)
 
     @property
     def base_name(self):
         if not getattr(self, '_base_name', None):
-            self._base_name = os.path.splitext(os.path.basename(self.file_name))[0]
+            self._base_name = os.path.splitext(
+                os.path.basename(self.file_name))[0]
         return self._base_name
 
     @property
@@ -171,7 +173,8 @@ class GeoDataset(object):
     @property
     def standard_parallels(self):
         if not getattr(self, '_standard_parallels', None):
-            self._standard_parallels = extract_metadata.get_standard_parallels(self.spatial_reference)
+            self._standard_parallels = extract_metadata.get_standard_parallels(
+                self.spatial_reference)
         return self._standard_parallels
 
     @property
@@ -188,9 +191,10 @@ class GeoDataset(object):
             try:
                 self._srs.MorphToESRI()
                 self._srs.MorphFromESRI()
-            except: pass #pragma: no cover
+            except:
+                pass  # pragma: no cover
 
-            #Setup the GCS
+            # Setup the GCS
             self._gcs = self._srs.CloneGeogCS()
         return self._srs
 
@@ -236,7 +240,8 @@ class GeoDataset(object):
                 start_polygon_byte = find_in_dict(polygon_pvl, 'StartByte')
                 num_polygon_bytes = find_in_dict(polygon_pvl, 'Bytes')
 
-                # I too dislike the additional open here.  Not sure a good option
+                # I too dislike the additional open here.  Not sure a good
+                # option
                 with open(self.file_name, 'r+') as f:
                     f.seek(start_polygon_byte - 1)
                     # Sloppy unicode to string because GDAL pukes on unicode
@@ -325,21 +330,22 @@ class GeoDataset(object):
     @property
     def coordinate_transformation(self):
         if not getattr(self, '_ct', None):
-            self._ct = osr.CoordinateTransformation(self.spatial_reference,
-                                                    self.geospatial_coordinate_system)
+            self._ct = osr.CoordinateTransformation(
+                self.spatial_reference, self.geospatial_coordinate_system)
         return self._ct
 
     @property
     def inverse_coordinate_transformation(self):
         if not getattr(self, '_ict', None):
-                       self._ict = osr.CoordinateTransformation(self.geospatial_coordinate_system,
-                                                                self.spatial_reference)
+            self._ict = osr.CoordinateTransformation(
+                self.geospatial_coordinate_system, self.spatial_reference)
         return self._ict
 
     @property
     def no_data_value(self):
         if not getattr(self, '_no_data_value', None):
-            self._no_data_value = self.dataset.GetRasterBand(1).GetNoDataValue()
+            self._no_data_value = self.dataset.GetRasterBand(
+                1).GetNoDataValue()
         return self._no_data_value
 
     @property
@@ -353,19 +359,23 @@ class GeoDataset(object):
     @property
     def spheroid(self):
         if not getattr(self, '_spheroid', None):
-            self._spheroid = extract_metadata.get_spheroid(self.spatial_reference)
+            self._spheroid = extract_metadata.get_spheroid(
+                self.spatial_reference)
         return self._spheroid
 
     @property
     def raster_size(self):
         if not getattr(self, '_raster_size', None):
-            self._raster_size = (self.dataset.RasterXSize, self.dataset.RasterYSize)
+            self._raster_size = (
+                self.dataset.RasterXSize,
+                self.dataset.RasterYSize)
         return self._raster_size
 
     @property
     def central_meridian(self):
         if not getattr(self, '_central_meridian', None):
-            self._central_meridian = extract_metadata.get_central_meridian(self.spatial_reference)
+            self._central_meridian = extract_metadata.get_central_meridian(
+                self.spatial_reference)
         return self._central_meridian
 
     def pixel_to_latlon(self, x, y):
@@ -383,7 +393,7 @@ class GeoDataset(object):
         -------
         lat, lon : tuple
                    (Latitude, Longitude) corresponding to the given (x,y).
-        
+
         """
         try:
             geotransform = self.geotransform
@@ -410,10 +420,11 @@ class GeoDataset(object):
         -------
         x, y : tuple
                (Sample, line) position corresponding to the given (latitude, longitude).
-        
+
         """
         geotransform = self.geotransform
-        upperlat, upperlon, _ = self.inverse_coordinate_transformation.TransformPoint(lon, lat)
+        upperlat, upperlon, _ = self.inverse_coordinate_transformation.TransformPoint(
+            lon, lat)
         x = (upperlat - geotransform[0]) / geotransform[1]
         y = (upperlon - geotransform[3]) / geotransform[5]
         return x, y
@@ -462,7 +473,8 @@ class GeoDataset(object):
             if ystart + pixels[3] > ymax:
                 yextent = ymax - ystart
 
-            array = band.ReadAsArray(xstart, ystart, xextent, yextent).astype(dtype)
+            array = band.ReadAsArray(
+                xstart, ystart, xextent, yextent).astype(dtype)
         return array
 
 
@@ -475,14 +487,14 @@ def array_to_raster(array, file_name, projection=None,
     Parameters
     ----------
     array : ndarray
-            
 
-    file_name : str 
 
-    projection : 
+    file_name : str
+
+    projection :
                  Default projection=None.
 
-    geotransform : object 
+    geotransform : object
                    Default geotransform=None.
 
     outformat : str
@@ -501,7 +513,7 @@ def array_to_raster(array, file_name, projection=None,
         y, x = array.shape
         single = True
 
-    #This is a crappy hard code to 32bit.
+    # This is a crappy hard code to 32bit.
     dataset = driver.Create(file_name, x, y, bands, gdal.GDT_Float64)
 
     if geotransform:
@@ -513,16 +525,16 @@ def array_to_raster(array, file_name, projection=None,
         else:
             dataset.SetProjection(projection.ExportToWkt())
 
-    if single == True:
+    if single:
         bnd = dataset.GetRasterBand(1)
-        if ndv != None:
+        if ndv is not None:
             bnd.SetNoDataValue(ndv)
         bnd.WriteArray(array)
         dataset.FlushCache()
     else:
         for i in range(1, bands + 1):
             bnd = dataset.GetRasterBand(i)
-            if ndv != None:
+            if ndv is not None:
                 bnd.SetNoDataValue(ndv)
-            bnd.WriteArray(array[:,:,i - 1])
+            bnd.WriteArray(array[:, :, i - 1])
             dataset.FlushCache()

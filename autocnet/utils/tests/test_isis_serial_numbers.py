@@ -4,9 +4,10 @@ import unittest
 from autocnet.examples import get_path
 
 import sys
-sys.path.insert(0, os.path.abspath('..'))
 
 from .. import isis_serial_numbers
+
+sys.path.insert(0, os.path.abspath('..'))
 
 
 class TestIsisSerials(unittest.TestCase):

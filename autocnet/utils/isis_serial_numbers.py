@@ -35,7 +35,8 @@ def get_isis_translation(label):
 
     # Grab the spacecraft name and run it through the ISIS lookup
     spacecraft_name = find_in_dict(label, 'SpacecraftName')
-    for row in autocnet.data_session.query(StringToMission).filter(StringToMission.key==spacecraft_name):
+    for row in autocnet.data_session.query(StringToMission).filter(
+            StringToMission.key == spacecraft_name):
         spacecraft_name = row.value.lower()
 
     # Try and pull an instrument identifier
@@ -44,8 +45,9 @@ def get_isis_translation(label):
     except:
         instrumentid = None
     # Grab the translation PVL object using the lookup
-    for row in autocnet.data_session.query(Translations).filter(Translations.mission==spacecraft_name,
-                                                                Translations.instrument==instrumentid):
+    for row in autocnet.data_session.query(Translations).filter(
+            Translations.mission == spacecraft_name,
+            Translations.instrument == instrumentid):
         # Convert the JSON back to a PVL object
         translation = PVLModule(row.translation)
 
@@ -81,7 +83,7 @@ def generate_serial_number(label):
         group = translation[k]
         search_key = group['InputKey']
         search_position = group['InputPosition']
-        search_translation = {group['Translation'][1]:group['Translation'][0]}
+        search_translation = {group['Translation'][1]: group['Translation'][0]}
 
         sub_group = find_nested_in_dict(label, search_position)
         serial_entry = sub_group[search_key]
@@ -100,6 +102,7 @@ class SerialNumberDecoder(pvl.decoder.PVLDecoder):
     A PVL Decoder class to handle cube label parsing for the purpose of creating a valid ISIS
     serial number. Inherits from the PVLDecoder in planetarypy's pvl module.
     """
+
     def cast_unquoated_string(self, value):
         """
         Overrides the parent class's method so that any un-quoted string type value found in the

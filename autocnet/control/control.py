@@ -12,7 +12,7 @@ class CSeries(pd.Series):
     """
     @property
     def _constructor(self):
-        return CSeries # pragma: no cover
+        return CSeries  # pragma: no cover
 
 
 class C(pd.DataFrame):
@@ -51,6 +51,7 @@ class C(pd.DataFrame):
     >>> C = control.C(data, index=multi_index, columns=columns)
 
     """
+
     def __init__(self, *args, **kwargs):
         super(C, self).__init__(*args, **kwargs)
         self._creationdate = strftime("%Y-%m-%d %H:%M:%S", gmtime())
