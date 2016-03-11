@@ -3,8 +3,9 @@ import unittest
 
 from .. import io_utils
 
+
 class TestIoUtils(unittest.TestCase):
-    
+
     def setUp(self):
         pass
 
@@ -13,4 +14,3 @@ class TestIoUtils(unittest.TestCase):
         self.assertTrue(os.path.exists(path))
         io_utils.delete_dir(path)
         self.assertFalse(os.path.exists(path))
-

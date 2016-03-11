@@ -6,7 +6,7 @@ from autocnet.utils.utils import find_in_dict
 from autocnet.spectral.spectra import Spectra
 
 
-#TODO: The spectra should inhert from a SpectraABC, monkey patch smoothing in.
+# TODO: The spectra should inhert from a SpectraABC, monkey patch smoothing in.
 class Spectral_Profiler(object):
 
     """
@@ -38,17 +38,17 @@ class Spectral_Profiler(object):
                   If True, mask the data based on the QA array.
         """
 
-        label_dtype_map = {'IEEE_REAL':'f',
-                        'MSB_INTEGER':'i',
-                        'MSB_UNSIGNED_INTEGER':'u'}
+        label_dtype_map = {'IEEE_REAL': 'f',
+                           'MSB_INTEGER': 'i',
+                           'MSB_UNSIGNED_INTEGER': 'u'}
 
         label = pvl.load(input_data)
-        self._label = label 
+        self._label = label
         with open(input_data, 'rb') as indata:
 
             # Get the offsets
-            ancillary_data_offset = find_in_dict(label, 
-                                    "^ANCILLARY_AND_SUPPLEMENT_DATA").value
+            ancillary_data_offset = find_in_dict(
+                label, "^ANCILLARY_AND_SUPPLEMENT_DATA").value
             wavelength_offset = find_in_dict(label, "^SP_SPECTRUM_WAV").value
             raw_offset = find_in_dict(label, "^SP_SPECTRUM_RAW").value
             ref2_offset = find_in_dict(label, "^SP_SPECTRUM_REF2").value
@@ -57,7 +57,8 @@ class Spectral_Profiler(object):
             qa_offset = find_in_dict(label, "^SP_SPECTRUM_QA").value
             l2d_offset = find_in_dict(label, "^L2D_RESULT_ARRAY").value
 
-            ancillary_data = find_in_dict(label, "ANCILLARY_AND_SUPPLEMENT_DATA")
+            ancillary_data = find_in_dict(
+                label, "ANCILLARY_AND_SUPPLEMENT_DATA")
             nrows = ancillary_data['ROWS']
             ncols = ancillary_data['COLUMNS']
             rowbytes = ancillary_data['ROW_BYTES']
@@ -77,7 +78,8 @@ class Spectral_Profiler(object):
                     datatypes.append(label_dtype_map[entry['DATA_TYPE']])
                     bytelengths.append(entry['BYTES'])
             strbytes = map(str, bytelengths)
-            rowdtype = list(zip(columns, map(''.join, zip(['>'] * ncols, datatypes, strbytes))))
+            rowdtype = list(
+                zip(columns, map(''.join, zip(['>'] * ncols, datatypes, strbytes))))
             d = np.fromstring(indata.read(rowbytes * nrows), dtype=rowdtype,
                               count=nrows)
             self.ancillary_data = pd.DataFrame(d, columns=columns,
@@ -92,24 +94,28 @@ class Spectral_Profiler(object):
 
             assert(ncols == len(columns))
 
-            keys = ["SP_SPECTRUM_WAV","SP_SPECTRUM_RAW", "SP_SPECTRUM_REF1",
+            keys = ["SP_SPECTRUM_WAV", "SP_SPECTRUM_RAW", "SP_SPECTRUM_REF1",
                     "SP_SPECTRUM_REF2", "SP_SPECTRUM_RAD", "SP_SPECTRUM_QA"]
             array_offsets = [wavelength_offset, raw_offset, ref1_offset,
-                            ref2_offset, radiance_offset, qa_offset]
+                             ref2_offset, radiance_offset, qa_offset]
             offsets = dict(zip(keys, array_offsets))
             arrays = {}
             for k, offset in offsets.items():
                 indata.seek(offset - 1)
                 newk = k.split('_')[-1]
-                
+
                 d = find_in_dict(label, k)
                 unit = d['UNIT']
                 lines = d['LINES']
                 scaling_factor = d['SCALING_FACTOR']
-                
-                arr = np.fromstring(indata.read(lines * 296*2), dtype='>H').astype(np.float64)
+
+                arr = np.fromstring(
+                    indata.read(
+                        lines * 296 * 2),
+                    dtype='>H').astype(
+                    np.float64)
                 arr = arr.reshape(lines, -1)
-                
+
                 if isinstance(scaling_factor, float):
                     arr *= scaling_factor
                 arrays[newk] = arr
@@ -118,21 +124,22 @@ class Spectral_Profiler(object):
 
             self.spectra = {}
             for i in range(nrows):
-                self.spectra[i] = pd.DataFrame(index = self.wavelengths,
-                                        columns = ["Raw", "Highlands",
-                                                 "Mare", "Radiance", "QA"])
-                 
+                self.spectra[i] = pd.DataFrame(
+                    index=self.wavelengths, columns=[
+                        "Raw", "Highlands", "Mare", "Radiance", "QA"])
+
                 self.spectra[i]['Raw'] = arrays['RAW'][i]
                 self.spectra[i]['Highlands'] = arrays['REF1'][i]
                 self.spectra[i]['Mare'] = arrays['REF2'][i]
                 self.spectra[i]['Radiance'] = arrays['RAD'][i]
                 self.spectra[i]['QA'] = arrays['QA'][i]
-                #self.spectra[i] = pd.concat([raw, high, self.mare, rad, qa], axis=1)
-                #self.spectra[i] = pd.concat([raw, high, self.mare, rad, qa], axis=1)
-           
+                # self.spectra[i] = pd.concat([raw, high, self.mare, rad, qa], axis=1)
+                # self.spectra[i] = pd.concat([raw, high, self.mare, rad, qa], axis=1)
+
                 if cleaned:
-                    self.spectra[i] = self.spectra[i][self.spectra[i]['QA'] < qa_threshold]
-            
+                    self.spectra[i] = self.spectra[i][
+                        self.spectra[i]['QA'] < qa_threshold]
+
                 self.spectra[i] = Spectra(self.spectra[i])
 
 

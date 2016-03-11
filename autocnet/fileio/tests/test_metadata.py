@@ -1,8 +1,9 @@
 import unittest
 from osgeo import osr
-osr.UseExceptions()
 
 from .. import extract_metadata as em
+osr.UseExceptions()
+
 
 class TestSRSProjectionExtraction(unittest.TestCase):
 
@@ -46,7 +47,9 @@ class TestSRSProjectionExtraction(unittest.TestCase):
         Check that proj4 is not supporting Moon2000_Mercator
         """
         proj4 = self.srs.ExportToProj4()
-        self.assertEqual(proj4, '+proj=merc +lon_0=180 +k=1 +x_0=0 +y_0=0 +a=1737400 +b=1737400 +units=m +no_defs ')
+        self.assertEqual(
+            proj4,
+            '+proj=merc +lon_0=180 +k=1 +x_0=0 +y_0=0 +a=1737400 +b=1737400 +units=m +no_defs ')
 
     def test_scale_factor(self):
         k = em.get_scale_factor(self.srs)

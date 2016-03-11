@@ -39,14 +39,18 @@ install:
   - pip install -r requirements.txt
   - pip install coverage
   - pip install coveralls
+  - pip install flake8
 
 script:
   - nosetests --with-coverage --cover-package=autocnet
+  - flake8 --ignore=E501,W293
+
 
 after_success:
   - coveralls
 
 notifications:
+<<<<<<< Updated upstream
   webhooks:
     urls:
       - https://webhooks.gitter.im/e/6cbe4b65fff6764ed80f
@@ -59,5 +63,17 @@ notifications:
           - dmlytle@usgs.gov
           - jwbacker@usgs.gov
           - krodriguez@usgs.gov
+          - acpaquette@usgs.gov
       on_success: always
       on_failure: always
+=======
+    email:
+        recipients:
+            - jlaura@usgs.gov
+            - kberry@usgs.gov
+            - dmlytle@usgs.gov
+            - jwbacker@usgs.gov
+            - acpaquette@usgs.gov
+        on_success: always
+        on_failure: always
+>>>>>>> Stashed changes

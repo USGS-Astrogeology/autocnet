@@ -5,10 +5,10 @@ import warnings
 
 import cv2
 
-sys.path.append(os.path.abspath('..'))
-
 from .. import matcher
 from autocnet.examples import get_path
+
+sys.path.append(os.path.abspath('..'))
 
 
 class TestMatcher(unittest.TestCase):
@@ -34,11 +34,9 @@ class TestMatcher(unittest.TestCase):
         fmatcher.train()
 
         with warnings.catch_warnings(record=True) as w:
-            fmatcher.query(self.fd['AS15-M-0296_SML.png'][1],0, k=2)
+            fmatcher.query(self.fd['AS15-M-0296_SML.png'][1], 0, k=2)
             self.assertEqual(len(w), 1)
             self.assertEqual(w[0].category, UserWarning)
 
     def tearDown(self):
         pass
-
-

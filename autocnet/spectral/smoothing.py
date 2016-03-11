@@ -3,6 +3,7 @@ from scipy import signal
 
 from pandas import Series
 
+
 def boxcar(y, window_size=3):
     """
     Smooth the input vector using the mean of the neighboring values,
@@ -18,7 +19,7 @@ def boxcar(y, window_size=3):
 
     Returns
     =======
-     : array 
+     : array
        The smoothed array.
 
     """
@@ -43,5 +44,3 @@ def gaussian(y, window_size=3, sigma=2):
     """
     filt = signal.gaussian(window_size, sigma)
     return Series(signal.convolve(y, filt, mode='same'), index=y.index)
-
-

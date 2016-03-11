@@ -6,9 +6,9 @@ from sqlalchemy.orm import session
 from autocnet import get_data
 
 import sys
-sys.path.insert(0, os.path.abspath('..'))
 
 from .. import io_db
+sys.path.insert(0, os.path.abspath('..'))
 
 
 class TestDataDB(unittest.TestCase):

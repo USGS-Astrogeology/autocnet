@@ -87,10 +87,12 @@ class DistanceRatio(Observable):
         self.single = single
         if mask is not None:
             self.mask = mask.copy()
-            new_mask = self.matches[mask].groupby('source_idx')['distance'].transform(func).astype('bool')
-            self.mask[mask==True] = new_mask
+            new_mask = self.matches[mask].groupby(
+                'source_idx')['distance'].transform(func).astype('bool')
+            self.mask[mask] = new_mask
         else:
-            self.mask = self.matches.groupby('source_idx')['distance'].transform(func).astype('bool')
+            self.mask = self.matches.groupby(
+                'source_idx')['distance'].transform(func).astype('bool')
 
         state_package = {'ratio': ratio,
                          'mask': self.mask.copy(),
@@ -142,7 +144,8 @@ class SpatialSuppression(Observable):
         columns = df.columns
         for i in ['x', 'y', 'strength']:
             if i not in columns:
-                raise ValueError('The dataframe is missing a {} column.'.format(i))
+                raise ValueError(
+                    'The dataframe is missing a {} column.'.format(i))
         self._df = df.sort_values(by=['strength'], ascending=False).copy()
         self.max_radius = max(domain)
         self.min_radius = min_radius
@@ -190,7 +193,8 @@ class SpatialSuppression(Observable):
         points, with good spatial distribution, remain
         """
         if self.k > len(self.df):
-            warnings.warn('Only {} valid points, but {} points requested'.format(len(self.df), self.k))
+            warnings.warn('Only {} valid points, but {} points requested'.format(
+                len(self.df), self.k))
             self.k = len(self.df)
         search_space = np.linspace(self.min_radius, self.max_radius / 16, 250)
         cell_sizes = (search_space / math.sqrt(2)).astype(np.int)
@@ -223,7 +227,7 @@ class SpatialSuppression(Observable):
                 y_center = ybins[i]
                 cell = grid[y_center, x_center]
 
-                if cell == False:
+                if not cell:
                     result.append(idx)
                     pts.append((p[['x', 'y']]))
                     if len(result) > self.k + self.k * self.error_k:
@@ -252,24 +256,28 @@ class SpatialSuppression(Observable):
                          x_min: x_max] = True
 
             #  Check break conditions
-            if self.k - self.k * self.error_k <= len(result) <= self.k + self.k * self.error_k:
+            if self.k - self.k * \
+                    self.error_k <= len(result) <= self.k + self.k * self.error_k:
                 break
             elif len(result) < self.k:
                 # The radius is too large
                 max_idx = mid_idx
             elif min_idx == mid_idx or mid_idx == max_idx:
-                warnings.warn('Unable to optimally solve.  Returning with {} points'.format(len(result)))
+                warnings.warn(
+                    'Unable to optimally solve.  Returning with {} points'.format(
+                        len(result)))
                 break
 
         self.mask = pd.Series(False, self.df.index)
         self.mask.loc[list(result)] = True
-        state_package = {'mask':self.mask,
+        state_package = {'mask': self.mask,
                          'k': self.k,
                          'error_k': self.error_k}
 
         self._action_stack.append(state_package)
         self._notify_subscribers(self)
-        self._current_action_stack = len(self._action_stack) - 1  # 0 based vs. 1 based
+        self._current_action_stack = len(
+            self._action_stack) - 1  # 0 based vs. 1 based
 
 
 def self_neighbors(matches):
@@ -316,13 +324,22 @@ def mirroring_test(matches):
                  otherwise, they will be false. Keypoints with only one match will be False. Removes
                  duplicate rows.
     """
-    duplicate_mask = matches.duplicated(subset=['source_idx', 'destination_idx', 'distance'],
-                                    keep='last')
+    duplicate_mask = matches.duplicated(
+        subset=[
+            'source_idx',
+            'destination_idx',
+            'distance'],
+        keep='last')
 
     return duplicate_mask
 
 
-def compute_fundamental_matrix(kp1, kp2, method='ransac', reproj_threshold=5.0, confidence=0.99):
+def compute_fundamental_matrix(
+        kp1,
+        kp2,
+        method='ransac',
+        reproj_threshold=5.0,
+        confidence=0.99):
     """
     Given two arrays of keypoints compute the fundamental matrix
 
@@ -366,17 +383,18 @@ def compute_fundamental_matrix(kp1, kp2, method='ransac', reproj_threshold=5.0, 
     elif method == 'normal':
         method_ = cv2.FM_7POINT
     else:
-        raise ValueError("Unknown outlier detection method.  Choices are: 'ransac', 'lmeds', or 'normal'.")
-
+        raise ValueError(
+            "Unknown outlier detection method.  Choices are: 'ransac', 'lmeds', or 'normal'.")
 
     transformation_matrix, mask = cv2.findFundamentalMat(kp1,
-                                                     kp2,
-                                                     method_,
-                                                     reproj_threshold,
-                                                     confidence)
+                                                         kp2,
+                                                         method_,
+                                                         reproj_threshold,
+                                                         confidence)
     try:
         mask = mask.astype(bool)
-    except: pass  # pragma: no cover
+    except:
+        pass  # pragma: no cover
 
     return transformation_matrix, mask
 
@@ -422,7 +440,8 @@ def compute_homography(kp1, kp2, method='ransac', **kwargs):
     elif method == 'normal':
         method_ = 0  # Normal method
     else:
-        raise ValueError("Unknown outlier detection method.  Choices are: 'ransac', 'lmeds', or 'normal'.")
+        raise ValueError(
+            "Unknown outlier detection method.  Choices are: 'ransac', 'lmeds', or 'normal'.")
 
     transformation_matrix, mask = cv2.findHomography(kp1,
                                                      kp2,

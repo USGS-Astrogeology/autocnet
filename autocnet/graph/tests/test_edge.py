@@ -2,6 +2,7 @@ import unittest
 
 from .. import edge
 
+
 class TestEdge(unittest.TestCase):
 
     def setUp(self):

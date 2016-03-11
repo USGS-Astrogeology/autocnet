@@ -10,6 +10,7 @@ class TestObservableABC(unittest.TestCase):
     def setUpClass(cls):
 
         class Tester(observable.Observable):
+
             def __init__(self):
                 self.a = 1
                 self.b = 2
@@ -28,8 +29,8 @@ class TestObservableABC(unittest.TestCase):
                 self.a += 1
                 self.b += 1
 
-                state_package={'a': self.a,
-                               'b': self.b}
+                state_package = {'a': self.a,
+                                 'b': self.b}
 
                 self._action_stack.append(state_package)
                 self._current_action_stack = len(self._action_stack) - 1
@@ -67,5 +68,3 @@ class TestObservableABC(unittest.TestCase):
         self.assertEqual(self.alertvalue, 0)
         self.TestClass.foo()
         self.assertEqual(self.alertvalue, 1)
-
-

@@ -1,9 +1,10 @@
 import pvl
 
 from autocnet.fileio import ControlNetFileV0002_pb2 as cnf
-from autocnet.control.control import POINT_TYPE, MEASURE_TYPE
+from autocnet.control.control import POINT_TYPE  # , MEASURE_TYPE
 
-#TODO: Protobuf3 should be a conditional import, if availble use it, otherwise bail
+# TODO: Protobuf3 should be a conditional import, if availble use it,
+# otherwise bail
 
 VERSION = 2
 HEADERSTARTBYTE = 65536
@@ -26,6 +27,7 @@ def write_filelist(lst, path="fromlist.lis"):
         handle.write(filename)
         handle.write('\n')
     return
+
 
 def to_isis(path, C, mode='w', version=VERSION,
             headerstartbyte=HEADERSTARTBYTE,
@@ -76,24 +78,28 @@ def to_isis(path, C, mode='w', version=VERSION,
         with IsisStore(path, mode) as store:
             point_messages, point_sizes = store.create_points(C)
             points_bytes = sum(point_sizes)
-            buffer_header, buffer_header_size = store.create_buffer_header(C, networkid,
-                                                                           targetname,
-                                                                           description,
-                                                                           username,
-                                                                           point_sizes)
+            buffer_header, buffer_header_size = store.create_buffer_header(
+                C, networkid, targetname, description, username, point_sizes)
             # Write the buffer header
-            store.write(buffer_header,HEADERSTARTBYTE)
+            store.write(buffer_header, HEADERSTARTBYTE)
 
-            # Then write the points, so we know where to start writing, + 1 to avoid overwrite
+            # Then write the points, so we know where to start writing, + 1 to
+            # avoid overwrite
             point_start_offset = HEADERSTARTBYTE + buffer_header_size
             for i, point in enumerate(point_messages):
                 store.write(point, point_start_offset)
                 point_start_offset += point_sizes[i]
 
-            header = store.create_pvl_header(C, version, headerstartbyte, networkid,
-                                             targetname, description, username,
-                                             buffer_header_size, points_bytes)
-
+            header = store.create_pvl_header(
+                C,
+                version,
+                headerstartbyte,
+                networkid,
+                targetname,
+                description,
+                username,
+                buffer_header_size,
+                points_bytes)
 
             store.write(header)
 
@@ -106,7 +112,7 @@ class IsisStore(object):
     def __init__(self, path, mode=None, **kwargs):
         self._path = path
         if not mode:
-            mode = 'a' # pragma: no cover
+            mode = 'a'  # pragma: no cover
         self._mode = mode
         self._handle = None
 
@@ -161,10 +167,12 @@ class IsisStore(object):
                 point_spec.id = str(pid)
             point_spec.type = POINT_TYPE
 
-            # The reference index should always be the image with the lowest index
+            # The reference index should always be the image with the lowest
+            # index
             point_spec.referenceIndex = 0
 
-            # A single extend call is cheaper than many add calls to pack points
+            # A single extend call is cheaper than many add calls to pack
+            # points
             measure_iterable = []
             for name, row in point.iterrows():
                 measure_spec = point_spec.Measure()
@@ -231,7 +239,7 @@ class IsisStore(object):
         return header_message, header_message_size
 
     def create_pvl_header(self, cnet, version, headerstartbyte,
-                      networkid, targetname, description, username,
+                          networkid, targetname, description, username,
                           buffer_header_size, points_bytes):
         """
         Create the PVL header object
@@ -279,25 +287,25 @@ class IsisStore(object):
 
         header = pvl.PVLModule([
             ('ProtoBuffer',
-                ({'Core':{'HeaderStartByte': headerstartbyte,
-                        'HeaderBytes': header_bytes,
-                        'PointsStartByte': points_start_byte,
-                        'PointsBytes': points_bytes},
+                ({'Core': {'HeaderStartByte': headerstartbyte,
+                           'HeaderBytes': header_bytes,
+                           'PointsStartByte': points_start_byte,
+                           'PointsBytes': points_bytes},
 
                   'ControlNetworkInfo': pvl.PVLGroup([
-                        ('NetworkId', networkid),
-                        ('TargetName', targetname),
-                        ('UserName', username),
-                        ('Created', cnet.creationdate),
-                        ('LastModified', cnet.modifieddate),
-                        ('Description', description),
-                        ('NumberOfPoints', cnet.n),
-                        ('NumberOfMeasures', cnet.m),
-                        ('Version', version)
-                        ])
+                      ('NetworkId', networkid),
+                      ('TargetName', targetname),
+                      ('UserName', username),
+                      ('Created', cnet.creationdate),
+                      ('LastModified', cnet.modifieddate),
+                      ('Description', description),
+                      ('NumberOfPoints', cnet.n),
+                      ('NumberOfMeasures', cnet.m),
+                      ('Version', version)
+                  ])
                   }),
 
-                 )
+             )
         ])
 
         return pvl.dumps(header, cls=encoder)
@@ -312,5 +320,3 @@ class IsisStore(object):
         if self._handle is not None:
             self._handle.close()
         self._handle = None
-
-
