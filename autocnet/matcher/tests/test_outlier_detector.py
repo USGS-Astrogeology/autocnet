@@ -7,7 +7,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
-# from .. import matcher, outlier_detector
+from .. import outlier_detector
+
 sys.path.append(os.path.abspath('..'))
 
 
@@ -35,7 +36,7 @@ class TestOutlierDetector(unittest.TestCase):
                 'distance'])
         d = outlier_detector.DistanceRatio(df)
         d.compute(0.9)
-        self.assertTrue(d.mask.all() is False)
+        self.assertTrue(d.mask.all() == False)
 
     def test_mirroring_test(self):
         # returned mask should be same length as input df
