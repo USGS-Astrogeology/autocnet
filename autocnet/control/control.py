@@ -43,8 +43,8 @@ class C(pd.DataFrame):
     >>> ptype = [2,2,2,2,2]
     >>> serials = ['a', 'b', 'c', 'b', 'c']
     >>> mtype = [2,2,2,2,2]
-    >>> multi_index = pd.MultiIndex.from_tuples(list(zip(ids, ptype, serials, mtype)),\
-                                    names=['Id', 'Type', 'Serial Number', 'Measure Type'])
+    >>> multi_index = pd.MultiIndex.from_tuples(list(zip(ids, ptype,\
+    serials, mtype)), names=['Id', 'Type', 'Serial Number', 'Measure Type'])
     >>> columns = ['Random Number']
     >>> data_length = 5
     >>> data = np.random.randn(data_length)

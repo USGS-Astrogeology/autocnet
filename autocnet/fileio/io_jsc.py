@@ -2,11 +2,14 @@ import os
 import numpy as np
 import pandas as pd
 from autocnet.fileio.utils import file_search
-# This function reads the lookup tables used to expand metadata from the file names
-# This is separated from parsing the filenames so that for large lists of files the
+# This function reads the lookup tables used to expand metadata from the
+# file names
+# This is separated from parsing the filenames so that for large lists of
+# files the
 # lookup tables don't need to be read over and over
 #
-# Info in the tables is stored in a dict of dataframes so that only one variable
+# Info in the tables is stored in a dict of dataframes so that only
+# one variable
 # (the dict) needs to be passed between functions
 
 
@@ -116,7 +119,8 @@ def jsc_batch(directory, LUT_files, searchstring='*.txt'):
         # get the spectrometer IDs for each file in the list
         spectIDs.append(os.path.basename(file).split('_')[6])
     spectIDs_unique = np.unique(spectIDs)  # get the unique spectrometer IDs
-    dfs = []  # create an empty list to hold the data frames for each spectrometer
+    dfs = []  # create an empty list to hold the data frames for each
+    # spectrometer
 
     # loop through each spectrometer, read the spectra and combine them into a
     # single data frame for that spectrometer
