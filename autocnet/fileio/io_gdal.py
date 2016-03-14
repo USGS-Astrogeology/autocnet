@@ -54,73 +54,93 @@ class GeoDataset(object):
                  The bounding box of the image in lat/lon space
 
     geotransform : object
-                   Geotransform reference OGR object as an array of size 6 containing the affine
-                   transformation coefficients for transforming from raw sample/line to projected x/y.
-                   xproj = geotransform[0] + sample * geotransform[1] + line * geotransform[2]
-                   yproj = geotransform[3] + sample * geotransform[4] + line * geotransform[5]
+                   Geotransform reference OGR object as an array of size 6
+                   containing the affine
+                   transformation coefficients for transforming from raw
+                   sample/line to projected x/y.
+                   xproj = geotransform[0] + sample * geotransform[1] +
+                   line * geotransform[2]
+                   yproj = geotransform[3] + sample * geotransform[4] +
+                   line * geotransform[5]
 
     geospatial_coordinate_system : object
                                    Geospatial coordinate system OSR object.
 
     latlon_extent : list
                     of two tuples containing the latitide/longitude boundaries.
-                    This list is in the form [(lowerlat, lowerlon), (upperlat, upperlon)].
+                    This list is in the form
+                    [(lowerlat, lowerlon), (upperlat, upperlon)].
 
     pixel_width : float
-                  The width of the image pixels (i.e. displacement in the x-direction).
+                  The width of the image pixels
+                  (i.e. displacement in the x-direction).
                   Note: This is the second value geotransform array.
 
     pixel_height : float
-                   The height of the image pixels (i.e. displacement in the y-direction).
+                   The height of the image pixels
+                   (i.e. displacement in the y-direction).
                    Note: This is the sixth (last) value geotransform array.
 
     spatial_reference : object
                         Spatial reference system OSR object.
 
     standard_parallels : list
-                         of the standard parallels used by the map projection found in the metadata
+                         of the standard parallels used by the map projection
+                         found in the metadata
                          using the spatial reference for this GeoDataset.
 
     unit_type : str
                 Name of the unit used by the raster, e.g. 'm' or 'ft'.
 
     x_rotation : float
-                The geotransform coefficient that represents the rotation about the x-axis.
+                The geotransform coefficient that represents the rotation
+                about the x-axis.
                 Note: This is the third value geotransform array.
 
     xy_extent : list
                 of two tuples containing the sample/line boundaries.
-                The first value is the upper left corner of the upper left pixel and
-                the second value is the lower right corner of the lower right pixel.
+                The first value is the upper left corner of the upper
+                left pixel and
+                the second value is the lower right corner of the lower
+                right pixel.
                 This list is in the form [(minx, miny), (maxx, maxy)].
 
     y_rotation : float
-                 The geotransform coefficient that represents the rotation about the y-axis.
+                 The geotransform coefficient that represents the rotation
+                 about the y-axis.
                  Note: This is the fifth value geotransform array.
 
     coordinate_transformation : object
-                                The coordinate transformation from the spatial reference system to
+                                The coordinate transformation from the spatial
+                                reference system to
                                 the geospatial coordinate system.
 
     inverse_coordinate_transformation : object
-                                        The coordinate transformation from the geospatial
-                                        coordinate system to the spatial reference system.
+                                        The coordinate transformation from the
+                                        geospatial
+                                        coordinate system to the spatial
+                                        reference system.
 
     scale : tuple
-            The name and value of the linear projection units of the spatial reference system.
+            The name and value of the linear projection units of the spatial
+            reference system.
             This tuple is of type string/float of the form (unit name, value).
             To transform a linear distance to meters, multiply by this value.
             If no units are available ("Meters", 1) will be returned.
 
     spheroid : tuple
-               The spheroid found in the metadata using the spatial reference system.
-               This is of the form (semi-major, semi-minor, inverse flattening).
+               The spheroid found in the metadata using the spatial reference
+               system.
+               This is of the form (semi-major, semi-minor, inverse
+               flattening).
 
     raster_size : tuple
-                  The dimensions of the raster, i.e. (number of samples, number of lines).
+                  The dimensions of the raster, i.e. (number of samples,
+                  number of lines).
 
     central_meridian : float
-                       The central meridian of the map projection from the metadata.
+                       The central meridian of the map projection from the
+                       metadata.
 
     no_data_value : float
                     Special value used to indicate pixels that are not valid.
@@ -135,7 +155,8 @@ class GeoDataset(object):
 
     def __init__(self, file_name):
         """
-        Initialization method to set the file name and open the file using GDAL.
+        Initialization method to set the file name and open the file using
+        GDAL.
 
         Parameters
         ----------
@@ -407,12 +428,12 @@ class GeoDataset(object):
         Returns
         -------
         x, y : tuple
-               (Sample, line) position corresponding to the given (latitude, longitude).
+               (Sample, line) position corresponding to the given
+               (latitude, longitude).
 
         """
         geotransform = self.geotransform
-        upperlat, upperlon, _ = self.inverse_coordinate_transformation.TransformPoint(
-            lon, lat)
+        upperlat, upperlon, _ = self.inverse_coordinate_transformation.TransformPoint(lon, lat)
         x = (upperlat - geotransform[0]) / geotransform[1]
         y = (upperlon - geotransform[3]) / geotransform[5]
         return x, y
@@ -425,7 +446,8 @@ class GeoDataset(object):
         ----------
 
         band : int
-               The image band number to be extracted as a NumPy array. Default band=1.
+               The image band number to be extracted as a NumPy array.
+               Default band=1.
 
         pixels : list
                  [xstart, ystart, xstop, ystop]. Default pixels=None.
@@ -470,7 +492,8 @@ def array_to_raster(array, file_name, projection=None,
                     geotransform=None, outformat='GTiff',
                     ndv=None):
     """
-    Converts the given NumPy array to a raster format using the GeoDataset class.
+    Converts the given NumPy array to a raster format using the GeoDataset
+    class.
 
     Parameters
     ----------
@@ -489,7 +512,8 @@ def array_to_raster(array, file_name, projection=None,
                 Default outformat='GTiff'.
 
     ndv : float
-          The no data value for the given band. See no_data_value(). Default ndv=None.
+          The no data value for the given band. See no_data_value(). Default
+          ndv=None.
 
     """
     driver = gdal.GetDriverByName(outformat)

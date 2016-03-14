@@ -71,7 +71,8 @@ def to_isis(path, C, mode='w', version=VERSION,
                   A description for the network.
 
     username : str
-               The name of the user / application that created the control network
+               The name of the user / application that created the control
+               network
 """
 
     if isinstance(path, str):
@@ -139,7 +140,8 @@ class IsisStore(object):
 
     def create_points(self, cnet):
         """
-        Step through a control network (C) and return protocol buffer point objects
+        Step through a control network (C) and return protocol buffer point
+        objects
 
         Parameters
         ----------
@@ -211,7 +213,8 @@ class IsisStore(object):
                   A description for the network.
 
         username : str
-               The name of the user / application that created the control network
+               The name of the user / application that created the control
+               network
 
         point_sizes : list
                       of the point sizes for each point message
@@ -253,7 +256,8 @@ class IsisStore(object):
               The current ISIS version to write, defaults to 2
 
         headerstartbyte : int
-                          The seek offset that the protocol buffer header starts at
+                          The seek offset that the protocol buffer header
+                          starts at
 
         networkid : str
                     The name of the network
@@ -265,7 +269,8 @@ class IsisStore(object):
                       A description for the network.
 
         username : str
-                   The name of the user / application that created the control network
+                   The name of the user / application that created the control
+                   network
 
         buffer_header_size : int
                              Total size of the header in bytes

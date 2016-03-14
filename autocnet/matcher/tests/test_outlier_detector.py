@@ -35,7 +35,7 @@ class TestOutlierDetector(unittest.TestCase):
                 'distance'])
         d = outlier_detector.DistanceRatio(df)
         d.compute(0.9)
-        self.assertTrue(d.mask.all() is False)
+        self.assertTrue(d.mask.all() == False)
 
     def test_mirroring_test(self):
         # returned mask should be same length as input df

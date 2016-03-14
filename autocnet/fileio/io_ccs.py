@@ -27,8 +27,10 @@ def CCS(input_data):
     df['Pversion'] = fname[34:36]
     # transpose the data frame
 
-    # read the file header and put information into the dataframe as new columns
-    # (inefficient to store this data many times, but much easier to concatenate data from multiple files)
+    # read the file header and put information into the dataframe as
+    # new columns
+    # (inefficient to store this data many times, but much easier to
+    # concatenate data from multiple files)
     with open(input_data, 'r') as f:
         header = {}
         for i, row in enumerate(f.readlines()):

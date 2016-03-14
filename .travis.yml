@@ -43,7 +43,6 @@ install:
 
 script:
   - nosetests --with-coverage --cover-package=autocnet
-  - flake8 --ignore=E501,W293
 
 
 after_success:
