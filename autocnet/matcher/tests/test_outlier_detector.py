@@ -7,7 +7,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-# from .. import matcher, outlier_detector
+from .. import outlier_detector
 sys.path.append(os.path.abspath('..'))
 
 
