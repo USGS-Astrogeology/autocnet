@@ -64,12 +64,3 @@ notifications:
           - acpaquette@usgs.gov
       on_success: always
       on_failure: always
-    email:
-        recipients:
-            - jlaura@usgs.gov
-            - kberry@usgs.gov
-            - dmlytle@usgs.gov
-            - jwbacker@usgs.gov
-            - acpaquette@usgs.gov
-        on_success: always
-        on_failure: always
