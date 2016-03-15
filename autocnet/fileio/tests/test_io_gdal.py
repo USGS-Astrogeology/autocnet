@@ -142,15 +142,7 @@ class TestLambert(unittest.TestCase):
         self.assertEqual(
             xy_extent, [
                 (-464400.0, -506970.0), (460530.0, -1571220.0)])
-
-<<<<<<< HEAD
-=======
-    def test_latlon_extent(self):
-        self.assertEqual(
-            self.dataset.latlon_extent, [
-                (-89.95903191125286, -140.8933768668104), (-89.98515758604582, -148.48059053073257)])
-
->>>>>>> pep8 checks and modifications
+        
 
 class TestPolar(unittest.TestCase):
 
