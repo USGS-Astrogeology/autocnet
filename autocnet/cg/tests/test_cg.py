@@ -4,8 +4,6 @@ import unittest
 
 import numpy as np
 
-# from autocnet.examples import get_path
-
 from .. import cg
 
 sys.path.insert(0, os.path.abspath('..'))

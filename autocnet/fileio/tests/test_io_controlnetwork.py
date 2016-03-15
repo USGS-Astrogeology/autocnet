@@ -3,8 +3,6 @@ from time import gmtime, strftime
 import unittest
 import sys
 
-# import numpy as np
-# import pandas as pd
 import pvl
 
 from .. import io_controlnetwork
