@@ -11,7 +11,6 @@ from .. import outlier_detector
 
 sys.path.append(os.path.abspath('..'))
 
-
 class TestOutlierDetector(unittest.TestCase):
 
     def test_distance_ratio(self):
