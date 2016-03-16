@@ -18,14 +18,14 @@ def continuum_correct(spectrum, nodes=None, method='linear'):
 
     method : {'linear', 'regresison', 'cubic'}
              The type of regression to be fit, where 'linear' is a piecewise
-             linear fit, 'regression' is an Ordinary Least Squares fit, and 
+             linear fit, 'regression' is an Ordinary Least Squares fit, and
              'cubic' is a 2nd order polynomial fit.
 
     Returns
     =======
      : pd.Series
        The continuum corrected Spectrum
-     
+
      : pd.Series
        The continuum line
     """
@@ -38,7 +38,7 @@ def continuum_correct(spectrum, nodes=None, method='linear'):
     return_length = len(y)
     corrected = np.empty(return_length)
     continuum = np.empty(return_length)
-    
+
     start = 0
     nlist = list(zip(nodes, nodes[1:]))
     for i, n in enumerate(nlist):
@@ -57,10 +57,10 @@ def continuum_correct(spectrum, nodes=None, method='linear'):
             stop = start + len(ny)
             c = correction_methods[method](nx, ny)
             ey = ny
- 
+
         continuum[start:stop] = c
         corrected[start:stop] = ey / c
-        
+
         start = stop
 
     return pd.Series(corrected, index=x), pd.Series(continuum, index=x)
@@ -100,16 +100,17 @@ def linear(nx, ny, ex=None):
     wv2 = nx[-1]
     if not isinstance(ex, np.ndarray):
         ex = nx
-    m = (y2-y1) / (wv2-wv1)
+    m = (y2 - y1) / (wv2 - wv1)
     b = y1 - (m * wv1)
-    
+
     c = m * ex + b
 
-    return c 
+    return c
+
 
 def cubic(spectrum, nodes):
     raise(NotImplemented)
 
-correction_methods = {'linear':linear,
-                      'regression':regression,
+correction_methods = {'linear': linear,
+                      'regression': regression,
                       'cubic': cubic}

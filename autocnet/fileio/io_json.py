@@ -1,5 +1,6 @@
 import json
 
+
 def read_json(inputfile):
     """
     Read the input json file into a python dictionary.
@@ -12,13 +13,15 @@ def read_json(inputfile):
     Returns
     =======
     jobs : dict
-           returns a dictionary 
+           returns a dictionary
 
     >>> inputs = readinputfile('testfiles/sampleinput.json')
     >>> k = inputs.keys()
     >>> k.sort()
     >>> print k
-    [u'ancillarydata', u'bands', u'force', u'images', u'latlon', u'name', u'outputformat', u'processing_pipeline', u'projection', u'resolution', u'rtilt', u'tesatm', u'uddw']
+    [u'ancillarydata', u'bands', u'force', u'images', u'latlon', u'name',
+    u'outputformat', u'processing_pipeline', u'projection', u'resolution',
+    u'rtilt', u'tesatm', u'uddw']
 
     """
     with open(inputfile, 'r') as f:
@@ -27,6 +30,7 @@ def read_json(inputfile):
             return jdict
         except IOError:
             return
+
 
 def write_json(outdata, outputfile):
     """

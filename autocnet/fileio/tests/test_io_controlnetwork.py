@@ -2,10 +2,7 @@ import os
 from time import gmtime, strftime
 import unittest
 import sys
-sys.path.insert(0, os.path.abspath('..'))
 
-import numpy as np
-import pandas as pd
 import pvl
 
 from .. import io_controlnetwork
@@ -13,6 +10,9 @@ from .. import ControlNetFileV0002_pb2 as cnf
 
 from autocnet.utils.utils import find_in_dict
 from autocnet.control.control import C
+
+sys.path.insert(0, os.path.abspath('..'))
+
 
 class TestWriteIsisControlNetwork(unittest.TestCase):
 
@@ -22,31 +22,31 @@ class TestWriteIsisControlNetwork(unittest.TestCase):
         """
 
         serial_times = {295: '1971-07-31T01:24:11.754',
-                   296: '1971-07-31T01:24:36.970',
-                   297: '1971-07-31T01:25:02.243',
-                   298: '1971-07-31T01:25:27.457',
-                   299: '1971-07-31T01:25:52.669',
-                   300: '1971-07-31T01:26:17.923'}
-        self.serials = ['APOLLO15/METRIC/{}'.format(i) for i in serial_times.values()]
-
+                        296: '1971-07-31T01:24:36.970',
+                        297: '1971-07-31T01:25:02.243',
+                        298: '1971-07-31T01:25:27.457',
+                        299: '1971-07-31T01:25:52.669',
+                        300: '1971-07-31T01:26:17.923'}
+        self.serials = [
+            'APOLLO15/METRIC/{}'.format(i) for i in serial_times.values()]
 
         x = list(range(5))
         y = list(range(5))
-        pid = [0,0,1,1,1]
+        pid = [0, 0, 1, 1, 1]
         idx = pid
         serials = [self.serials[0], self.serials[1], self.serials[2],
                    self.serials[2], self.serials[3]]
 
-
         columns = ['x', 'y', 'idx', 'pid', 'nid', 'point_type']
         self.data_length = 5
 
-        data = [x,y, idx, pid, serials, [2] * self.data_length]
+        data = [x, y, idx, pid, serials, [2] * self.data_length]
 
         self.creation_time = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         cnet = C(data, index=columns).T
 
-        io_controlnetwork.to_isis('test.net', cnet, mode='wb', targetname='Moon')
+        io_controlnetwork.to_isis(
+            'test.net', cnet, mode='wb', targetname='Moon')
 
         self.header_message_size = 85
         self.point_start_byte = 65621
@@ -58,7 +58,7 @@ class TestWriteIsisControlNetwork(unittest.TestCase):
             header_protocol = cnf.ControlNetFileHeaderV0002()
             header_protocol.ParseFromString(raw_header_message)
 
-            #Non-repeating
+            # Non-repeating
             self.assertEqual('None', header_protocol.networkId)
             self.assertEqual('Moon', header_protocol.targetName)
             self.assertEqual(io_controlnetwork.DEFAULTUSERNAME,
@@ -68,7 +68,7 @@ class TestWriteIsisControlNetwork(unittest.TestCase):
             self.assertEqual('None', header_protocol.description)
             self.assertEqual('Not modified', header_protocol.lastModified)
 
-            #Repeating
+            # Repeating
             self.assertEqual([135, 199], header_protocol.pointMessageSizes)
 
     def test_create_point(self):

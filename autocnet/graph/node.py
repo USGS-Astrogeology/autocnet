@@ -128,7 +128,7 @@ class Node(dict, MutableMapping):
 
         """
         keypoint_objs, descriptors = fe.extract_features(array, **kwargs)
-        keypoints = np.empty((len(keypoint_objs), 7),dtype=np.float32)
+        keypoints = np.empty((len(keypoint_objs), 7), dtype=np.float32)
         for i, kpt in enumerate(keypoint_objs):
             octave = kpt.octave & 8
             layer = (kpt.octave >> 8) & 255
@@ -136,9 +136,18 @@ class Node(dict, MutableMapping):
                 octave = octave
             else:
                 octave = (-128 | octave)
-            keypoints[i] = kpt.pt[0], kpt.pt[1], kpt.response, kpt.size, kpt.angle, octave, layer  # y, x
-        self.keypoints = pd.DataFrame(keypoints, columns=['x', 'y', 'response', 'size',
-                                                          'angle', 'octave', 'layer'])
+            keypoints[i] = kpt.pt[0], kpt.pt[
+                1], kpt.response, kpt.size, kpt.angle, octave, layer  # y, x
+        self.keypoints = pd.DataFrame(
+            keypoints,
+            columns=[
+                'x',
+                'y',
+                'response',
+                'size',
+                'angle',
+                'octave',
+                'layer'])
         self._nkeypoints = len(self.keypoints)
         self.descriptors = descriptors.astype(np.float32)
 
@@ -151,7 +160,8 @@ class Node(dict, MutableMapping):
 
         if not hasattr(self, 'suppression'):
             # Instantiate a suppression object and suppress keypoints
-            self.suppression = od.SpatialSuppression(self.keypoints, domain, **kwargs)
+            self.suppression = od.SpatialSuppression(
+                self.keypoints, domain, **kwargs)
             self.suppression.suppress()
         else:
             # Update the suppression object attributes and process
@@ -173,10 +183,12 @@ class Node(dict, MutableMapping):
         """
         ideal_area = self.handle.pixel_area
         if not hasattr(self, 'keypoints'):
-            raise AttributeError('Keypoints must be extracted already, they have not been.')
+            raise AttributeError(
+                'Keypoints must be extracted already, they have not been.')
 
         if clean_keys:
-            mask = np.prod([self._mask_arrays[i] for i in clean_keys], axis=0, dtype=np.bool)
+            mask = np.prod([self._mask_arrays[i]
+                            for i in clean_keys], axis=0, dtype=np.bool)
             keypoints = self.keypoints[mask]
 
         keypoints = self.keypoints[['x', 'y']].values
@@ -206,9 +218,9 @@ class Node(dict, MutableMapping):
                     A boolean series to inflate back to the full match set
         """
         if not hasattr(self, 'keypoints'):
-            raise AttributeError('Keypoints have not been extracted for this node.')
+            raise AttributeError(
+                'Keypoints have not been extracted for this node.')
         panel = self.masks
         mask = panel[clean_keys].all(axis=1)
         matches = self.keypoints[mask]
         return matches, mask
-

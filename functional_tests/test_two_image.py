@@ -25,12 +25,13 @@ class TestTwoImageMatching(unittest.TestCase):
     """
 
     def setUp(self):
-        self.serial_numbers = {'AS15-M-0295_SML.png': '1971-07-31T01:24:11.754',
-                               'AS15-M-0296_SML.png': '1971-07-31T01:24:36.970',
-                               'AS15-M-0297_SML.png': '1971-07-31T01:25:02.243',
-                               'AS15-M-0298_SML.png': '1971-07-31T01:25:27.457',
-                               'AS15-M-0299_SML.png': '1971-07-31T01:25:52.669',
-                               'AS15-M-0300_SML.png': '1971-07-31T01:26:17.923'}
+        self.serial_numbers = {
+            'AS15-M-0295_SML.png': '1971-07-31T01:24:11.754',
+            'AS15-M-0296_SML.png': '1971-07-31T01:24:36.970',
+            'AS15-M-0297_SML.png': '1971-07-31T01:25:02.243',
+            'AS15-M-0298_SML.png': '1971-07-31T01:25:27.457',
+            'AS15-M-0299_SML.png': '1971-07-31T01:25:52.669',
+            'AS15-M-0300_SML.png': '1971-07-31T01:26:17.923'}
 
         for k, v in self.serial_numbers.items():
             self.serial_numbers[k] = 'APOLLO15/METRIC/{}'.format(v)
@@ -44,21 +45,24 @@ class TestTwoImageMatching(unittest.TestCase):
         self.assertEqual(1, cg.number_of_edges())
 
         # Step: Extract image data and attribute nodes
-        cg.extract_features(method='sift', extractor_parameters={"nfeatures":500})
+        cg.extract_features(
+            method='sift',
+            extractor_parameters={
+                "nfeatures": 500})
         for i, node in cg.nodes_iter(data=True):
             self.assertIn(node.nkeypoints, range(490, 511))
 
-        #Step: Compute the coverage ratios
+        # Step: Compute the coverage ratios
         truth_ratios = [0.95351579,
                         0.93595664]
         for i, node in cg.nodes_iter(data=True):
             ratio = node.coverage_ratio()
-            self.assertIn(round(ratio,8), truth_ratios)
+            self.assertIn(round(ratio, 8), truth_ratios)
         # Step: apply Adaptive non-maximal suppression
         for i, node in cg.nodes_iter(data=True):
             pass
-            #node.anms()
-            #self.assertNotEqual(node.nkeypoints, sum(node._mask_arrays['anms']))
+            # node.anms()
+            # self.assertNotEqual(node.nkeypoints, sum(node._mask_arrays['anms']))
 
         cg.match_features(k=2)
 
@@ -83,7 +87,12 @@ class TestTwoImageMatching(unittest.TestCase):
         cg.subpixel_register(clean_keys=['ransac'])
 
         # Step: And create a C object
-        cnet = cg.to_cnet(clean_keys=['symmetry', 'ratio', 'ransac', 'subpixel'])
+        cnet = cg.to_cnet(
+            clean_keys=[
+                'symmetry',
+                'ratio',
+                'ransac',
+                'subpixel'])
 
         # Step: Create a fromlist to go with the cnet and write it to a file
         filelist = cg.to_filelist()
@@ -103,4 +112,5 @@ class TestTwoImageMatching(unittest.TestCase):
         try:
             os.path.remove('TestTwoImageMatching.net')
             os.path.remove('fromlist.lis')
-        except: pass
+        except:
+            pass

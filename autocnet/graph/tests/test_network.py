@@ -1,6 +1,5 @@
 import os
 import sys
-sys.path.insert(0, os.path.abspath('..'))
 
 import unittest
 
@@ -10,15 +9,18 @@ from autocnet.examples import get_path
 
 from .. import network
 
+sys.path.insert(0, os.path.abspath('..'))
+
 
 class TestCandidateGraph(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         basepath = get_path('Apollo15')
-        cls.graph = network.CandidateGraph.from_adjacency(get_path('three_image_adjacency.json'),
-                                                          basepath=basepath)
-        cls.disconnected_graph = network.CandidateGraph.from_adjacency(get_path('adjacency.json'))
+        cls.graph = network.CandidateGraph.from_adjacency(
+            get_path('three_image_adjacency.json'), basepath=basepath)
+        cls.disconnected_graph = network.CandidateGraph.from_adjacency(
+            get_path('adjacency.json'))
 
     def test_get_name(self):
         node_number = self.graph.node_name_map['AS15-M-0297_SML.png']
@@ -49,11 +51,12 @@ class TestCandidateGraph(unittest.TestCase):
         subgraph_list = self.graph.connected_subgraphs()
         self.assertEqual(len(subgraph_list), 1)
 
-
     def test_save_load(self):
         self.graph.save('test_save.cg')
         loaded = self.graph.from_graph('test_save.cg')
-        self.assertEqual(self.graph.node[0].nkeypoints, loaded.node[0].nkeypoints)
+        self.assertEqual(
+            self.graph.node[0].nkeypoints,
+            loaded.node[0].nkeypoints)
         self.assertEqual(self.graph.edge[0][1], loaded.edge[0][1])
 
         a = self.graph.node[0].handle.read_array()
@@ -98,5 +101,5 @@ class TestEdge(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.graph = network.CandidateGraph.from_adjacency(get_path('adjacency.json'))
-
+        cls.graph = network.CandidateGraph.from_adjacency(
+            get_path('adjacency.json'))

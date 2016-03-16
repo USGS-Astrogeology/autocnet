@@ -104,7 +104,12 @@ def plot_node(node, ax=None, clean_keys=[], **kwargs):
     if 'color' in kwargs.keys():
         color = kwargs['color']
         kwargs.pop('color', None)
-    ax.scatter(keypoints['x'], keypoints['y'], marker=marker, color=color, **kwargs)
+    ax.scatter(
+        keypoints['x'],
+        keypoints['y'],
+        marker=marker,
+        color=color,
+        **kwargs)
 
     return ax
 
@@ -162,7 +167,7 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
 
     y = max(s_shape[0], d_shape[0])
     x = s_shape[1] + d_shape[1] + image_space
-    composite = np.zeros((y,x))
+    composite = np.zeros((y, x))
 
     composite[:, :s_shape[1]] = source_array
     composite[:, s_shape[1] + image_space:] = destination_array
@@ -203,15 +208,19 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
 
     s_kps = s_kps[['x', 'y']].values
     d_kps = d_kps[['x', 'y']].values
-    d_kps[:,0] += x_offset
+    d_kps[:, 0] += x_offset
 
     for l in zip(s_kps, d_kps):
-        ax.plot((l[0][0], l[1][0]), (l[0][1], l[1][1]), color=color, **line_kwargs)
+        ax.plot((l[0][0], l[1][0]), (l[0][1], l[1][1]),
+                color=color, **line_kwargs)
 
     return ax
 
 
-def plotAdjacencyGraphFeatures(graph, pointColorAndHatch='b.', featurePointSize=7):
+def plotAdjacencyGraphFeatures(
+        graph,
+        pointColorAndHatch='b.',
+        featurePointSize=7):
     """
     Plot each image in an adjacency graph and its found features in a single figure.
     The user may also specify the color and style of the points to be plotted and
@@ -225,7 +234,7 @@ def plotAdjacencyGraphFeatures(graph, pointColorAndHatch='b.', featurePointSize=
 
     pointColorAndHatch : str
                          The color and hatch (symbol) to be used to mark
-                         the found features. Defaults to 'b.', blue and 
+                         the found features. Defaults to 'b.', blue and
                          square dot. See matplotlib documentation for
                          more choices.
 
@@ -239,18 +248,16 @@ def plotAdjacencyGraphFeatures(graph, pointColorAndHatch='b.', featurePointSize=
     rows = columns
     for node, attributes in graph.nodes_iter(data=True):
         plt.subplot(rows, columns, counter)
-        plotFeatures(attributes['handle'], 
-                         attributes['keypoints'], 
-                         pointColorAndHatch)
+        plotFeatures(attributes['handle'],
+                     attributes['keypoints'],
+                     pointColorAndHatch)
         counter = counter + 1
-
-
 
 
 # NOTE: We will probably delete this code if it is found to be un-needed,
 # However, for now we will keep in case it winds up being a more useful tool.
-def plotAdjacencyGraphMatchesSingleDisplay(imageName1, 
-                                           imageName2, 
+def plotAdjacencyGraphMatchesSingleDisplay(imageName1,
+                                           imageName2,
                                            graph,
                                            featurePointSize=10,
                                            lineWidth=3):
@@ -283,31 +290,33 @@ def plotAdjacencyGraphMatchesSingleDisplay(imageName1,
     Returns
     -------
      : AxesImage object
-       An image object that can be saved. 
+       An image object that can be saved.
     """
 
     imgArray1 = GeoDataset(get_path(imageName1)).read_array()
     imgArray2 = GeoDataset(get_path(imageName2)).read_array()
-    
+
     height1, width1 = imgArray1.shape[:2]
     height2, width2 = imgArray2.shape[:2]
-    
-    w = width1+width2+50
+
+    w = width1 + width2 + 50
     h = max(height1, height2)
-    
+
     displayBox = np.zeros((h, w), np.uint8)
-       
+
     displayBox[:height1, :width1] = imgArray1
-    displayBox[:height2, width1+50:w] = imgArray2
-    
-    for kp in graph.get_keypoints(imageName1): 
+    displayBox[:height2, width1 + 50:w] = imgArray2
+
+    for kp in graph.get_keypoints(imageName1):
         x, y = kp.pt
-        plt.plot(x, y,'ro', markersize=featurePointSize)
-    for kp in graph.get_keypoints(imageName2): 
+        plt.plot(x, y, 'ro', markersize=featurePointSize)
+    for kp in graph.get_keypoints(imageName2):
         x, y = kp.pt
-        plt.plot(x+width1+50, y,'ro', markersize=featurePointSize)
-    
-    edge = graph[graph.node_name_map[imageName1]][graph.node_name_map[imageName2]]
+        plt.plot(x + width1 + 50, y, 'ro', markersize=featurePointSize)
+
+    edge = graph[
+        graph.node_name_map[imageName1]][
+        graph.node_name_map[imageName2]]
     if 'matches' in edge.keys():
         for i, row in edge['matches'].iterrows():
             # get matching points
@@ -315,14 +324,15 @@ def plotAdjacencyGraphMatchesSingleDisplay(imageName1,
             image2ID = int(row['destination_idx'])
             keypointImage1 = (graph.get_keypoints(imageName1)[image1ID].pt[0],
                               graph.get_keypoints(imageName1)[image1ID].pt[1])
-            keypointImage2 = (graph.get_keypoints(imageName2)[image2ID].pt[0]+width1+50,
-                              graph.get_keypoints(imageName2)[image2ID].pt[1])
-                            
-            # construct a line between the matching points using the data coordinates and the 
+            keypointImage2 = (
+                graph.get_keypoints(imageName2)[image2ID].pt[0] + width1 + 50,
+                graph.get_keypoints(imageName2)[image2ID].pt[1])
+
+            # construct a line between the matching points using the data coordinates and the
             # transformation from data coordinates to display coordinates
-            plt.plot([keypointImage1[0], keypointImage2[0]], 
+            plt.plot([keypointImage1[0], keypointImage2[0]],
                      [keypointImage1[1], keypointImage2[1]],
-                     color='g', 
+                     color='g',
                      marker='o',
                      markeredgecolor='g',
                      markersize=featurePointSize,

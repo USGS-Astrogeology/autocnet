@@ -1,7 +1,8 @@
 try:
     import yaml
 except:
-    print 'YAML package not installed, disabling yaml_io module'
+    print('YAML package not installed, disabling yaml_io module')
+
 
 def read_yaml(inputfile):
     """

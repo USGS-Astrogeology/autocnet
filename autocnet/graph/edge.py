@@ -1,4 +1,3 @@
-import math
 import warnings
 from collections import MutableMapping
 
@@ -44,7 +43,7 @@ class Edge(dict, MutableMapping):
 
         self._observers = set()
 
-        #Subscribe the heatlh observer
+        # Subscribe the heatlh observer
         self._health = health.EdgeHealth()
 
     def __repr__(self):
@@ -61,7 +60,7 @@ class Edge(dict, MutableMapping):
         if not hasattr(self, '_masks'):
             if hasattr(self, 'matches'):
                 self._masks = pd.DataFrame(True, columns=['symmetry'],
-                                       index=self.matches.index)
+                                           index=self.matches.index)
             else:
                 self._masks = pd.DataFrame()
         # If the mask is coming form another object that tracks
@@ -101,7 +100,8 @@ class Edge(dict, MutableMapping):
         if clean_keys:
             matches, _ = self._clean(clean_keys)
 
-        # Now that we know the matches, build a pair of dataframes that are the truncated keypoints
+        # Now that we know the matches, build a pair of dataframes that are the
+        # truncated keypoints
         s_kps = self.source.keypoints.iloc[matches['source_idx']]
         d_kps = self.destination.keypoints.iloc[matches['destination_idx']]
         return s_kps, d_kps
@@ -111,7 +111,8 @@ class Edge(dict, MutableMapping):
             mask = od.mirroring_test(self.matches)
             self.masks = ('symmetry', mask)
         else:
-            raise AttributeError('No matches have been computed for this edge.')
+            raise AttributeError(
+                'No matches have been computed for this edge.')
 
     def ratio_check(self, clean_keys=[], **kwargs):
         if hasattr(self, 'matches'):
@@ -121,7 +122,6 @@ class Edge(dict, MutableMapping):
             else:
                 mask = pd.Series(True, self.matches.index)
 
-
             self.distance_ratio = od.DistanceRatio(self.matches)
             self.distance_ratio.compute(mask=mask, **kwargs)
 
@@ -130,34 +130,38 @@ class Edge(dict, MutableMapping):
 
             self.masks = ('ratio', self.distance_ratio.mask)
         else:
-            raise AttributeError('No matches have been computed for this edge.')
+            raise AttributeError(
+                'No matches have been computed for this edge.')
 
     def compute_fundamental_matrix(self, clean_keys=[], **kwargs):
 
         if hasattr(self, 'matches'):
             matches = self.matches
         else:
-            raise AttributeError('Matches have not been computed for this edge')
+            raise AttributeError(
+                'Matches have not been computed for this edge')
 
-        all_source_keypoints = self.source.keypoints.iloc[matches['source_idx']]
-        all_destin_keypoints = self.destination.keypoints.iloc[matches['destination_idx']]
+        all_source_keypoints = self.source.keypoints.iloc[
+            matches['source_idx']]
+        all_destin_keypoints = self.destination.keypoints.iloc[
+            matches['destination_idx']]
 
         if clean_keys:
             matches, mask = self._clean(clean_keys)
 
         s_keypoints = self.source.keypoints.iloc[matches['source_idx'].values]
-        d_keypoints = self.destination.keypoints.iloc[matches['destination_idx'].values]
+        d_keypoints = self.destination.keypoints.iloc[
+            matches['destination_idx'].values]
 
-        transformation_matrix, fundam_mask = od.compute_fundamental_matrix(s_keypoints[['x', 'y']].values,
-                                                                           d_keypoints[['x', 'y']].values,
-                                                                           **kwargs)
+        transformation_matrix, fundam_mask = od.compute_fundamental_matrix(
+            s_keypoints[['x', 'y']].values, d_keypoints[['x', 'y']].values, **kwargs)
         try:
             fundam_mask = fundam_mask.ravel()
         except:
             return
         # Convert the truncated RANSAC mask back into a full length mask
         if clean_keys:
-            mask[mask == True] = fundam_mask
+            mask[mask] = fundam_mask
         else:
             mask = fundam_mask
         self.fundamental_matrix = FundamentalMatrix(transformation_matrix,
@@ -172,7 +176,12 @@ class Edge(dict, MutableMapping):
         # Set the initial state of the fundamental mask in the masks
         self.masks = ('fundamental', mask)
 
-    def compute_homography(self, method='ransac', clean_keys=[], pid=None, **kwargs):
+    def compute_homography(
+            self,
+            method='ransac',
+            clean_keys=[],
+            pid=None,
+            **kwargs):
         """
         For each edge in the (sub) graph, compute the homography
         Parameters
@@ -195,29 +204,30 @@ class Edge(dict, MutableMapping):
         if hasattr(self, 'matches'):
             matches = self.matches
         else:
-            raise AttributeError('Matches have not been computed for this edge')
+            raise AttributeError(
+                'Matches have not been computed for this edge')
 
         if clean_keys:
             matches, mask = self._clean(clean_keys)
 
         s_keypoints = self.source.keypoints.iloc[matches['source_idx'].values]
-        d_keypoints = self.destination.keypoints.iloc[matches['destination_idx'].values]
+        d_keypoints = self.destination.keypoints.iloc[
+            matches['destination_idx'].values]
 
-        transformation_matrix, ransac_mask = od.compute_homography(s_keypoints[['x', 'y']].values,
-                                                                   d_keypoints[['x', 'y']].values,
-                                                                   **kwargs)
+        transformation_matrix, ransac_mask = od.compute_homography(
+            s_keypoints[['x', 'y']].values, d_keypoints[['x', 'y']].values, **kwargs)
 
         ransac_mask = ransac_mask.ravel()
         # Convert the truncated RANSAC mask back into a full length mask
         if clean_keys:
-            mask[mask == True] = ransac_mask
+            mask[mask] = ransac_mask
         else:
             mask = ransac_mask
         self.masks = ('ransac', mask)
         self.homography = Homography(transformation_matrix,
                                      s_keypoints[ransac_mask][['x', 'y']],
                                      d_keypoints[ransac_mask][['x', 'y']],
-                                     mask=mask[mask == True].index)
+                                     mask=mask[mask].index)
 
         # Finalize the array to get custom attrs to propagate
         self.homography.__array_finalize__(self.homography)
@@ -259,8 +269,9 @@ class Edge(dict, MutableMapping):
                       without being considered an outlier
         """
         matches = self.matches
-        for column, default in {'x_offset': 0, 'y_offset': 0, 'correlation': 0, 'reference': -1}.items():
-            if not column in self.matches.columns:
+        for column, default in {
+                'x_offset': 0, 'y_offset': 0, 'correlation': 0, 'reference': -1}.items():
+            if column not in self.matches.columns:
                 self.matches[column] = default
 
         # Build up a composite mask from all of the user specified masks
@@ -283,30 +294,35 @@ class Edge(dict, MutableMapping):
             d_idx = int(row['destination_idx'])
 
             s_keypoint = self.source.keypoints.iloc[s_idx][['x', 'y']].values
-            d_keypoint = self.destination.keypoints.iloc[d_idx][['x', 'y']].values
+            d_keypoint = self.destination.keypoints.iloc[
+                d_idx][['x', 'y']].values
 
             # Get the template and search window
             s_template = sp.clip_roi(s_img, s_keypoint, template_size)
             d_search = sp.clip_roi(d_img, d_keypoint, search_size)
             try:
-                x_offset, y_offset, strength = sp.subpixel_offset(s_template, d_search, **kwargs)
-                self.matches.loc[idx, ('x_offset', 'y_offset',
-                                       'correlation', 'reference')] = [x_offset, y_offset, strength, source_image]
+                x_offset, y_offset, strength = sp.subpixel_offset(
+                    s_template, d_search, **kwargs)
+                self.matches.loc[
+                    idx, ('x_offset', 'y_offset', 'correlation', 'reference')] = [
+                    x_offset, y_offset, strength, source_image]
             except:
-                warnings.warn('Template-Search size mismatch, failing for this correspondence point.')
+                warnings.warn(
+                    'Template-Search size mismatch, failing for this correspondence point.')
                 continue
 
         # Compute the mask for correlations less than the threshold
         threshold_mask = self.matches['correlation'] >= threshold
 
         # Compute the mask for the point shifts that are too large
-        query_string = 'x_offset <= -{0} or x_offset >= {0} or y_offset <= -{1} or y_offset >= {1}'.format(max_x_shift,
-                                                                                                           max_y_shift)
+        query_string = 'x_offset <= -{0} or x_offset >= {0} or y_offset <= -{1} or y_offset >= {1}'.format(
+            max_x_shift, max_y_shift)
         sp_shift_outliers = self.matches.query(query_string)
         shift_mask = pd.Series(True, index=self.matches.index)
         shift_mask.loc[sp_shift_outliers.index] = False
 
-        # Generate the composite mask and write the masks to the mask data structure
+        # Generate the composite mask and write the masks to the mask data
+        # structure
         mask = threshold_mask & shift_mask
         self.masks = ('shift', shift_mask)
         self.masks = ('threshold', threshold_mask)
@@ -330,7 +346,8 @@ class Edge(dict, MutableMapping):
                      of the matches dataframe.
         """
         if not hasattr(self, 'matches'):
-            raise AttributeError('This edge does not yet have any matches computed.')
+            raise AttributeError(
+                'This edge does not yet have any matches computed.')
 
         # Build up a composite mask from all of the user specified masks
         if clean_keys:
@@ -341,7 +358,10 @@ class Edge(dict, MutableMapping):
 
         # Massage the dataframe into the correct structure
         coords = self.source.keypoints[['x', 'y']]
-        merged = matches.merge(coords, left_on=['source_idx'], right_index=True)
+        merged = matches.merge(
+            coords,
+            left_on=['source_idx'],
+            right_index=True)
         merged['strength'] = merged.apply(func, axis=1)
 
         if not hasattr(self, 'suppression'):
@@ -355,7 +375,7 @@ class Edge(dict, MutableMapping):
             self.suppression.suppress()
 
         if clean_keys:
-            mask[mask == True] = self.suppression.mask
+            mask[mask] = self.suppression.mask
         else:
             mask = self.suppression.mask
         self.masks = ('suppression', mask)
@@ -370,7 +390,8 @@ class Edge(dict, MutableMapping):
                 The ratio $area_{convexhull} / area_{imageoverlap}$
         """
         if self.homography is None:
-            raise AttributeError('A homography has not been computed. Unable to determine image overlap.')
+            raise AttributeError(
+                'A homography has not been computed. Unable to determine image overlap.')
 
         matches = self.matches
         # Build up a composite mask from all of the user specified masks
@@ -380,7 +401,8 @@ class Edge(dict, MutableMapping):
         d_idx = matches['destination_idx'].values
         keypoints = self.destination.keypoints.iloc[d_idx][['x', 'y']].values
         if len(keypoints) < 3:
-            raise ValueError('Convex hull computation requires at least 3 measures.')
+            raise ValueError(
+                'Convex hull computation requires at least 3 measures.')
 
         source_geom, proj_geom, ideal_area = self.compute_homography_overlap()
 
@@ -412,7 +434,8 @@ class Edge(dict, MutableMapping):
         # Project using the homography
         vertices_to_project = destination_geom.vertices
         for i, v in enumerate(vertices_to_project):
-            vertices_to_project[i] = tuple(np.array([v[0], v[1], 1]).dot(self.homography)[:2])
+            vertices_to_project[i] = tuple(
+                np.array([v[0], v[1], 1]).dot(self.homography)[:2])
         projected_geom = Polygon(vertices_to_project)
 
         # Estimate the overlapping area

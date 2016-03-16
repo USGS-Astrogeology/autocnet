@@ -4,7 +4,6 @@ from autocnet.examples import get_path
 from autocnet.fileio.io_controlnetwork import to_isis
 from autocnet.fileio.io_controlnetwork import write_filelist
 from autocnet.graph.network import CandidateGraph
-from autocnet.matcher.matcher import FlannMatcher
 
 
 class TestThreeImageMatching(unittest.TestCase):
@@ -24,12 +23,13 @@ class TestThreeImageMatching(unittest.TestCase):
     """
 
     def setUp(self):
-        self.serial_numbers = {'AS15-M-0295_SML.png': '1971-07-31T01:24:11.754',
-                               'AS15-M-0296_SML.png': '1971-07-31T01:24:36.970',
-                               'AS15-M-0297_SML.png': '1971-07-31T01:25:02.243',
-                               'AS15-M-0298_SML.png': '1971-07-31T01:25:27.457',
-                               'AS15-M-0299_SML.png': '1971-07-31T01:25:52.669',
-                               'AS15-M-0300_SML.png': '1971-07-31T01:26:17.923'}
+        self.serial_numbers = {
+            'AS15-M-0295_SML.png': '1971-07-31T01:24:11.754',
+            'AS15-M-0296_SML.png': '1971-07-31T01:24:36.970',
+            'AS15-M-0297_SML.png': '1971-07-31T01:25:02.243',
+            'AS15-M-0298_SML.png': '1971-07-31T01:25:27.457',
+            'AS15-M-0299_SML.png': '1971-07-31T01:25:52.669',
+            'AS15-M-0300_SML.png': '1971-07-31T01:26:17.923'}
 
         for k, v in self.serial_numbers.items():
             self.serial_numbers[k] = 'APOLLO15/METRIC/{}'.format(v)
@@ -43,7 +43,7 @@ class TestThreeImageMatching(unittest.TestCase):
         self.assertEqual(3, cg.number_of_edges())
 
         # Step: Extract image data and attribute nodes
-        cg.extract_features(extractor_parameters={'nfeatures':500})
+        cg.extract_features(extractor_parameters={'nfeatures': 500})
         for i, node, in cg.nodes_iter(data=True):
             self.assertIn(node.nkeypoints, range(490, 511))
 
@@ -75,4 +75,5 @@ class TestThreeImageMatching(unittest.TestCase):
         try:
             os.path.remove('TestThreeImageMatching.net')
             os.path.remove('TestThreeImageMatching_fromlist.lis')
-        except: pass
+        except:
+            pass

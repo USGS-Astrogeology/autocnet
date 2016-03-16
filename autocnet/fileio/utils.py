@@ -4,6 +4,7 @@ import os
 import fnmatch
 import numpy as np
 
+
 def create_dir(basedir=''):
     """
     Create a unique, temporary directory in /tmp where processing will occur
@@ -15,6 +16,7 @@ def create_dir(basedir=''):
     """
     return tempfile.mkdtemp(dir=basedir)
 
+
 def delete_dir(dir):
     """
     Delete a directory
@@ -25,12 +27,13 @@ def delete_dir(dir):
           Remove a directory
     """
     shutil.rmtree(dir)
-    
-def file_search(searchdir,searchstring):
-#Recursively search for files in the specified directory
+
+
+def file_search(searchdir, searchstring):
+    # Recursively search for files in the specified directory
     filelist = []
     for root, dirnames, filenames in os.walk(searchdir):
         for filename in fnmatch.filter(filenames, searchstring):
             filelist.append(os.path.join(root, filename))
-    filelist=np.array(filelist)
-    return filelist    
+    filelist = np.array(filelist)
+    return filelist

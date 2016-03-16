@@ -39,9 +39,11 @@ install:
   - pip install -r requirements.txt
   - pip install coverage
   - pip install coveralls
+  - pip install flake8
 
 script:
   - nosetests --with-coverage --cover-package=autocnet
+
 
 after_success:
   - coveralls
@@ -59,5 +61,6 @@ notifications:
           - dmlytle@usgs.gov
           - jwbacker@usgs.gov
           - krodriguez@usgs.gov
+          - acpaquette@usgs.gov
       on_success: always
       on_failure: always

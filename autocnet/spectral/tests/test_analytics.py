@@ -4,10 +4,11 @@ from autocnet.spectral import analytics
 import pandas as pd
 import numpy as np
 
+
 class Test_Analytics(unittest.TestCase):
-    
+
     np.random.seed(12345)
-    
+
     def setUp(self):
         self.series = pd.Series(np.random.random(25))
 
@@ -26,14 +27,13 @@ class Test_Analytics(unittest.TestCase):
     def test_band_area(self):
         x = np.arange(-2, 2, 0.1)
         y = x**2
-        parabola = pd.Series(y[y<=1], index=x[y<=1])
+        parabola = pd.Series(y[y <= 1], index=x[y <= 1])
         area = analytics.band_area(parabola)
         self.assertAlmostEqual(area, -5.7950)
 
     def test_band_center(self):
         pass
 
-    
 
 if __name__ == '__main__':
     unittest.main()

@@ -1,18 +1,18 @@
-from pandas import DataFrame, Series
+from pandas import Series
 
 from autocnet.spectral.smoothing import boxcar, gaussian
 from autocnet.spectral.continuum import continuum_correct
 import autocnet.spectral.analytics as analytics
 
 
-def tospectra(func): # pragma: no cover
+def tospectra(func):  # pragma: no cover
     def wrapper(*args, **kwargs):
         result = func(*args, **kwargs)
         return Spectra(result)
     return wrapper
 
 
-def tospectrum(func): # pragma: no cover
+def tospectrum(func):  # pragma: no cover
     def wrapper(*args, **kwargs):
         result = func(*args, **kwargs)
         return Spectrum(result)
@@ -32,7 +32,7 @@ class Spectrum(object):
         if callable(result):
             result = tospectrum(result)
         return result
-    
+
     def __getitem__(self, key):
         try:
             result = self.series.loc[key]
@@ -45,7 +45,7 @@ class Spectrum(object):
 
     def gaussian_smooth(self, *args, **kwargs):
         return Spectrum(gaussian(self.series, *args, **kwargs))
-    
+
     def continuum_correct(self, *args, **kwargs):
         corrected, continuum = continuum_correct(self.series, *args, **kwargs)
         return Spectrum(corrected), Spectrum(continuum)
@@ -82,7 +82,3 @@ class Spectra(object):
 
     def __repr__(self):
         return repr(self.df)
-
-    
-       
-    

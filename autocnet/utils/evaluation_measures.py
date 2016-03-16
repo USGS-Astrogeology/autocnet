@@ -64,7 +64,7 @@ def mse(x1, x2, axis=0):
     """
     x1 = np.asanyarray(x1)
     x2 = np.asanyarray(x2)
-    return np.mean((x1-x2)**2, axis=axis)
+    return np.mean((x1 - x2)**2, axis=axis)
 
 
 def rmse(x1, x2, axis=0):
@@ -113,7 +113,7 @@ def maxabs(x1, x2, axis=0):
     """
     x1 = np.asanyarray(x1)
     x2 = np.asanyarray(x2)
-    return np.max(np.abs(x1-x2), axis=axis)
+    return np.max(np.abs(x1 - x2), axis=axis)
 
 
 def meanabs(x1, x2, axis=0):
@@ -137,7 +137,7 @@ def meanabs(x1, x2, axis=0):
     """
     x1 = np.asanyarray(x1)
     x2 = np.asanyarray(x2)
-    return np.mean(np.abs(x1-x2), axis=axis)
+    return np.mean(np.abs(x1 - x2), axis=axis)
 
 
 def medianabs(x1, x2, axis=0):
@@ -161,7 +161,7 @@ def medianabs(x1, x2, axis=0):
     """
     x1 = np.asanyarray(x1)
     x2 = np.asanyarray(x2)
-    return np.median(np.abs(x1-x2), axis=axis)
+    return np.median(np.abs(x1 - x2), axis=axis)
 
 
 def bias(x1, x2, axis=0):
@@ -185,7 +185,7 @@ def bias(x1, x2, axis=0):
     """
     x1 = np.asanyarray(x1)
     x2 = np.asanyarray(x2)
-    return np.mean(x1-x2, axis=axis)
+    return np.mean(x1 - x2, axis=axis)
 
 
 def medianbias(x1, x2, axis=0):
@@ -209,7 +209,7 @@ def medianbias(x1, x2, axis=0):
     """
     x1 = np.asanyarray(x1)
     x2 = np.asanyarray(x2)
-    return np.median(x1-x2, axis=axis)
+    return np.median(x1 - x2, axis=axis)
 
 
 def vare(x1, x2, ddof=0, axis=0):
@@ -233,7 +233,7 @@ def vare(x1, x2, ddof=0, axis=0):
     """
     x1 = np.asanyarray(x1)
     x2 = np.asanyarray(x2)
-    return np.var(x1-x2, ddof=ddof, axis=axis)
+    return np.var(x1 - x2, ddof=ddof, axis=axis)
 
 
 def stde(x1, x2, ddof=0, axis=0):
@@ -257,7 +257,7 @@ def stde(x1, x2, ddof=0, axis=0):
     """
     x1 = np.asanyarray(x1)
     x2 = np.asanyarray(x2)
-    return np.std(x1-x2, ddof=ddof, axis=axis)
+    return np.std(x1 - x2, ddof=ddof, axis=axis)
 
 
 def iqr(x1, x2, axis=0):
@@ -289,7 +289,7 @@ def iqr(x1, x2, axis=0):
         axis = 0
     xdiff = np.sort(x1 - x2)
     nobs = x1.shape[axis]
-    idx = np.round((nobs-1) * np.array([0.25, 0.75])).astype(int)
+    idx = np.round((nobs - 1) * np.array([0.25, 0.75])).astype(int)
     sl = [slice(None)] * xdiff.ndim
     sl[axis] = idx
     iqr = np.diff(xdiff[sl], axis=axis)

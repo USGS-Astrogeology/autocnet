@@ -12,7 +12,7 @@ class CSeries(pd.Series):
     """
     @property
     def _constructor(self):
-        return CSeries # pragma: no cover
+        return CSeries  # pragma: no cover
 
 
 class C(pd.DataFrame):
@@ -43,14 +43,15 @@ class C(pd.DataFrame):
     >>> ptype = [2,2,2,2,2]
     >>> serials = ['a', 'b', 'c', 'b', 'c']
     >>> mtype = [2,2,2,2,2]
-    >>> multi_index = pd.MultiIndex.from_tuples(list(zip(ids, ptype, serials, mtype)),\
-                                    names=['Id', 'Type', 'Serial Number', 'Measure Type'])
+    >>> multi_index = pd.MultiIndex.from_tuples(list(zip(ids, ptype,\
+    serials, mtype)), names=['Id', 'Type', 'Serial Number', 'Measure Type'])
     >>> columns = ['Random Number']
     >>> data_length = 5
     >>> data = np.random.randn(data_length)
     >>> C = control.C(data, index=multi_index, columns=columns)
 
     """
+
     def __init__(self, *args, **kwargs):
         super(C, self).__init__(*args, **kwargs)
         self._creationdate = strftime("%Y-%m-%d %H:%M:%S", gmtime())

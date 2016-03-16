@@ -10,6 +10,7 @@ Development Team
 * Jeannie Backer <jwbacker@usgs.gov>
 * Dyer Lytle <dmlytle@usgs.gov>
 * Kelvin Rodriguez <krodriguez@usgs.gov>
+* Adam Paquette <acpaquette@usgs.gov>
 
 Contributors
 ------------

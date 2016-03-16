@@ -25,7 +25,7 @@ class CandidateGraph(nx.Graph):
 
     Attributes
     node_counter : int
-                   The number of nodes in the graph. 
+                   The number of nodes in the graph.
     node_name_map : dict
                     The mapping of image labels (i.e. file base names) to their
                     corresponding node indices.
@@ -49,10 +49,12 @@ class CandidateGraph(nx.Graph):
             # Replace the default node dict with an object
             self.node[node_name] = Node(image_name, image_path)
 
-            # fill the dictionary used for relabelling nodes with relative path keys
+            # fill the dictionary used for relabelling nodes with relative path
+            # keys
             node_labels[node_name] = self.node_counter
             # fill the dictionary used for mapping base name to node index
-            self.node_name_map[self.node[node_name].image_name] = self.node_counter
+            self.node_name_map[
+                self.node[node_name].image_name] = self.node_counter
             self.node_counter += 1
 
         nx.relabel_nodes(self, node_labels, copy=False)
@@ -79,7 +81,6 @@ class CandidateGraph(nx.Graph):
             graph = pickle.load(f)
         return graph
 
-
     @classmethod
     def from_filelist(cls, filelist):
         """
@@ -105,10 +106,10 @@ class CandidateGraph(nx.Graph):
         # This is brute force for now, could swap to an RTree at some point.
         adjacency_dict = {}
 
-        for i, j in itertools.permutations(datasets,2):
-            if not i.base_name in adjacency_dict.keys():
+        for i, j in itertools.permutations(datasets, 2):
+            if i.base_name not in adjacency_dict.keys():
                 adjacency_dict[i.base_name] = []
-            if not j.base_name in adjacency_dict.keys():
+            if j.base_name not in adjacency_dict.keys():
                 adjacency_dict[j.base_name] = []
 
             # Grab the footprints and test for intersection
@@ -119,7 +120,6 @@ class CandidateGraph(nx.Graph):
                 adjacency_dict[j.base_name].append(i.base_name)
 
         return cls(adjacency_dict)
-
 
     @classmethod
     def from_adjacency(cls, input_adjacency, basepath=None):
@@ -148,7 +148,10 @@ class CandidateGraph(nx.Graph):
             if basepath is not None:
                 for k, v in input_adjacency.items():
                     input_adjacency[k] = [os.path.join(basepath, i) for i in v]
-                    input_adjacency[os.path.join(basepath, k)] = input_adjacency.pop(k)
+                    input_adjacency[
+                        os.path.join(
+                            basepath,
+                            k)] = input_adjacency.pop(k)
         return cls(input_adjacency)
 
     def get_name(self, node_index):
@@ -159,7 +162,7 @@ class CandidateGraph(nx.Graph):
         ----------
         node_index : int
                      The index of the node.
-        
+
         Returns
         -------
          : str
@@ -177,7 +180,7 @@ class CandidateGraph(nx.Graph):
         ----------
         node_name : str
                     The name of the node.
-        
+
         Returns
         -------
          : object
@@ -190,17 +193,17 @@ class CandidateGraph(nx.Graph):
     def get_keypoints(self, nodekey):
         """
         Get the list of keypoints for the given node.
-        
+
         Parameters
         ----------
         nodeIndex : int or string
                     The key for the node, by index or name.
-        
+
         Returns
         -------
          : list
            The list of keypoints for the given node.
-        
+
         """
         try:
             return self.get_node(nodekey).keypoints
@@ -239,7 +242,7 @@ class CandidateGraph(nx.Graph):
         for i, node in self.nodes_iter(data=True):
             image = node.get_array()
             node.extract_features(image, method=method,
-                                extractor_parameters=extractor_parameters)
+                                  extractor_parameters=extractor_parameters)
 
     def match_features(self, k=None):
         """
@@ -257,7 +260,8 @@ class CandidateGraph(nx.Graph):
 
             # Grab the descriptors
             if not hasattr(node, 'descriptors'):
-                raise AttributeError('Descriptors must be extracted before matching can occur.')
+                raise AttributeError(
+                    'Descriptors must be extracted before matching can occur.')
             descriptors = node.descriptors
             # Load the neighbors of the current node into the FLANN matcher
             neighbors = self.neighbors(i)
@@ -290,17 +294,20 @@ class CandidateGraph(nx.Graph):
         source_groups = matches.groupby('source_image')
         for i, source_group in source_groups:
             for j, dest_group in source_group.groupby('destination_image'):
-                destination_key = int(dest_group['destination_image'].values[0])
+                destination_key = int(
+                    dest_group['destination_image'].values[0])
                 source_key = int(dest_group['source_image'].values[0])
                 if (source_key, destination_key) in edges:
                     edge = self.edge[source_key][destination_key]
                 else:
                     edge = self.edge[destination_key][source_key]
-                    dest_group.rename(columns={'source_image': 'destination_image',
-                                               'source_idx': 'destination_idx',
-                                               'destination_image': 'source_image',
-                                               'destination_idx': 'source_idx'},
-                                      inplace=False)
+                    dest_group.rename(
+                        columns={
+                            'source_image': 'destination_image',
+                            'source_idx': 'destination_idx',
+                            'destination_image': 'source_image',
+                            'destination_idx': 'source_idx'},
+                        inplace=False)
                 if hasattr(edge, 'matches'):
                     df = edge.matches
                     edge.matches = df.append(dest_group, ignore_index=True)
@@ -349,15 +356,27 @@ class CandidateGraph(nx.Graph):
         for s, d, edge in self.edges_iter(data=True):
             edge.compute_fundamental_matrix(clean_keys=clean_keys, **kwargs)
 
-    def subpixel_register(self, clean_keys=[], threshold=0.8, upsampling=10,
-                                 template_size=9, search_size=27, tiled=False, **kwargs):
-         """
-         Compute subpixel offsets for all edges using identical parameters
-         """
-         for s, d, edge in self.edges_iter(data=True):
-             edge.subpixel_register(clean_keys=clean_keys, threshold=threshold,
-                                    upsampling=upsampling, template_size=template_size,
-                                    search_size=search_size, tiled=tiled, **kwargs)
+    def subpixel_register(
+            self,
+            clean_keys=[],
+            threshold=0.8,
+            upsampling=10,
+            template_size=9,
+            search_size=27,
+            tiled=False,
+            **kwargs):
+        """
+        Compute subpixel offsets for all edges using identical parameters
+        """
+        for s, d, edge in self.edges_iter(data=True):
+            edge.subpixel_register(
+                clean_keys=clean_keys,
+                threshold=threshold,
+                upsampling=upsampling,
+                template_size=template_size,
+                search_size=search_size,
+                tiled=tiled,
+                **kwargs)
 
     def suppress(self, clean_keys=[], func=spf.correlation, **kwargs):
         for s, d, e in self.edges_iter(data=True):
@@ -454,7 +473,6 @@ class CandidateGraph(nx.Graph):
                 m1 = (source, int(row['source_idx']))
                 m2 = (destination, int(row['destination_idx']))
 
-
                 values.append([kp1.loc[m1_pid]['x'],
                                kp1.loc[m1_pid]['y'],
                                m1,
@@ -486,27 +504,40 @@ class CandidateGraph(nx.Graph):
             if merged_cnet is None:
                 merged_cnet = cnet.copy(deep=True)
             else:
-                pid_offset = merged_cnet['pid'].max() + 1  # Get the current max point index
+                # Get the current max point index
+                pid_offset = merged_cnet['pid'].max() + 1
                 cnet[['pid']] += pid_offset
 
                 # Inner merge on the dataframe identifies common points
-                common = pd.merge(merged_cnet, cnet, how='inner', on='idx', left_index=True, suffixes=['_r',
-                                                                                                      '_l'])
+                common = pd.merge(
+                    merged_cnet,
+                    cnet,
+                    how='inner',
+                    on='idx',
+                    left_index=True,
+                    suffixes=[
+                        '_r',
+                        '_l'])
 
                 # Iterate over the points to be merged and merge them in.
                 for i, r in common.iterrows():
                     new_pid = r['pid_r']
                     update_pid = r['pid_l']
-                    cnet.loc[cnet['pid'] == update_pid, ['pid']] = new_pid  # Update the point ids
+                    cnet.loc[
+                        cnet['pid'] == update_pid,
+                        ['pid']] = new_pid  # Update the point ids
 
                 # Perform the concat
                 merged_cnet = pd.concat([merged_cnet, cnet])
-                merged_cnet.drop_duplicates(['idx', 'pid'], keep='first', inplace=True)
+                merged_cnet.drop_duplicates(
+                    ['idx', 'pid'], keep='first', inplace=True)
 
-        # Final validation to remove any correspondence with multiple correspondences in the same image
+        # Final validation to remove any correspondence with multiple
+        # correspondences in the same image
         merged_cnet = _validate_cnet(merged_cnet)
 
-        # If the user wants ISIS serial numbers, replace the nid with the serial.
+        # If the user wants ISIS serial numbers, replace the nid with the
+        # serial.
         if isis_serials is True:
             nid_to_serial = {}
             for i, node in self.nodes_iter(data=True):
@@ -582,4 +613,4 @@ class CandidateGraph(nx.Graph):
          : object
            A MatPlotLib axes object
         """
-        return plot_graph(self, ax=ax,  **kwargs)
+        return plot_graph(self, ax=ax, **kwargs)

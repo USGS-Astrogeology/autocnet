@@ -1,6 +1,7 @@
 from functools import reduce
 import numpy as np
 
+
 def getnearest(iterable, value):
     """
     Given an iterable, get the index nearest to the input value
@@ -60,7 +61,7 @@ def checkdeplaid(incidence):
     """
     if incidence >= 95 and incidence <= 180:
         return 'night'
-    elif incidence >=90 and incidence < 95:
+    elif incidence >= 90 and incidence < 95:
         return 'night'
     elif incidence >= 85 and incidence < 90:
         return 'day'
@@ -115,7 +116,7 @@ def find_in_dict(obj, key):
     if key in obj:
         return obj[key]
     for k, v in obj.items():
-        if isinstance(v,dict):
+        if isinstance(v, dict):
             item = find_in_dict(v, key)
             if item is not None:
                 return item
