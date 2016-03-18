@@ -49,7 +49,6 @@ class TestCandidateGraph(unittest.TestCase):
         subgraph_list = self.graph.connected_subgraphs()
         self.assertEqual(len(subgraph_list), 1)
 
-
     def test_save_load(self):
         self.graph.save('test_save.cg')
         loaded = self.graph.from_graph('test_save.cg')
@@ -67,6 +66,7 @@ class TestCandidateGraph(unittest.TestCase):
 
 
 class TestFromList(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
         filelist = [get_path('Mars_MGS_MOLA_ClrShade_MAP2_0.0N0.0_MERC.tif'),
@@ -99,4 +99,3 @@ class TestEdge(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.graph = network.CandidateGraph.from_adjacency(get_path('adjacency.json'))
-

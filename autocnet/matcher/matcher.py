@@ -1,4 +1,3 @@
-from collections import deque
 import warnings
 
 import cv2
@@ -6,14 +5,12 @@ import pandas as pd
 
 from scipy.ndimage.interpolation import zoom
 
-from autocnet.utils.observable import Observable
-
 FLANN_INDEX_KDTREE = 1  # Algorithm to set centers,
 DEFAULT_FLANN_PARAMETERS = dict(algorithm=FLANN_INDEX_KDTREE,
                                 trees=3)
 
 
-def pattern_match(template, image, upsampling=16,func=cv2.TM_CCOEFF_NORMED, error_check=False):
+def pattern_match(template, image, upsampling=16, func=cv2.TM_CCOEFF_NORMED, error_check=False):
     """
     Call an arbitrary pattern matcher
 
@@ -64,7 +61,7 @@ def pattern_match(template, image, upsampling=16,func=cv2.TM_CCOEFF_NORMED, erro
     result = cv2.matchTemplate(u_image, u_template, method=func)
     min_corr, max_corr, min_loc, max_loc = cv2.minMaxLoc(result)
     if func == cv2.TM_SQDIFF or func == cv2.TM_SQDIFF_NORMED:
-        x,y = (min_loc[0], min_loc[1])
+        x, y = (min_loc[0], min_loc[1])
     else:
         x, y = (max_loc[0], max_loc[1])
 
