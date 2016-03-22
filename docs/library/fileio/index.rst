@@ -3,5 +3,6 @@
 
 .. toctree::
 
+   control
    gdal
    json

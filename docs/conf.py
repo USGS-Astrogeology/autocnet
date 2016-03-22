@@ -17,6 +17,11 @@ import sys
 import os
 from unittest.mock import MagicMock
 
+
+autodoc_mock_imports = ['proj4', 'gdal', 'osr','ogr', 'cv2', 'scikit-image',
+                        'skimage', 'skimage.feature', 'sklearn', 'osgeo']
+
+'''
 class Mock(MagicMock):
     @classmethod
     def __getattr__(cls, name):
@@ -24,7 +29,7 @@ class Mock(MagicMock):
 
 MOCK_MODULES = ['proj4', 'gdal', 'osr','ogr', 'cv2', 'scikit-image', 'skimage', 'skimage.feature', 'sklearn', 'osgeo']
 sys.modules.update((mod_name, Mock()) for mod_name in MOCK_MODULES)
-
+'''
 
 # If extensions (or modules to document with autodoc) are in another
 # directory, add these directories to sys.path here. If the directory is

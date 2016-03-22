@@ -1,3 +1,4 @@
+from functools import singledispatch
 import itertools
 import os
 import dill as pickle
@@ -13,6 +14,7 @@ from autocnet.matcher.matcher import FlannMatcher
 import autocnet.matcher.suppression_funcs as spf
 from autocnet.graph.edge import Edge
 from autocnet.graph.node import Node
+from autocnet.graph import markov_cluster
 from autocnet.vis.graph_view import plot_graph
 
 
@@ -28,8 +30,11 @@ class CandidateGraph(nx.Graph):
                    The number of nodes in the graph.
     node_name_map : dict
                     The mapping of image labels (i.e. file base names) to their
-                    corresponding node indices.
+                    corresponding node indices
 
+    clusters : dict
+               of clusters with key as the cluster id and value as a
+               list of node indices
     ----------
     """
     edge_attr_dict_factory = Edge
@@ -114,8 +119,8 @@ class CandidateGraph(nx.Graph):
             i_fp = i.footprint
             j_fp = j.footprint
             if i_fp.Intersects(j_fp):
-                adjacency_dict[i.base_name].append(j.base_name)
-                adjacency_dict[j.base_name].append(i.base_name)
+                adjacency_dict[i.file_name].append(j.file_name)
+                adjacency_dict[j.file_name].append(i.file_name)
 
         return cls(adjacency_dict)
 
@@ -167,6 +172,7 @@ class CandidateGraph(nx.Graph):
         """
         return self.node[node_index].image_name
 
+<<<<<<< HEAD
     def get_node(self, node_name):
         """
         Get the node with the given name.
@@ -205,6 +211,8 @@ class CandidateGraph(nx.Graph):
         except:
             return self.node[nodekey].keypoints
 
+=======
+>>>>>>> master
     def add_image(self, *args, **kwargs):
         """
         Adds an image node to the graph.
@@ -215,8 +223,6 @@ class CandidateGraph(nx.Graph):
         """
 
         raise NotImplementedError
-        self.add_node(self.node_counter, *args, **kwargs)
-        self.node_counter += 1
 
     def extract_features(self, method='orb', extractor_parameters={}):
         """
@@ -304,6 +310,25 @@ class CandidateGraph(nx.Graph):
                     edge.matches = df.append(dest_group, ignore_index=True)
                 else:
                     edge.matches = dest_group
+
+    def compute_clusters(self, func=markov_cluster.mcl, *args, **kwargs):
+        """
+        Apply some graph clustering algorithm to compute a subset of the global
+        graph.
+
+        Parameters
+        ----------
+        func : object
+               The clustering function to be applied.  Defaults to
+               Markov Clustering Algorithm
+
+        args : list
+               of arguments to be passed through to the func
+
+        kwargs : dict
+                 of keyword arguments to be passed through to the func
+        """
+        _, self.clusters = func(self, *args, **kwargs)
 
     def symmetry_checks(self):
         """
@@ -579,4 +604,25 @@ class CandidateGraph(nx.Graph):
          : object
            A MatPlotLib axes object
         """
+<<<<<<< HEAD
         return plot_graph(self, ax=ax, **kwargs)
+=======
+        return plot_graph(self, ax=ax,  **kwargs)
+
+    @singledispatch
+    def create_subgraph(self, arg, key=None):
+        if not hasattr(self, 'clusters'):
+            raise AttributeError('No clusters have been computed for this graph.')
+        nodes_in_cluster = self.clusters[arg]
+        subgraph = self.subgraph(nodes_in_cluster)
+        return subgraph
+
+    @create_subgraph.register(pd.DataFrame)
+    def _(self, arg, g, key=None):
+        if key == None:
+            return
+        col = arg[key]
+        nodes = col[col == True].index
+        subgraph = g.subgraph(nodes)
+        return subgraph
+>>>>>>> master

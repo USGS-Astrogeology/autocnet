@@ -4,3 +4,6 @@
 .. toctree::
 
    network
+   node
+   edge
+   markov_cluster
