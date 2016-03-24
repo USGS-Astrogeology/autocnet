@@ -27,7 +27,7 @@ class CandidateGraph(nx.Graph):
 
     Attributes
     node_counter : int
-                   The number of nodes in the graph. 
+                   The number of nodes in the graph.
     node_name_map : dict
                     The mapping of image labels (i.e. file base names) to their
                     corresponding node indices
@@ -84,7 +84,6 @@ class CandidateGraph(nx.Graph):
             graph = pickle.load(f)
         return graph
 
-
     @classmethod
     def from_filelist(cls, filelist):
         """
@@ -114,11 +113,11 @@ class CandidateGraph(nx.Graph):
         # This is brute force for now, could swap to an RTree at some point.
         adjacency_dict = {}
 
-        for i, j in itertools.permutations(datasets,2):
-            if not i.file_name in adjacency_dict.keys():
-                adjacency_dict[i.file_name] = []
-            if not j.file_name in adjacency_dict.keys():
-                adjacency_dict[j.file_name] = []
+        for i, j in itertools.permutations(datasets, 2):
+            if i.base_name not in adjacency_dict.keys():
+                adjacency_dict[i.base_name] = []
+            if j.base_name not in adjacency_dict.keys():
+                adjacency_dict[j.base_name] = []
 
             # Grab the footprints and test for intersection
             i_fp = i.footprint
@@ -128,7 +127,6 @@ class CandidateGraph(nx.Graph):
                 adjacency_dict[j.file_name].append(i.file_name)
 
         return cls(adjacency_dict)
-
 
     @classmethod
     def from_adjacency(cls, input_adjacency, basepath=None):
@@ -168,7 +166,7 @@ class CandidateGraph(nx.Graph):
         ----------
         node_index : int
                      The index of the node.
-        
+
         Returns
         -------
          : str
@@ -178,6 +176,47 @@ class CandidateGraph(nx.Graph):
         """
         return self.node[node_index].image_name
 
+<<<<<<< HEAD
+    def get_node(self, node_name):
+        """
+        Get the node with the given name.
+
+        Parameters
+        ----------
+        node_name : str
+                    The name of the node.
+
+        Returns
+        -------
+         : object
+           The node with the given image name.
+
+
+        """
+        return self.node[self.node_name_map[node_name]]
+
+    def get_keypoints(self, nodekey):
+        """
+        Get the list of keypoints for the given node.
+
+        Parameters
+        ----------
+        nodeIndex : int or string
+                    The key for the node, by index or name.
+
+        Returns
+        -------
+         : list
+           The list of keypoints for the given node.
+
+        """
+        try:
+            return self.get_node(nodekey).keypoints
+        except:
+            return self.node[nodekey].keypoints
+
+=======
+>>>>>>> master
     def add_image(self, *args, **kwargs):
         """
         Adds an image node to the graph.
@@ -208,7 +247,7 @@ class CandidateGraph(nx.Graph):
         for i, node in self.nodes_iter(data=True):
             image = node.get_array()
             node.extract_features(image, method=method,
-                                extractor_parameters=extractor_parameters)
+                                  extractor_parameters=extractor_parameters)
 
     def match_features(self, k=None):
         """
@@ -338,14 +377,14 @@ class CandidateGraph(nx.Graph):
             edge.compute_fundamental_matrix(clean_keys=clean_keys, **kwargs)
 
     def subpixel_register(self, clean_keys=[], threshold=0.8, upsampling=10,
-                                 template_size=9, search_size=27, tiled=False, **kwargs):
-         """
-         Compute subpixel offsets for all edges using identical parameters
-         """
-         for s, d, edge in self.edges_iter(data=True):
-             edge.subpixel_register(clean_keys=clean_keys, threshold=threshold,
-                                    upsampling=upsampling, template_size=template_size,
-                                    search_size=search_size, tiled=tiled, **kwargs)
+                          template_size=9, search_size=27, tiled=False, **kwargs):
+        """
+        Compute subpixel offsets for all edges using identical parameters
+        """
+        for s, d, edge in self.edges_iter(data=True):
+            edge.subpixel_register(clean_keys=clean_keys, threshold=threshold,
+                                   upsampling=upsampling, template_size=template_size,
+                                   search_size=search_size, tiled=tiled, **kwargs)
 
     def suppress(self, clean_keys=[], func=spf.correlation, **kwargs):
         for s, d, e in self.edges_iter(data=True):
@@ -442,7 +481,6 @@ class CandidateGraph(nx.Graph):
                 m1 = (source, int(row['source_idx']))
                 m2 = (destination, int(row['destination_idx']))
 
-
                 values.append([kp1.loc[m1_pid]['x'],
                                kp1.loc[m1_pid]['y'],
                                m1,
@@ -479,7 +517,7 @@ class CandidateGraph(nx.Graph):
 
                 # Inner merge on the dataframe identifies common points
                 common = pd.merge(merged_cnet, cnet, how='inner', on='idx', left_index=True, suffixes=['_r',
-                                                                                                      '_l'])
+                                                                                                       '_l'])
 
                 # Iterate over the points to be merged and merge them in.
                 for i, r in common.iterrows():
@@ -570,6 +608,9 @@ class CandidateGraph(nx.Graph):
          : object
            A MatPlotLib axes object
         """
+<<<<<<< HEAD
+        return plot_graph(self, ax=ax, **kwargs)
+=======
         return plot_graph(self, ax=ax,  **kwargs)
 
     @singledispatch
@@ -588,3 +629,4 @@ class CandidateGraph(nx.Graph):
         nodes = col[col == True].index
         subgraph = g.subgraph(nodes)
         return subgraph
+>>>>>>> master

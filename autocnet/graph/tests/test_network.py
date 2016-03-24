@@ -66,6 +66,7 @@ class TestCandidateGraph(unittest.TestCase):
 
 
 class TestFromList(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
         filelist = [get_path('Mars_MGS_MOLA_ClrShade_MAP2_0.0N0.0_MERC.tif'),
@@ -98,4 +99,3 @@ class TestEdge(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.graph = network.CandidateGraph.from_adjacency(get_path('adjacency.json'))
-

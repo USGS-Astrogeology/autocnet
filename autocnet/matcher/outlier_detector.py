@@ -88,7 +88,7 @@ class DistanceRatio(Observable):
         if mask is not None:
             self.mask = mask.copy()
             new_mask = self.matches[mask].groupby('source_idx')['distance'].transform(func).astype('bool')
-            self.mask[mask==True] = new_mask
+            self.mask[mask == True] = new_mask
         else:
             self.mask = self.matches.groupby('source_idx')['distance'].transform(func).astype('bool')
 
@@ -263,7 +263,7 @@ class SpatialSuppression(Observable):
 
         self.mask = pd.Series(False, self.df.index)
         self.mask.loc[list(result)] = True
-        state_package = {'mask':self.mask,
+        state_package = {'mask': self.mask,
                          'k': self.k,
                          'error_k': self.error_k}
 
@@ -317,7 +317,7 @@ def mirroring_test(matches):
                  duplicate rows.
     """
     duplicate_mask = matches.duplicated(subset=['source_idx', 'destination_idx', 'distance'],
-                                    keep='last')
+                                        keep='last')
 
     return duplicate_mask
 
@@ -368,15 +368,15 @@ def compute_fundamental_matrix(kp1, kp2, method='ransac', reproj_threshold=5.0, 
     else:
         raise ValueError("Unknown outlier detection method.  Choices are: 'ransac', 'lmeds', or 'normal'.")
 
-
     transformation_matrix, mask = cv2.findFundamentalMat(kp1,
-                                                     kp2,
-                                                     method_,
-                                                     reproj_threshold,
-                                                     confidence)
+                                                         kp2,
+                                                         method_,
+                                                         reproj_threshold,
+                                                         confidence)
     try:
         mask = mask.astype(bool)
-    except: pass  # pragma: no cover
+    except:
+        pass  # pragma: no cover
 
     return transformation_matrix, mask
 

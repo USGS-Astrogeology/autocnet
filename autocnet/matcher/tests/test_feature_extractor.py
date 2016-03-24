@@ -28,7 +28,6 @@ class TestFeatureExtractor(unittest.TestCase):
                                                       method='sift',
                                                       extractor_parameters=self.parameters)
         self.assertEquals(len(features), 2)
-        self.assertIn(len(features[0]), range(8,12))
+        self.assertIn(len(features[0]), range(8, 12))
         self.assertIsInstance(features[0][0], type(cv2.KeyPoint()))
         self.assertIsInstance(features[1][0], np.ndarray)
-

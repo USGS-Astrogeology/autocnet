@@ -128,7 +128,7 @@ class Node(dict, MutableMapping):
 
         """
         keypoint_objs, descriptors = fe.extract_features(array, **kwargs)
-        keypoints = np.empty((len(keypoint_objs), 7),dtype=np.float32)
+        keypoints = np.empty((len(keypoint_objs), 7), dtype=np.float32)
         for i, kpt in enumerate(keypoint_objs):
             octave = kpt.octave & 8
             layer = (kpt.octave >> 8) & 255
@@ -211,4 +211,3 @@ class Node(dict, MutableMapping):
         mask = panel[clean_keys].all(axis=1)
         matches = self.keypoints[mask]
         return matches, mask
-

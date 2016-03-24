@@ -29,7 +29,7 @@ def clip_roi(img, center, img_size):
                   The clipped image
     """
     if img_size % 2 == 0:
-            raise ValueError('Image size must be odd.')
+        raise ValueError('Image size must be odd.')
 
     i = int((img_size - 1) / 2)
 
