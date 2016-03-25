@@ -70,9 +70,9 @@ def mcl(g, expand_factor=2, inflate_factor=2, max_loop=10, mult_factor=1):
 
     def _stop(arr, i):
 
-        if i%5==4:
+        if i % 5 == 4:
             m = np.max(arr ** 2 - arr) - np.min(arr ** 2 - arr)
-            if m==0:
+            if m == 0:
                 return True
 
         return False
@@ -101,7 +101,8 @@ def mcl(g, expand_factor=2, inflate_factor=2, max_loop=10, mult_factor=1):
         arr = _expand(arr, expand_factor)
 
         # Check for convergence
-        if _stop(arr, i): break
+        if _stop(arr, i):
+            break
 
     clusters = _get_clusters(arr)
     return arr, clusters
