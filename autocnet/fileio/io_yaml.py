@@ -1,7 +1,7 @@
 try:
     import yaml
 except:
-    print 'YAML package not installed, disabling yaml_io module'
+    print('YAML package not installed, disabling yaml_io module')
 
 def read_yaml(inputfile):
     """
@@ -18,7 +18,9 @@ def read_yaml(inputfile):
             YAML file parsed to a Python dict
     """
     try:
-        ydict = yaml.load(f.read())
+        with open(inputfile, 'r') as f:
+            ydict = yaml.load(f)
+
     except:
         raise IOError('Unable to load YAML file.')
     return ydict

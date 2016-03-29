@@ -1,0 +1,56 @@
+system_paths:
+    basepath: /home/acpaquette/Desktop/
+    inputfile_path: /home/acpaquette/autocnet/autocnet/examples/Apollo15/
+    outputfile_path: /home/acpaquette/autocnet/autocnet/examples/Apollo15/
+
+extract_features:
+    method: sift
+    extractor_parameters:
+        nfeatures: 500
+
+match_features:
+    k: 50
+
+# Any clean keys being passed in requires a method to have been used on the candidate graph object
+# before the key can be passed in
+ratio_checks:
+    clean_keys:
+        -
+    keyword_arguments:
+        -
+
+fundamental_matrics:
+    clean_keys:
+        - ratio
+        - symmetry
+    keyword_arguments:
+        -
+
+subpixel_register:
+    clean_keys:
+        - ratio
+        - symmetry
+        - fundamental
+    template_size: 19
+    threshold: 0.8
+    search_size: 53
+    max_x_shift: 1.0
+    max_y_shift: 1.0
+    tiled: False
+    keyword_arguments:
+        -
+
+suppress:
+    clean_keys:
+        - fundamental
+    keyword_arguments:
+        k: 50
+
+cnet_conversion:
+    clean_keys:
+        - subpixel
+to_isis:
+    networkid: None
+    targetname: Moon
+    description: None
+    username: DEFAULTUSERNAME
