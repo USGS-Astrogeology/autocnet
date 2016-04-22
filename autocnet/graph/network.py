@@ -1,22 +1,22 @@
 import itertools
 import math
 import os
+import warnings
+
 import dill as pickle
 import networkx as nx
 import numpy as np
 import pandas as pd
-import warnings
 
-from autocnet.fileio.io_gdal import GeoDataset
-from autocnet.fileio import io_utils
-from autocnet.fileio import io_hdf
 from autocnet.control.control import C
+from autocnet.fileio import io_hdf
 from autocnet.fileio import io_json
-from autocnet.matcher.matcher import FlannMatcher
-import autocnet.matcher.suppression_funcs as spf
+from autocnet.fileio import io_utils
+from autocnet.fileio.io_gdal import GeoDataset
+from autocnet.graph import markov_cluster
 from autocnet.graph.edge import Edge
 from autocnet.graph.node import Node
-from autocnet.graph import markov_cluster
+from autocnet.matcher.matcher import FlannMatcher
 from autocnet.vis.graph_view import plot_graph
 
 
@@ -46,7 +46,6 @@ class CandidateGraph(nx.Graph):
         self.node_counter = 0
         node_labels = {}
         self.node_name_map = {}
-        self.graph_masks = pd.DataFrame()
 
         for node_name in self.nodes():
             image_name = os.path.basename(node_name)
@@ -374,7 +373,7 @@ class CandidateGraph(nx.Graph):
         """
         _, self.clusters = func(self, *args, **kwargs)
 
-    def apply_func_to_edges(self, function, *args, graph_mask_keys=[], **kwargs):
+    def apply_func_to_edges(self, function, *args, **kwargs):
         """
         Iterates over edges using an optional mask and and applies the given function.
         If func is not an attribute of Edge, raises AttributeError
@@ -385,20 +384,12 @@ class CandidateGraph(nx.Graph):
         graph_mask_keys : list
                           of keys in graph_masks
         """
-
-        if graph_mask_keys:
-            merged_graph_mask = self.graph_masks[graph_mask_keys].all(axis=1)
-            edges_to_iter = merged_graph_mask[merged_graph_mask].index
-        else:
-            edges_to_iter = self.edges()
-
         if not isinstance(function, str):
             function = function.__name__
 
-        for s, d in edges_to_iter:
-            curr_edge = self.get_edge_data(s, d)
+        for s, d, edge in self.edges_iter(data=True):
             try:
-                func = getattr(curr_edge, function)
+                func = getattr(edge, function)
             except:
                 raise AttributeError(function, ' is not an attribute of Edge')
             else:
@@ -415,11 +406,8 @@ class CandidateGraph(nx.Graph):
            boolean mask for edges in the minimum spanning tree
         """
 
-        graph_mask = pd.Series(False, index=self.edges())
-        self.graph_masks['mst'] = graph_mask
-
         mst = nx.minimum_spanning_tree(self)
-        self.graph_masks['mst'][mst.edges()] = True
+        return self.create_edge_subgraph(mst.edges())
 
     def to_filelist(self):
         """
