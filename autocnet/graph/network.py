@@ -395,6 +395,63 @@ class CandidateGraph(nx.Graph):
             else:
                 func(*args, **kwargs)
 
+    def symmetry_checks(self):
+        '''
+        Apply a symmetry check to all edges in the graph
+        '''
+        self.apply_func_to_edges('symmetry_check')
+
+    def ratio_checks(self, *args, **kwargs):
+        '''
+        Apply a ratio check to all edges in the graph
+
+        See Also
+        --------
+        autocnet.matcher.outlier_detector.DistanceRatio.compute
+        '''
+        self.apply_func_to_edges('ratio_check', *args, **kwargs)
+
+    def compute_homographies(self, *args, **kwargs):
+        '''
+        Compute homographies for all edges using identical parameters
+
+        See Also
+        --------
+        autocnet.graph.edge.Edge.compute_homography
+        autocnet.matcher.outlier_detector.compute_homography
+        '''
+        self.apply_func_to_edges('compute_homography', *args, **kwargs)
+
+    def compute_fundamental_matrices(self, *args, **kwargs):
+        '''
+        Compute fundmental matrices for all edges using identical parameters
+
+        See Also
+        --------
+        autocnet.matcher.outlier_detector.compute_fundamental_matrix
+        '''
+        self.apply_func_to_edges('compute_fundamental_matrix', *args, **kwargs)
+
+    def subpixel_register(self, *args, **kwargs):
+        '''
+        Compute subpixel offsets for all edges using identical parameters
+
+        See Also
+        --------
+        autocnet.graph.edge.Edge.subpixel_register
+        '''
+        self.apply_func_to_edges('subpixel_register', *args, **kwargs)
+
+    def suppress(self, *args, **kwargs):
+        '''
+        Apply a metric of point suppression to the graph
+
+        See Also
+        --------
+        autocnet.matcher.outlier_detector.SpatialSuppression
+        '''
+        self.apply_func_to_edges('suppress', *args, **kwargs)
+
     def minimum_spanning_tree(self):
         """
         Calculates the minimum spanning tree of the graph

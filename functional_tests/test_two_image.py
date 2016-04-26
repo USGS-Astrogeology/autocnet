@@ -62,25 +62,37 @@ class TestTwoImageMatching(unittest.TestCase):
 
         cg.match_features(k=2)
 
+        # Perform the symmetry check
+        cg.symmetry_checks()
+        # Perform the ratio check
+        cg.ratio_checks(clean_keys = ['symmetry'])
+        # Create fundamental matrix
+        cg.compute_fundamental_matrices(clean_keys = ['symmetry', 'ratio'])
+
+
         for source, destination, edge in cg.edges_iter(data=True):
 
             # Perform the symmetry check
-            edge.symmetry_check()
             self.assertIn(edge.masks['symmetry'].sum(), range(400, 600))
-
             # Perform the ratio test
-            edge.ratio_check(clean_keys=['symmetry'])
             self.assertIn(edge.masks['ratio'].sum(), range(30, 100))
 
+            # Range needs to be set
+            self.assertIn(edge.masks['fundamental'].sum(), range(30, 50))
+
+
         # Step: Compute the homographies and apply RANSAC
-        cg.apply_func_to_edges("compute_homography", clean_keys=['symmetry', 'ratio'])
+        cg.compute_homographies(clean_keys=['symmetry', 'ratio'])
 
         # Step: Compute the overlap ratio and coverage ratio
         for s, d, edge in cg.edges_iter(data=True):
             edge.coverage_ratio(clean_keys=['symmetry', 'ratio'])
 
         # Step: Compute subpixel offsets for candidate points
-        cg.apply_func_to_edges("subpixel_register", clean_keys=['ransac'])
+        cg.subpixel_register(clean_keys=['ransac'])
+
+        # Step:
+        cg.suppress(clean_keys = 'ratio')
 
         # Step: And create a C object
         cnet = cg.to_cnet(clean_keys=['symmetry', 'ratio', 'ransac', 'subpixel'])
