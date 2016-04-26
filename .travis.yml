@@ -4,6 +4,7 @@ sudo: false
 branches:
 only:
   - master
+  - dev
 
 python:
   - "3.5"
@@ -27,9 +28,9 @@ install:
   - conda info -a
 
   # Create a virtual env and install dependencies
-  - conda create -y -q -n test-env python=$TRAVIS_PYTHON_VERSION nose numpy pillow scipy pandas networkx scikit-image sqlalchemy numexpr dill cython pyyaml
-  # Activate the env
-  - source activate test-env
+  # conda is explicitly included here to try to get it into a non-root env.  It is NOT needed outside of CI testing and binstar upload.
+  - conda install python=3.5 nose numpy pillow scipy pandas networkx scikit-image sqlalchemy numexpr dill cython pyyaml
+
 
   # Install the non-conda packages if required, requirements.txt duplicates are ignored
   - conda install -c https://conda.anaconda.org/jlaura opencv3=3.0.0
@@ -39,11 +40,15 @@ install:
   - pip install coverage
   - pip install coveralls
 
+  # Install libs to support upload to binstar
+  - conda install anaconda-client binstar conda-build
+
 script:
   - nosetests --with-coverage --cover-package=autocnet
 
 after_success:
   - coveralls
+  - python ci_support/upload_or_check_non_existence.py ci_support jlaura --channel=main
 
 notifications:
   webhooks:
@@ -60,3 +65,4 @@ notifications:
           - krodriguez@usgs.gov
       on_success: always
       on_failure: always
+      
