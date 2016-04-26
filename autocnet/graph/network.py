@@ -685,11 +685,17 @@ class CandidateGraph(nx.Graph):
             The number of edges or sum of edge weights in the graph.
 
         """
-        s = sum(self.degree(weight=weight).values()) / 2
-        if weight is None:
-            return math.ceil(s)
+
+        if weight:
+            return sum([e[weight] for s, d, e in self.edges_iter(data=True)])
         else:
-            return s
+            return len(self.edges())
+
+        # s = sum(self.degree(weight=weight).values()) / 2
+        # if weight is None:
+        #     return math.ceil(s)
+        # else:
+        #     return s
 
     def create_node_subgraph(self, nodes):
         """
