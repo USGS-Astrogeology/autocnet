@@ -19,25 +19,20 @@ AutoCNet
     :target: http://autocnet.readthedocs.org/en/latest/
     :alt: Documentation Status
 
-
-R&D for automated control network generation.
+Automated sparse control network generation to support photogrammetric control of planetary image data.
 
 * Documentation: https://autocnet.readthedocs.org.
 
-Developer TODOs
----------------
+Installation Instructions
+-------------------------
+We suggest using Anaconda Python to install Autocnet within a virtual environment.  These steps will walk you through the process.
 
-* Ensure installation requirements are met
-    * Watch for the OpenCV dependency
-* Read comparing workflows (https://www.atlassian.com/git/tutorials/comparing-workflows)
-
-Credits
----------
-
-Tools used in rendering this package:
-
-*  Cookiecutter_
-*  `cookiecutter-pypackage`_
-
-.. _Cookiecutter: https://github.com/audreyr/cookiecutter
-.. _`cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
+1. [Download](https://www.continuum.io/downloads) and install the Python 3.x Miniconda installer.  Respond ``Yes`` when
+   prompted to add conda to your BASH profile.
+1. (Optional) We like to sequester applications in their own environments to avoid any dependency conflicts.  To do this:
+  * ``conda create -n <your_environment_name> python=3 && source activate <your_environment_name>``
+1. Bring up a command line and add three channels to your conda config (``~/condarc``):
+  * ``conda config --add channels conda-forge``
+  * ``conda condig --add channels jlaura``
+  * ``conda config --add channels menpo``
+1. Finally, install autocnet: ``conda install -c jlaura autocnet-dev``

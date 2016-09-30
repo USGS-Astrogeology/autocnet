@@ -1,9 +1,6 @@
-import math
 import numpy as np
 import networkx as nx
 
-from autocnet.examples import get_path
-from autocnet.fileio.io_gdal import GeoDataset
 from matplotlib import pyplot as plt
 import matplotlib
 
@@ -176,13 +173,13 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
 
     matches, mask = edge._clean(clean_keys)
 
-    source_keypoints = edge.source.get_keypoints(index=mask)
-    destination_keypoints = edge.destination.get_keypoints(index=mask)
+    source_keypoints = edge.source.get_keypoints(index=matches['source_idx'])
+    destination_keypoints = edge.destination.get_keypoints(index=matches['destination_idx'])
 
     # Plot the source
     source_idx = matches['source_idx'].values
     s_kps = source_keypoints.loc[source_idx]
-    ax.scatter(s_kps['x'], s_kps['y'], **scatter_kwargs)
+    ax.scatter(s_kps['x'], s_kps['y'], **scatter_kwargs, cmap='gray')
 
     # Plot the destination
     destination_idx = matches['destination_idx'].values

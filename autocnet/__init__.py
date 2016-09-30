@@ -9,3 +9,12 @@ def get_data(filename):
     fullname = os.path.join(dirname, filename)
     return fullname
 
+import autocnet.examples
+import autocnet.camera
+import autocnet.cg
+import autocnet.control
+import autocnet.graph
+import autocnet.matcher
+import autocnet.transformation
+import autocnet.utils
+import autocnet.utils

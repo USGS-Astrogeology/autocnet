@@ -1,23 +1,36 @@
-language: python
 sudo: false
 
 branches:
 only:
   - master
-  - dev
 
-python:
-  - "3.5"
+env:
+  global:
+    - BINSTAR_USER: jlaura
+  matrix:
+    - PYTHON_VERSION: 3.5
+
+os:
+  - linux
+  - osx
 
 before_install:
 
 install:
   # We do this conditionally because it saves us some downloading if the
   # version is the same.
-  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
-      wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh;
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then
+      if [ "$PYTHON_VERSION" == 2.7 ]; then
+        wget https://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh -O miniconda.sh;
+      else
+        wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+      fi
     else
-      wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
+      if ["$PYTHON_VERSION" == 2.7]; then
+        curl -o miniconda.sh  https://repo.continuum.io/miniconda/Miniconda-latest-MacOSX-x86_64.sh;
+      else
+        curl -o miniconda.sh  https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh;
+      fi
     fi
   - bash miniconda.sh -b -p $HOME/miniconda
   - export PATH="$HOME/miniconda/bin:$PATH"
@@ -27,42 +40,43 @@ install:
   # Useful for debugging any issues with conda
   - conda info -a
 
-  # Create a virtual env and install dependencies
-  # conda is explicitly included here to try to get it into a non-root env.  It is NOT needed outside of CI testing and binstar upload.
-  - conda install python=3.5 nose numpy pillow scipy pandas networkx scikit-image sqlalchemy numexpr dill cython pyyaml
-
-
-  # Install the non-conda packages if required, requirements.txt duplicates are ignored
-  - conda install -c https://conda.anaconda.org/jlaura opencv3=3.0.0
+  # Install dependencies
   - conda config --add channels conda-forge
-  - conda install -c https://conda.anaconda.org/conda-forge gdal h5py
-  - pip install -r requirements.txt
-  - pip install coverage
-  - pip install coveralls
+  - conda config --add channels menpo
+  - conda config --add channels jlaura
+  - conda install -c conda-forge numpy
+  - conda install -c jlaura plio opencv3=3.0.0
+  - conda install -c conda-forge vlfeat
+  - conda install -c menpo cyvlfeat
+  - pip install pillow pysal
+  - conda install scipy networkx numexpr dill cython pyyaml matplotlib runipy
 
-  # Install libs to support upload to binstar
-  - conda install anaconda-client binstar conda-build
+  # Development installation
+  - conda install nose coverage sh anaconda-client
+  - pip install coveralls
+  - python runipynbs.py
+
+
+    # Straight from the menpo team
+  - if [["$TRAVIS_OS_NAME" == "osx"]]; then
+      curl -o condaci.py https://raw.githubusercontent.com/menpo/condaci/v0.4.8/condaci.py;
+    else
+      wget https://raw.githubusercontent.com/menpo/condaci/v0.4.8/condaci.py -O condaci.py;
+    fi
+    # Build autocnet and push to anaconda cloud
+  - python condaci.py setup
 
 script:
   - nosetests --with-coverage --cover-package=autocnet
 
 after_success:
+  # Upload to anaconda and push to coveralls
+  - ~/miniconda/bin/python condaci.py build ./conda
   - coveralls
-  - python ci_support/upload_or_check_non_existence.py ci_support jlaura --channel=main
 
 notifications:
   webhooks:
     urls:
       - https://webhooks.gitter.im/e/6cbe4b65fff6764ed80f
-    on_success: always  
-    on_failure: always  
-    on_start: never     
-  email:
-      recipients:
-          - kberry@usgs.gov
-          - dmlytle@usgs.gov
-          - jwbacker@usgs.gov
-          - krodriguez@usgs.gov
-      on_success: always
-      on_failure: always
-      
+    on_success: always
+    on_failure: always

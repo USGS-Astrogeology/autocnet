@@ -126,7 +126,7 @@ class TestCandidateGraph(unittest.TestCase):
         good_poly = ogr.CreateGeometryFromWkt('POLYGON ((30 10, 40 40, 20 40, 10 20, 30 10))')
         bad_poly = ogr.CreateGeometryFromWkt('POLYGON ((9999 10, 40 40, 20 40, 10 20, 30 10))')
 
-        with patch('autocnet.fileio.io_gdal.GeoDataset.footprint', new_callable=PropertyMock) as patch_fp:
+        with patch('plio.io.io_gdal.GeoDataset.footprint', new_callable=PropertyMock) as patch_fp:
             patch_fp.return_value = good_poly
             n = network.CandidateGraph.from_filelist(mock_list, get_path('Apollo15'))
             self.assertEqual(n.number_of_nodes(), 6)
@@ -153,7 +153,7 @@ class TestCandidateGraph(unittest.TestCase):
 
     def test_filter(self):
         def edge_func(edge):
-            return hasattr(edge, 'matches') and not edge.matches.empty
+            return edge.matches is not None and hasattr(edge, 'matches')
 
         graph = self.graph.copy()
         test_sub_graph = graph.create_node_subgraph([0, 1])

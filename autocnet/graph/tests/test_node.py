@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 
 from autocnet.examples import get_path
-from autocnet.fileio.io_gdal import GeoDataset
+from plio.io.io_gdal import GeoDataset
 
 from .. import node
 
@@ -37,10 +37,6 @@ class TestNode(unittest.TestCase):
         self.assertEquals(len(self.node.descriptors), 10)
         self.assertIsInstance(self.node.descriptors[0], np.ndarray)
         self.assertEqual(10, self.node.nkeypoints)
-
-        # Test the setter
-        self.node.nkeypoints = 11
-        self.assertEqual(11, self.node.nkeypoints)
 
     def test_masks(self):
         # Assert a warning raise here
@@ -75,3 +71,11 @@ class TestNode(unittest.TestCase):
         self.assertTrue((kps.sort(axis=0) == self.node.get_keypoints().sort(axis=0)).all().all())
 
         os.remove('node_test.hdf')
+
+    def test_coverage(self):
+        image = self.node.get_array()
+        self.node.extract_features(image, method='sift', extractor_parameters={'nfeatures': 10})
+
+        coverage_percn = self.node.coverage()
+
+        self.assertAlmostEqual(coverage_percn, 38.06139557)

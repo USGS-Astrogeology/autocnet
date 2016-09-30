@@ -2,7 +2,6 @@ from collections import deque
 import math
 import warnings
 
-import cv2
 import numpy as np
 import pandas as pd
 
@@ -53,7 +52,7 @@ class DistanceRatio(Observable):
     def nvalid(self):
         return self.mask.sum()
 
-    def compute(self, ratio=0.95, mask=None, mask_name=None, single=False):
+    def compute(self, ratio=0.8, mask=None, mask_name=None, single=False):
         """
         Compute and return a mask for a matches dataframe
         using Lowe's ratio test.  If keypoints have a single
@@ -84,13 +83,18 @@ class DistanceRatio(Observable):
                 res[0] = True
             return res
 
-        self.single = single
         if mask is not None:
             self.mask = mask.copy()
-            new_mask = self.matches[mask].groupby('source_idx')['distance'].transform(func).astype('bool')
-            self.mask[mask == True] = new_mask
+            mask_s = self.matches[mask].groupby('source_idx')['distance'].transform(func).astype('bool')
+            single = True
+            mask_d = self.matches[mask].groupby('destination_idx')['distance'].transform(func).astype('bool')
+            self.mask[mask] = mask_s & mask_d
         else:
-            self.mask = self.matches.groupby('source_idx')['distance'].transform(func).astype('bool')
+            mask_s = self.matches.groupby('source_idx')['distance'].transform(func).astype('bool')
+            single = True
+            mask_d = self.matches.groupby('destination_idx')['distance'].transform(func).astype('bool')
+
+            self.mask = mask_s & mask_d
 
         state_package = {'ratio': ratio,
                          'mask': self.mask.copy(),
@@ -138,7 +142,7 @@ class SpatialSuppression(Observable):
 
     """
 
-    def __init__(self, df, domain, min_radius=1, k=250, error_k=0.1):
+    def __init__(self, df, domain, min_radius=1.5, k=250, error_k=0.1):
         columns = df.columns
         for i in ['x', 'y', 'strength']:
             if i not in columns:
@@ -182,14 +186,13 @@ class SpatialSuppression(Observable):
             self.k = len(self.df)
             result = self.df.index
             process = False
-        search_space = np.linspace(self.min_radius, self.max_radius / 16, 250)
-        cell_sizes = (search_space / math.sqrt(2)).astype(np.int)
+        search_space = np.linspace(self.min_radius, self.max_radius, 100)
+        cell_sizes = search_space / math.sqrt(2)
         min_idx = 0
         max_idx = len(search_space) - 1
 
         while process:
             mid_idx = int((min_idx + max_idx) / 2)
-            r = search_space[mid_idx]
 
             cell_size = cell_sizes[mid_idx]
             n_x_cells = int(self.domain[0] / cell_size)
@@ -222,19 +225,19 @@ class SpatialSuppression(Observable):
                         min_idx = mid_idx
                         break
 
-                    y_min = y_center - 5
+                    y_min = y_center - int(round(cell_size, 0))
                     if y_min < 0:
                         y_min = 0
 
-                    x_min = x_center - 5
+                    x_min = x_center - int(round(cell_size, 0))
                     if x_min < 0:
                         x_min = 0
 
-                    y_max = y_center + 5
+                    y_max = y_center + int(round(cell_size, 0))
                     if y_max > grid.shape[0]:
                         y_max = grid.shape[0]
 
-                    x_max = x_center + 5
+                    x_max = x_center + int(round(cell_size, 0))
                     if x_max > grid.shape[1]:
                         x_max = grid.shape[1]
 
@@ -242,18 +245,24 @@ class SpatialSuppression(Observable):
                     grid[y_min: y_max,
                          x_min: x_max] = True
 
+
             #  Check break conditions
             if self.k - self.k * self.error_k <= len(result) <= self.k + self.k * self.error_k:
                 process = False
             elif len(result) < self.k:
                 # The radius is too large
                 max_idx = mid_idx
+                if max_idx == 0:
+                    warnings.warn('Unable to retrieve {} points. Consider reducing the amount of points you request(k)'
+                                  .format(self.k))
+                    process = False
                 if min_idx == max_idx:
                     process = False
             elif min_idx == mid_idx or mid_idx == max_idx:
                 warnings.warn('Unable to optimally solve.  Returning with {} points'.format(len(result)))
                 process = False
 
+        self.mask = pd.Series(False, self.df.index)
         self.mask.loc[list(result)] = True
         state_package = {'mask': self.mask,
                          'k': self.k,
@@ -311,111 +320,3 @@ def mirroring_test(matches):
     duplicate_mask = matches.duplicated(subset=['source_idx', 'destination_idx', 'distance'], keep='last')
     return duplicate_mask
 
-
-def compute_fundamental_matrix(kp1, kp2, method='ransac', reproj_threshold=5.0, confidence=0.99):
-    """
-    Given two arrays of keypoints compute the fundamental matrix
-
-    Parameters
-    ----------
-    kp1 : ndarray
-          (n, 2) of coordinates from the source image
-
-    kp2 : ndarray
-          (n, 2) of coordinates from the destination image
-
-    outlier_algorithm : {'ransac', 'lmeds', 'normal'}
-                        The openCV algorithm to use for outlier detection
-
-    reproj_threshold : float
-                       The maximum distances in pixels a reprojected points
-                       can be from the epipolar line to be considered an inlier
-
-    confidence : float
-                 [0, 1] that the estimated matrix is correct
-
-    Returns
-    -------
-    transformation_matrix : ndarray
-                            The 3x3 transformation matrix
-
-    mask : ndarray
-           Boolean array of the outliers
-
-    Notes
-    -----
-    While the method is user definable, if the number of input points
-    is < 7, normal outlier detection is automatically used, if 7 > n > 15,
-    least medians is used, and if 7 > 15, ransac can be used.
-    """
-    if method == 'ransac':
-        method_ = cv2.FM_RANSAC
-    elif method == 'lmeds':
-        method_ = cv2.FM_LMEDS
-    elif method == 'normal':
-        method_ = cv2.FM_7POINT
-    else:
-        raise ValueError("Unknown outlier detection method.  Choices are: 'ransac', 'lmeds', or 'normal'.")
-
-    transformation_matrix, mask = cv2.findFundamentalMat(kp1,
-                                                         kp2,
-                                                         method_,
-                                                         reproj_threshold,
-                                                         confidence)
-    try:
-        mask = mask.astype(bool)
-    except:
-        pass  # pragma: no cover
-
-    return transformation_matrix, mask
-
-
-def compute_homography(kp1, kp2, method='ransac', **kwargs):
-    """
-    Given two arrays of keypoints compute the homography
-
-    Parameters
-    ----------
-    kp1 : ndarray
-          (n, 2) of coordinates from the source image
-
-    kp2 : ndarray
-          (n, 2) of coordinates from the destination image
-
-    method : {'ransac', 'lmeds', 'normal'}
-             The openCV algorithm to use for outlier detection
-
-    ransacReprojThreshold : float
-                            The maximum distances in pixels a reprojected points
-                            can be from the epipolar line to be considered an inlier
-
-    Returns
-    -------
-    transformation_matrix : ndarray
-                            The 3x3 perspective transformation matrix
-
-    mask : ndarray
-           Boolean array of the outliers
-
-    Notes
-    -----
-    While the method is user definable, if the number of input points
-    is < 7, normal outlier detection is automatically used, if 7 > n > 15,
-    least medians is used, and if 7 > 15, ransac can be used.
-    """
-
-    if method == 'ransac':
-        method_ = cv2.RANSAC
-    elif method == 'lmeds':
-        method_ = cv2.LMEDS
-    elif method == 'normal':
-        method_ = 0  # Normal method
-    else:
-        raise ValueError("Unknown outlier detection method.  Choices are: 'ransac', 'lmeds', or 'normal'.")
-    transformation_matrix, mask = cv2.findHomography(kp1,
-                                                     kp2,
-                                                     method_,
-                                                     **kwargs)
-    if mask is not None:
-        mask = mask.astype(bool)
-    return transformation_matrix, mask

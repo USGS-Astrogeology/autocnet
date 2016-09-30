@@ -9,6 +9,7 @@ import numpy.testing
 import pandas as pd
 from autocnet.transformation import transformations
 
+
 class TestHomography(unittest.TestCase):
 
     def test_Homography(self):
@@ -23,10 +24,9 @@ class TestHomography(unittest.TestCase):
         tp = static_H.dot(fph.T)
         # normalize hom. coordinates
         tp /= tp[-1, :np.newaxis]
-        H = transformations.Homography(static_H,
-                                       pd.DataFrame(fp, columns=['x', 'y']),
-                                       pd.DataFrame(tp.T[:, :2], columns=['x', 'y']),
-                                       mask=pd.Series(True, index=np.arange(fp.shape[0])))
+        H = transformations.Homography(static_H, index=np.arange(20))
+        H.x1 = pd.DataFrame(fp, columns=['x', 'y'])
+        H.x2 = pd.DataFrame(tp.T[:, :2], columns=['x', 'y'])
         self.assertAlmostEqual(H.determinant, 0.6249999, 5)
         self.assertAlmostEqual(H.condition, 7.19064438, 5)
 
@@ -41,10 +41,7 @@ class TestHomography(unittest.TestCase):
 
     def test_Homography_fail(self):
         with self.assertRaises(TypeError):
-            h = transformations.Homography([1,2,3], np.arange(3), np.arange(3), None)
-        with self.assertRaises(ValueError):
-            h = transformations.Homography(np.arange(4).reshape(2,2),
-                                           np.arange(3), np.arange(3), None)
+            transformations.Homography([1,2,3], np.arange(3), np.arange(3), None)
 
 
 class TestFundamentalMatrix(unittest.TestCase):
@@ -62,10 +59,22 @@ class TestFundamentalMatrix(unittest.TestCase):
         # normalize hom. coordinates
         tp /= tp[-1, :np.newaxis]
 
-        cls.F = transformations.FundamentalMatrix(static_F,
-                                              pd.DataFrame(fph, columns=['x', 'y', 'h']),
-                                              pd.DataFrame(tp.T, columns=['x', 'y', 'h']),
-                                              mask=pd.Series(True, index=np.arange(fp.shape[0])))
+        cls.F = transformations.FundamentalMatrix(static_F, index=np.arange(20))
+        cls.F.x1 = pd.DataFrame(fph, columns=['x', 'y', 'h'])
+        cls.F.x2 = pd.DataFrame(tp.T, columns=['x', 'y', 'h'])
+
+    def test_compute_f(self):
+        np.random.seed(12345)
+        nbr_inliers = 20
+        fp = np.array(np.random.standard_normal((nbr_inliers, 2)))
+        tp = np.array(np.random.standard_normal((nbr_inliers, 2)))
+
+        F = transformations.FundamentalMatrix(np.zeros((3,3)), index=np.arange(20))
+        F.compute(fp, tp)
+
+        np.testing.assert_array_almost_equal(F, np.array([[-0.685892, -5.870193, 2.268333],
+                                                          [-0.704199, 12.88776,  -3.040341],
+                                                          [-0.231815, -2.806056, 1.]]))
 
     def test_f_error(self):
         self.assertIsInstance(self.F.error, pd.Series)
@@ -80,13 +89,13 @@ class TestFundamentalMatrix(unittest.TestCase):
     def test_f_refine(self):
         # This should raise an error.
         self.F.refine()
-        self.assertEqual(len(self.F._action_stack), 1)
+        self.assertEqual(len(self.F._action_stack), 2)
 
         # Previous error should preclude do/undo
         self.F.rollback()
         self.assertEqual(self.F._current_action_stack, 0)
         self.F.rollforward()
-        self.assertEqual(self.F._current_action_stack, 0)
+        self.assertEqual(self.F._current_action_stack, 1)
 
         self.F._clean_attrs()
         self.assertNotIn('_error', self.F.__dict__)

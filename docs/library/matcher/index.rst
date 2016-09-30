@@ -7,4 +7,6 @@
    matcher
    outlier_detector
    subpixel
-   
+   ciratefi
+   feature
+   naive_template

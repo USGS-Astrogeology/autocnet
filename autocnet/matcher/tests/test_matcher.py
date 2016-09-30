@@ -5,7 +5,7 @@ import warnings
 
 import cv2
 
-from .. import matcher
+from .. import feature
 from autocnet.examples import get_path
 
 sys.path.append(os.path.abspath('..'))
@@ -25,7 +25,7 @@ class TestMatcher(unittest.TestCase):
         self.fd['AS15-M-0297_SML.png'] = sift.detectAndCompute(im2, None)
 
     def test_flann_match_k_eq_2(self):
-        fmatcher = matcher.FlannMatcher()
+        fmatcher = feature.FlannMatcher()
         source_image = self.fd['AS15-M-0296_SML.png']
         fmatcher.add(source_image[1], 0)
 

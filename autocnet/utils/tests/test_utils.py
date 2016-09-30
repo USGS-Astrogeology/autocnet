@@ -1,5 +1,8 @@
 import unittest
 import numpy as np
+import pandas as pd
+
+from osgeo import ogr
 from .. import utils
 
 
@@ -7,6 +10,12 @@ class TestUtils(unittest.TestCase):
 
     def setUp(self):
         pass
+
+    def test_cross_form(self):
+        a = np.array([-1, 0, 1.25])
+        np.testing.assert_array_almost_equal(utils.crossform(a), np.array([[0., -1.25,  0.],
+                                                                           [1.25,  0.,  1.],
+                                                                           [-0., -1.,  0.]]))
 
     def test_checkbandnumbers(self):
         self.assertTrue(utils.checkbandnumbers([1,2,3,4,5], (2,5,1)))
@@ -110,3 +119,24 @@ class TestUtils(unittest.TestCase):
         y = utils.normalize_vector(x)
         truth = np.tile(np.array([ 0.70710678,  0.70710678,  0.70710678]), 4).reshape(4,3)
         np.testing.assert_array_almost_equal(truth, y)
+
+    def test_slope(self):
+        x1 = pd.DataFrame({'x': np.arange(1, 11),
+                           'y': np.arange(1, 11)})
+        x2 = pd.DataFrame({'x': np.arange(6, 16),
+                           'y': np.arange(11, 21)})
+
+        slope = utils.calculate_slope(x1, x2)
+        self.assertEqual(slope[0], 2)
+
+    def test_array_to_poly(self):
+        array1 = np.array([[1, 2],
+                           [3, 4],
+                           [5, 6]])
+        array2 = np.array([[1, 2, 3],
+                           [4, 5, 6],
+                           [7, 8, 9]])
+        geom1 = utils.array_to_poly(array1)
+
+        self.assertIsInstance(geom1, ogr.Geometry)
+        self.assertRaises(ValueError, utils.array_to_poly, array2)

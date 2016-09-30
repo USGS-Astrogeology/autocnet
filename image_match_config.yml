@@ -37,6 +37,8 @@ fundamental_matrices:
 subpixel_register:
     clean_keys:
         - ratio
+        - symmetry
+        - fundamental
     template_size: 5
     threshold: 0.8
     search_size: 15
@@ -50,7 +52,7 @@ subpixel_register:
 
 suppress:
     clean_keys:
-        - ratio
+        - fundamental
 
 # Keyword arguments
     min_radius: 2

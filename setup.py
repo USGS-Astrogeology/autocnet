@@ -1,57 +1,64 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+import os
+from setuptools import setup, find_packages
+import autocnet
+from autocnet.examples import available
+#Grab the README.md for the long description
+with open('README.rst', 'r') as f:
+    long_description = f.read()
 
 
-try:
-    from setuptools import setup
-except ImportError:
-    from distutils.core import setup
+VERSION = autocnet.__version__
 
+def setup_package():
+    examples = set()
+    for i in available():
+        if not os.path.isdir('plio/examples/' + i):
+            if '.' in i:
+                glob_name = 'examples/*.' + i.split('.')[-1]
+            else:
+                glob_name = 'examples/' + i
+        else:
+            glob_name = 'examples/' + i + '/*'
+        examples.add(glob_name)
 
-with open('README.rst') as readme_file:
-    readme = readme_file.read()
+    setup(
+        name = "plio",
+        version = VERSION,
+        author = "Jay Laura",
+        author_email = "jlaura@usgs.gov",
+        description = ("I/O API to support planetary data formats."),
+        long_description = long_description,
+        license = "Public Domain",
+        keywords = "planetary io",
+        url = "http://packages.python.org/autocnet",
+        packages=find_packages(),
+        include_package_data=True,
+        package_data={'autocnet' : list(examples)},
+        zip_safe=False,
+        install_requires=[
+            'pandas',
+            'pyyaml',
+            'plio',
+            'cyvlfeat',
+            'pillow',
+            'pysal',
+            'scipy',
+            'networkx',
+            'numexpr',
+            'dill',
+            'cython',
+            'matplotlib'],
+        classifiers=[
+            "Development Status :: 3 - Alpha",
+            "Topic :: Utilities",
+            "License :: Public Domain",
+            'Programming Language :: Python :: 2.7',
+            'Programming Language :: Python :: 3',
+            'Programming Language :: Python :: 3.3',
+            'Programming Language :: Python :: 3.4',
+            'Programming Language :: Python :: 3.5',
+        ],
+    )
 
-with open('HISTORY.rst') as history_file:
-    history = history_file.read().replace('.. :changelog:', '')
-
-requirements = [
-    # TODO: put package requirements here
-]
-
-test_requirements = [
-    # TODO: put package test requirements here
-]
-
-setup(
-    name='autocnet',
-    version='0.1.0',
-    description="R&D for automated control network generation.",
-    long_description=readme + '\n\n' + history,
-    author="Jay Laura",
-    author_email='jlaura@usgs.gov',
-    url='https://github.com/jlaura@usgs.gov/autocnet',
-    packages=[
-        'autocnet',
-    ],
-    package_dir={'autocnet':
-                 'autocnet'},
-    include_package_data=True,
-    install_requires=requirements,
-    license="ISCL",
-    zip_safe=False,
-    keywords='autocnet',
-    classifiers=[
-        'Development Status :: 2 - Pre-Alpha',
-        'Intended Audience :: Developers',
-        'License :: OSI Approved :: ISC License (ISCL)',
-        'Natural Language :: English',
-        "Programming Language :: Python :: 2",
-        'Programming Language :: Python :: 2.6',
-        'Programming Language :: Python :: 2.7',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.3',
-        'Programming Language :: Python :: 3.4',
-    ],
-    test_suite='tests',
-    tests_require=test_requirements
-)
+if __name__ == '__main__':
+    setup_package()

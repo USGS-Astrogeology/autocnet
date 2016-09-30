@@ -1,10 +1,9 @@
 import unittest
 
 from autocnet.examples import get_path
-from autocnet.fileio.io_controlnetwork import to_isis
-from autocnet.fileio.io_controlnetwork import write_filelist
+from plio.io.io_controlnetwork import to_isis
+from plio.io.io_controlnetwork import write_filelist
 from autocnet.graph.network import CandidateGraph
-from autocnet.matcher.matcher import FlannMatcher
 
 
 class TestThreeImageMatching(unittest.TestCase):
@@ -48,12 +47,11 @@ class TestThreeImageMatching(unittest.TestCase):
             self.assertIn(node.nkeypoints, range(490, 511))
 
         cg.match_features(k=5)
-
-        for source, destination, edge in cg.edges_iter(data=True):
-            edge.symmetry_check()
-            edge.ratio_check(clean_keys=['symmetry'], ratio=0.99)
+        cg.symmetry_checks()
+        cg.ratio_checks()
 
         cg.apply_func_to_edges("compute_homography", clean_keys=['symmetry', 'ratio'])
+        cg.compute_fundamental_matrices(clean_keys=['symmetry', 'ratio'])
 
         # Step: And create a C object
         cg.generate_cnet(clean_keys=['symmetry', 'ratio', 'ransac'])
@@ -61,6 +59,9 @@ class TestThreeImageMatching(unittest.TestCase):
         # Step: Create a fromlist to go with the cnet and write it to a file
         filelist = cg.to_filelist()
         write_filelist(filelist, 'TestThreeImageMatching_fromlist.lis')
+
+        # Step: Create a correspondence network
+        cg.generate_cnet(clean_keys=['ransac'], deepen=True)
 
         to_isis('TestThreeImageMatching.net', cg.cn, mode='wb',
                 networkid='TestThreeImageMatching', targetname='Moon')

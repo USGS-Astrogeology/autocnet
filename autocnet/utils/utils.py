@@ -1,6 +1,28 @@
+import json
+
 from functools import reduce
+
 import numpy as np
 import pandas as pd
+
+from osgeo import ogr
+
+def crossform(a):
+    """
+    Return the cross form, e.g. a in the cross product of a b.
+    Parameters
+    ----------
+    a : ndarray
+        (3,) vector
+
+    Returns
+    -------
+    a : ndarray
+        (3,3)
+    """
+    return np.array([[0, -a[2], a[1]],
+                     [a[2], 0, -a[0]],
+                     [-a[1], a[0], 0]])
 
 
 def normalize_vector(line):
@@ -218,3 +240,97 @@ def remove_field_name(a, name):
         names.remove(name)
     b = a[names]
     return b
+
+
+def calculate_slope(x1, x2):
+    """
+    Calculates the 2-dimensional slope between the points in two dataframes each containing two columns ['x', 'y']
+    The slope is calculated from x1 to x2.
+
+    Parameters
+    ----------
+    x1 : dataframe
+         Each row is a point with columns ['x', 'y']
+    x2 : dataframe
+        Each row is a point with columns ['x', 'y']
+
+    Returns
+    -------
+    : dataframe
+      A dataframe with the slope between the points in x1 and x2 for each row.
+    """
+
+
+    sl = False
+    if isinstance(x1, pd.DataFrame):
+        index = x1.index
+        sl = True
+        x1 = x1.values
+    if isinstance(x2, pd.DataFrame):
+        x2 = x2.values
+    slopes = (x2[:,1] - x1[:,1])/(x2[:,0] - x1[:,0])
+
+    if sl:
+        slopes = pd.Series(slopes, index=index)
+    return slopes
+
+
+def cartesian(arrays, out=None):
+
+    """
+    Generate a cartesian product of input arrays.
+    Parameters
+    ----------
+    arrays : list of array-like
+        1-D arrays to form the cartesian product of.
+    out : ndarray
+        Array to place the cartesian product in.
+    Returns
+    -------
+    out : ndarray
+        2-D array of shape (M, len(arrays)) containing cartesian products
+        formed of input arrays.
+
+    from scikit-learn
+    https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/extmath.py
+    """
+    arrays = [np.asarray(x) for x in arrays]
+    shape = (len(x) for x in arrays)
+    dtype = arrays[0].dtype
+
+    ix = np.indices(shape)
+    ix = ix.reshape(len(arrays), -1).T
+
+    if out is None:
+        out = np.empty_like(ix, dtype=dtype)
+
+    for n, arr in enumerate(arrays):
+        out[:, n] = arrays[n][ix[:, n]]
+
+    return out
+
+
+def array_to_poly(array):
+    """
+    Generate a geojson geom
+    Parameters
+    ----------
+    array : array-like
+            2-D array of size (n, 2) of x, y coordinates
+
+    Returns
+    -------
+    geom : GeoJson
+           geojson containing the necessary data to construct
+           a poly gon
+    """
+    array = np.asarray(array)
+    size = np.shape(array)
+    if size[1] != 2:
+        raise ValueError('Array is not the proper size.')
+        return
+    geom_array = np.append(array, [array[0]], axis = 0).tolist()
+    geom = {"type": "Polygon", "coordinates": [geom_array]}
+    poly = ogr.CreateGeometryFromJson(json.dumps(geom))
+    return poly
+

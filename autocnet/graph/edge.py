@@ -3,16 +3,16 @@ from collections import MutableMapping
 
 import numpy as np
 import pandas as pd
-from pysal.cg.shapes import Polygon
 
-from autocnet.cg.cg import convex_hull_ratio
-from autocnet.cg.cg import overlapping_polygon_area
+from autocnet.utils import utils
 from autocnet.matcher import health
 from autocnet.matcher import outlier_detector as od
 from autocnet.matcher import suppression_funcs as spf
 from autocnet.matcher import subpixel as sp
+from autocnet.matcher.feature import FlannMatcher
 from autocnet.transformation.transformations import FundamentalMatrix, Homography
 from autocnet.vis.graph_view import plot_edge
+from autocnet.cg import cg
 
 
 class Edge(dict, MutableMapping):
@@ -31,6 +31,11 @@ class Edge(dict, MutableMapping):
                  With key equal to an autoincrementing integer and value
                  equal to a dict of parameters used to generate this
                  realization.
+
+    weight : dict
+             Dictionary with two keys overlap_area, and overlap_percn
+             overlap_area returns the area overlaped by both images
+             overlap_percn retuns the total percentage of overlap
     """
 
     def __init__(self, source=None, destination=None):
@@ -39,7 +44,10 @@ class Edge(dict, MutableMapping):
 
         self.homography = None
         self.fundamental_matrix = None
+        self.matches = None
         self._subpixel_offsets = None
+
+        self.weight = {}
 
         self._observers = set()
 
@@ -58,7 +66,7 @@ class Edge(dict, MutableMapping):
         mask_lookup = {'fundamental': 'fundamental_matrix',
                        'ratio': 'distance_ratio'}
         if not hasattr(self, '_masks'):
-            if hasattr(self, 'matches'):
+            if self.matches is not None:
                 self._masks = pd.DataFrame(True, columns=['symmetry'],
                                            index=self.matches.index)
             else:
@@ -67,7 +75,9 @@ class Edge(dict, MutableMapping):
         # state, dynamically draw the mask from the object.
         for c in self._masks.columns:
             if c in mask_lookup:
-                self._masks[c] = getattr(self, mask_lookup[c]).mask
+                truncated_mask = getattr(self, mask_lookup[c]).mask
+                self._masks[c] = False
+                self._masks[c].iloc[truncated_mask.index] = truncated_mask
         return self._masks
 
     @masks.setter
@@ -79,6 +89,50 @@ class Edge(dict, MutableMapping):
     @property
     def health(self):
         return self._health.health
+
+    def match(self, k=2):
+        """
+        Given two sets of descriptors, utilize a FLANN (Approximate Nearest
+        Neighbor KDTree) matcher to find the k nearest matches.  Nearness is
+        the euclidean distance between descriptors.
+
+        The matches are then added as an attribute to the edge object.
+        Parameters
+        ----------
+        k : int
+            The number of neighbors to find
+
+        Returns
+        -------
+
+        """
+        def mono_matches(a, b):
+            fl.add(a.descriptors, a.node_id)
+            fl.train()
+            self._add_matches(fl.query(b.descriptors, b.node_id, k))
+            fl.clear()
+
+        fl = FlannMatcher()
+        mono_matches(self.source, self.destination)
+        mono_matches(self.destination, self.source)
+
+    def _add_matches(self, matches):
+        """
+        Given a dataframe of matches, either append to an existing
+        matches edge attribute or initially populate said attribute.
+
+        Parameters
+        ----------
+        matches : dataframe
+                  A dataframe of matches
+        """
+        if self.matches is None:
+            self.matches = matches
+        else:
+            df = self.matches
+            self.matches = df.append(matches,
+                                     ignore_index=True,
+                                     verify_integrity=True)
 
     def symmetry_check(self):
         if hasattr(self, 'matches'):
@@ -103,35 +157,46 @@ class Edge(dict, MutableMapping):
             raise AttributeError('No matches have been computed for this edge.')
 
     def compute_fundamental_matrix(self, clean_keys=[], **kwargs):
+        """
+        Estimate the fundamental matrix (F) using the correspondences tagged to this
+        edge.
 
-        if hasattr(self, 'matches'):
-            matches = self.matches
-        else:
+
+        Parameters
+        ----------
+        clean_keys : list
+                     Of strings used to apply masks to omit correspondences
+
+        method : {linear, nonlinear}
+                 Method to use to compute F.  Linear is significantly faster at
+                 the cost of reduced accuracy.
+
+        See Also
+        --------
+        autocnet.transformation.transformations.FundamentalMatrix
+       :
+        """
+        if not hasattr(self, 'matches'):
             raise AttributeError('Matches have not been computed for this edge')
             return
-
         matches, mask = self._clean(clean_keys)
 
+        # TODO: Homogeneous is horribly inefficient here, use Numpy array notation
         s_keypoints = self.source.get_keypoint_coordinates(index=matches['source_idx'],
-                                                           homogeneous=True)
+                                                                 homogeneous=True)
         d_keypoints = self.destination.get_keypoint_coordinates(index=matches['destination_idx'],
                                                                 homogeneous=True)
 
-        transformation_matrix, fundam_mask = od.compute_fundamental_matrix(s_keypoints.values,
-                                                                           d_keypoints.values,
-                                                                           **kwargs)
-        try:
-            fundam_mask = fundam_mask.ravel()
-        except:
-            return
+
+        # Replace the index with the matches index.
+        s_keypoints.index = matches.index
+        d_keypoints.index = matches.index
+
+        self.fundamental_matrix = FundamentalMatrix(np.zeros((3,3)), index=matches.index)
+        self.fundamental_matrix.compute(s_keypoints, d_keypoints, **kwargs)
 
         # Convert the truncated RANSAC mask back into a full length mask
-        mask[mask] = fundam_mask
-
-        self.fundamental_matrix = FundamentalMatrix(transformation_matrix,
-                                                    s_keypoints,
-                                                    d_keypoints,
-                                                    mask=mask)
+        mask[mask] = self.fundamental_matrix.mask
 
         # Subscribe the health watcher to the fundamental matrix observable
         self.fundamental_matrix.subscribe(self._health.update)
@@ -170,17 +235,13 @@ class Edge(dict, MutableMapping):
         s_keypoints = self.source.get_keypoint_coordinates(index=matches['source_idx'])
         d_keypoints = self.destination.get_keypoint_coordinates(index=matches['destination_idx'])
 
-        transformation_matrix, ransac_mask = od.compute_homography(s_keypoints.values,
-                                                                   d_keypoints.values,
-                                                                   **kwargs)
+        self.homography = Homography(np.zeros((3,3)), index=self.masks.index)
+        self.homography.compute(s_keypoints.values,
+                                d_keypoints.values)
 
         # Convert the truncated RANSAC mask back into a full length mask
-        mask[mask] = ransac_mask.ravel()
+        mask[mask] = self.homography.mask
         self.masks = ('ransac', mask)
-        self.homography = Homography(transformation_matrix,
-                                     s_keypoints[ransac_mask],
-                                     d_keypoints[ransac_mask],
-                                     mask=mask[mask].index)
 
         # Finalize the array to get custom attrs to propagate
         self.homography.__array_finalize__(self.homography)
@@ -318,65 +379,6 @@ class Edge(dict, MutableMapping):
         mask[mask] = self.suppression.mask
         self.masks = ('suppression', mask)
 
-    def coverage_ratio(self, clean_keys=[]):
-        """
-        Compute the ratio $area_{convexhull} / area_{imageoverlap}$.
-
-        Returns
-        -------
-        ratio : float
-                The ratio $area_{convexhull} / area_{imageoverlap}$
-        """
-        if self.homography is None:
-            raise AttributeError('A homography has not been computed. Unable to determine image overlap.')
-
-        matches = self.matches
-        # Build up a composite mask from all of the user specified masks
-        matches, _ = self._clean(clean_keys)
-
-        d_idx = matches['destination_idx'].values
-        keypoints = self.destination.get_keypoint_coordinates(d_idx)
-        if len(keypoints) < 3:
-            raise ValueError('Convex hull computation requires at least 3 measures.')
-
-        source_geom, proj_geom, ideal_area = self.compute_homography_overlap()
-
-        ratio = convex_hull_ratio(keypoints, ideal_area)
-        return ratio
-
-    def compute_homography_overlap(self):
-        """
-        Using the homography, estimate the overlapping area
-        between images on the edge
-
-        Returns
-        -------
-        source_geom : object
-                      PySAL Polygon object of the source pixel bounding box
-
-        projected_geom : object
-                         PySAL Polygon object of the destination geom projected
-                         into the source reference system using the current
-                         homography
-
-        area : float
-               The estimated area
-        """
-
-        source_geom = self.source.geodata.pixel_polygon
-        destination_geom = self.destination.geodata.pixel_polygon
-
-        # Project using the homography
-        vertices_to_project = destination_geom.vertices
-        for i, v in enumerate(vertices_to_project):
-            vertices_to_project[i] = tuple(np.array([v[0], v[1], 1]).dot(self.homography)[:2])
-        projected_geom = Polygon(vertices_to_project)
-
-        # Estimate the overlapping area
-        area = overlapping_polygon_area([source_geom, projected_geom])
-
-        return source_geom, projected_geom, area
-
     def plot(self, ax=None, clean_keys=[], **kwargs):
         return plot_edge(self, ax=ax, clean_keys=clean_keys, **kwargs)
 
@@ -402,11 +404,61 @@ class Edge(dict, MutableMapping):
                A boolean series to inflate back to the full match set
         """
         if clean_keys:
-            panel = self.masks
-            mask = panel[clean_keys].all(axis=1)
-            matches = self.matches[mask]
+            mask = self.masks[clean_keys].all(axis=1)
         else:
-            matches = self.matches
             mask = pd.Series(True, self.matches.index)
 
-        return matches, mask
+        return self.matches[mask], mask
+
+    def overlap(self):
+        """
+        Acts on an edge and returns the overlap area and percentage of overlap
+        between the two images on the edge. Data is returned to the
+        weight dictionary
+        """
+        poly1 = self.source.geodata.footprint
+        poly2 = self.destination.geodata.footprint
+
+        overlapinfo = cg.two_poly_overlap(poly1, poly2)
+
+        self.weight['overlap_area'] = overlapinfo[1]
+        self.weight['overlap_percn'] = overlapinfo[0]
+
+    def coverage(self, clean_keys = []):
+        """
+        Acts on the edge given either the source node
+        or the destination node and returns the percentage
+        of overlap covered by the keypoints. Data for the
+        overlap is gathered from the source node of the edge
+        resulting in a maximum area difference of 2% when compared
+        to the destination.
+
+        Returns
+        -------
+        total_overlap_percentage : float
+                                   returns the overlap area
+                                   covered by the keypoints
+        """
+        if self.matches is None:
+            raise AttributeError('Edge needs to have features extracted and matched')
+            return
+        matches, mask = self._clean(clean_keys)
+        source_array = self.source.get_keypoint_coordinates(index=matches['source_idx']).values
+
+        source_coords = self.source.geodata.latlon_corners
+        destination_coords = self.destination.geodata.latlon_corners
+
+        convex_hull = cg.convex_hull(source_array)
+
+        convex_points = [self.source.geodata.pixel_to_latlon(row[0], row[1]) for row in convex_hull.points[convex_hull.vertices]]
+        convex_coords = [(x, y) for x, y in convex_points]
+
+        source_poly = utils.array_to_poly(source_coords)
+        destination_poly = utils.array_to_poly(destination_coords)
+        convex_poly = utils.array_to_poly(convex_coords)
+
+        intersection_area = cg.get_area(source_poly, destination_poly)
+
+        total_overlap_coverage = (convex_poly.GetArea()/intersection_area)
+
+        return total_overlap_coverage
