@@ -311,9 +311,9 @@ class FundamentalMatrix(TransformationMatrix):
 
         x = self.x1[self.mask]
         x1 = self.x2[self.mask]
-        return self.compute_error(self.x1, self.x2)
+        return self.compute_error(self.x1, self.x2, index=self.index)
 
-    def compute_error(self, x, x1):
+    def compute_error(self, x, x1, index=None):
         """
         Given a set of matches and a known fundamental matrix,
         compute distance between all match points and the associated
@@ -337,6 +337,9 @@ class FundamentalMatrix(TransformationMatrix):
             n,3 dataframe of homogeneous coordinates with the same
             length as argument x
 
+        index : series
+            Applies a series of indicies to the items in the vector
+
         Returns
         -------
         F_error : ndarray
@@ -347,6 +350,7 @@ class FundamentalMatrix(TransformationMatrix):
         l_norms = normalize_vector(x.dot(self.T))
         F_error = np.abs(np.sum(l_norms * x1, axis=1))
 
+        F_error = pd.Series(F_error, index=index)
         return F_error
 
     def compute(self, kp1, kp2, method='ransac', reproj_threshold=2.0, confidence=0.99):
