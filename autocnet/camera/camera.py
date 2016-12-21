@@ -1,9 +1,7 @@
 import numpy as np
 from autocnet.camera.utils import crossform
-try:
-    import cv2
-except:
-    cv2 = None
+import cv2  # TODO: Make conditional to make OpenCV conditional.
+
 
 def compute_epipoles(f):
     """

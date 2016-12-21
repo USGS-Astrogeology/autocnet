@@ -16,10 +16,8 @@ Sub-packages
 
    cg/index
    control/index
-   fileio/index
    graph/index
    matcher/index
    transformation/index
-   spectral/index
    utils/index
    vis/index

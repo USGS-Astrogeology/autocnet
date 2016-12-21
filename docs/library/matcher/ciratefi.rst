@@ -1,5 +1,5 @@
 :mod:`matcher.ciratefi` --- RST-BC Invariant template match algorithm
-====================================================================
+=====================================================================
 
 The :mod:`matcher.ciratefi` module
 

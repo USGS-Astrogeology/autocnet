@@ -19,7 +19,8 @@ from unittest.mock import MagicMock
 
 
 autodoc_mock_imports = ['proj4', 'gdal', 'osr','ogr', 'cv2', 'scikit-image',
-                        'skimage', 'skimage.feature', 'sklearn', 'osgeo']
+                        'skimage', 'skimage.feature', 'sklearn', 'osgeo',
+                        'cudasift']
 
 '''
 class Mock(MagicMock):
@@ -300,4 +301,3 @@ texinfo_documents = [
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 # texinfo_no_detailmenu = False
-

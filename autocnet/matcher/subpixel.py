@@ -51,7 +51,7 @@ def clip_roi(img, center, img_size):
     return clipped_img
 
 
-def subpixel_offset(template, search, method='naive', **kwargs):
+def subpixel_offset(template, search, **kwargs):
     """
     Uses a pattern-matcher on subsets of two images determined from the passed-in keypoints and optional sizes to
     compute an x and y offset from the search keypoint to the template keypoint and an associated strength.
@@ -75,6 +75,12 @@ def subpixel_offset(template, search, method='naive', **kwargs):
     strength : float
                Strength of the correspondence in the range [-1, 1]
     """
+
+    if 'method' in kwargs.keys():
+        method = kwargs['method']
+        kwargs.pop('method', None)
+    else:
+        method = 'naive'
 
     functions = { 'naive' : naive_template.pattern_match,
                   'ciratefi' : ciratefi.ciratefi}

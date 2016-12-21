@@ -13,7 +13,6 @@ from autocnet.cg import cg
 from autocnet.control.control import Correspondence, Point
 
 from autocnet.matcher.add_depth import deepen_correspondences
-from autocnet.matcher import feature_extractor as fe
 from autocnet.matcher import outlier_detector as od
 from autocnet.matcher import suppression_funcs as spf
 from autocnet.cg.cg import convex_hull_ratio
@@ -227,19 +226,15 @@ class Node(dict, MutableMapping):
 
         return keypoints
 
-    def extract_features(self, array, **kwargs):
+    @staticmethod
+    def _extract_features(*args, **kwargs):
         """
-        Extract features for the node
-
-        Parameters
-        ----------
-        array : ndarray
-
-        kwargs : dict
-                 kwargs passed to autocnet.feature_extractor.extract_features
-
+        Dispatcher to extract features logic for CPU and GPU extractors.
         """
-        self._keypoints, self.descriptors = fe.extract_features(array, **kwargs)
+        pass
+
+    def extract_features(self, *args, **kwargs):
+        self._keypoints, self.descriptors = Node._extract_features(*args, **kwargs)
 
     def load_features(self, in_path):
         """

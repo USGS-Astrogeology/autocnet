@@ -418,7 +418,6 @@ class Homography(TransformationMatrix):
 
         Parameters
         ----------
-
         a : ndarray
             n,2 array of x,y coordinates
 
@@ -430,7 +429,6 @@ class Homography(TransformationMatrix):
 
         Returns
         -------
-
         df : dataframe
              With columns for x_residual, y_residual, rmse, and
              error contribution.  The dataframe also has cumulative

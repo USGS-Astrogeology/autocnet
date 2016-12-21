@@ -31,7 +31,13 @@ control networks.  AutoCNet is licensed in `the public domain`.
     :hidden:
 
     users/index
-    developers/index
     library/index
+    authors.rst
+    contributing.rst
+    history.rst
+    installation.rst
+    readme.rst
+    references.rst
+    usage.rst
 
 .. _the public domain: license.html

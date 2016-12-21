@@ -108,7 +108,6 @@ class CandidateGraph(nx.Graph):
         """
         if isinstance(filelist, str):
             filelist = io_utils.file_to_list(filelist)
-
         # TODO: Reject unsupported file formats + work with more file formats
         if basepath:
             datasets = [GeoDataset(os.path.join(basepath, f)) for f in filelist]
@@ -207,7 +206,7 @@ class CandidateGraph(nx.Graph):
 
         raise NotImplementedError
 
-    def extract_features(self, method='orb', extractor_parameters={}):
+    def extract_features(self, *args, **kwargs):
         """
         Extracts features from each image in the graph and uses the result to assign the
         node attributes for 'handle', 'image', 'keypoints', and 'descriptors'.
@@ -225,8 +224,7 @@ class CandidateGraph(nx.Graph):
         """
         for i, node in self.nodes_iter(data=True):
             image = node.get_array()
-            node.extract_features(image, method=method,
-                                  extractor_parameters=extractor_parameters)
+            node.extract_features(image, *args, **kwargs),
 
     def save_features(self, out_path, nodes=[]):
         """
@@ -295,6 +293,9 @@ class CandidateGraph(nx.Graph):
         autocnet.graph.edge.Edge.match
         """
         self.apply_func_to_edges('match', *args, **kwargs)
+
+    def cuda_match(self, *args, **kwargs):
+        self.apply_func_to_edges('cuda_match', *args, **kwargs)
 
     def decompose_and_match_features(self, *args, **kwargs):
         """

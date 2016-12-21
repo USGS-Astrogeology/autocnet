@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 import matplotlib
 
 
-def plot_graph(graph, ax=None, cmap='Spectral', **kwargs):
+def plot_graph(graph, ax=None, cmap='Spectral', labels=False, font_size=12, clusters=None, **kwargs):
     """
 
     Parameters
@@ -38,7 +38,13 @@ def plot_graph(graph, ax=None, cmap='Spectral', **kwargs):
         else:
             colors.append(cmap(0)[0])
 
-    nx.draw(graph, ax=ax, edge_color=colors)
+    pos = nx.spring_layout(graph)
+    nx.draw_networkx_nodes(graph, pos)
+    nx.draw_networkx_edges(graph, pos)
+    if labels:
+        labels = dict((i, d.image_name) for i, d in graph.nodes_iter(data=True))
+        nx.draw_networkx_labels(graph, pos, labels, font_size=font_size)
+    ax.axis('off')
     return ax
 
 
@@ -236,9 +242,9 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
     composite[0: d_shape[0], s_shape[1] + image_space:] = destination_array
 
     if 'cmap' in image_kwargs:
-        cmap = image_kwargs['cmap']
+        image_cmap = image_kwargs['cmap']
     else:
-        cmap = 'Greys'
+        image_cmap = 'Greys'
 
     matches, mask = edge.clean(clean_keys)
 
@@ -248,7 +254,7 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
     # Plot the source
     source_idx = matches['source_idx'].values
     s_kps = source_keypoints.loc[source_idx]
-    ax.scatter(s_kps['x'], s_kps['y'], **scatter_kwargs, cmap='gray')
+    ax.scatter(s_kps['x'], s_kps['y'], **scatter_kwargs)
 
     # Plot the destination
     destination_idx = matches['destination_idx'].values
@@ -257,7 +263,7 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
     newx = d_kps['x'] + x_offset
     ax.scatter(newx, d_kps['y'], **scatter_kwargs)
 
-    ax.imshow(composite, cmap=cmap)
+    ax.imshow(composite, cmap=image_cmap)
 
     # Draw the connecting lines
     color = 'y'
