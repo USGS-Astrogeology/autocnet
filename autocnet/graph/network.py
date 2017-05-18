@@ -3,27 +3,26 @@ import os
 from time import gmtime, strftime
 import warnings
 
-import dill as pickle
 import networkx as nx
+import pandas as pd
 
-from autocnet.fileio import io_hdf
-from autocnet.fileio import io_json
-from autocnet.fileio import io_utils
-from autocnet.fileio.io_gdal import GeoDataset
+from plio.io import io_hdf, io_json
+from plio.utils import utils as io_utils
+from plio.io.io_gdal import GeoDataset
 from autocnet.graph import markov_cluster
 from autocnet.graph.edge import Edge
 from autocnet.graph.node import Node
-from autocnet.vis.graph_view import plot_graph
+from autocnet.io import network as io_network
+from autocnet.vis.graph_view import plot_graph, cluster_plot
 
 
 class CandidateGraph(nx.Graph):
     """
     A NetworkX derived directed graph to store candidate overlap images.
 
-    Parameters
+    Attributes
     ----------
 
-    Attributes
     node_counter : int
                    The number of nodes in the graph.
     node_name_map : dict
@@ -42,21 +41,21 @@ class CandidateGraph(nx.Graph):
 
     def __init__(self, *args, basepath=None, **kwargs):
         super(CandidateGraph, self).__init__(*args, **kwargs)
-        self.node_counter = 0
+        self.graph['node_counter'] = 0
         node_labels = {}
-        self.node_name_map = {}
+        self.graph['node_name_map'] = {}
 
         for node_name in self.nodes():
             image_name = os.path.basename(node_name)
             image_path = node_name
             # Replace the default attr dict with a Node object
-            self.node[node_name] = Node(image_name, image_path, self.node_counter)
+            self.node[node_name] = Node(image_name, image_path, self.graph['node_counter'])
 
             # fill the dictionary used for relabelling nodes with relative path keys
-            node_labels[node_name] = self.node_counter
+            node_labels[node_name] = self.graph['node_counter']
             # fill the dictionary used for mapping base name to node index
-            self.node_name_map[self.node[node_name].image_name] = self.node_counter
-            self.node_counter += 1
+            self.graph['node_name_map'][self.node[node_name]['image_name']] = self.graph['node_counter']
+            self.graph['node_counter'] += 1
 
         nx.relabel_nodes(self, node_labels, copy=False)
 
@@ -67,26 +66,19 @@ class CandidateGraph(nx.Graph):
             e.source = self.node[s]
             e.destination = self.node[d]
 
-        self.creationdate = strftime("%Y-%m-%d %H:%M:%S", gmtime())
-        self.modifieddate = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        self.graph['creationdate'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        self.graph['modifieddate'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
-    @classmethod
-    def from_graph(cls, graph):
-        """
-        Return a graph object from a pickled file
-        Parameters
-        ----------
-        graph : str
-                PATH to the graph object
-
-        Returns
-        -------
-        graph : object
-                CandidateGraph object
-        """
-        with open(graph, 'rb') as f:
-            graph = pickle.load(f)
-        return graph
+    def __eq__(self, other):
+        eq = True
+        # Check the nodes
+        for n in self.nodes_iter():
+            if not self.node[n] == other.node[n]:
+                eq = False
+        for s, d in self.edges_iter():
+            if not self.edge[s][d] == other.edge[s][d]:
+                eq = False
+        return eq
 
     @classmethod
     def from_filelist(cls, filelist, basepath=None):
@@ -107,7 +99,6 @@ class CandidateGraph(nx.Graph):
         """
         if isinstance(filelist, str):
             filelist = io_utils.file_to_list(filelist)
-
         # TODO: Reject unsupported file formats + work with more file formats
         if basepath:
             datasets = [GeoDataset(os.path.join(basepath, f)) for f in filelist]
@@ -175,7 +166,7 @@ class CandidateGraph(nx.Graph):
         """
         Update the last modified date attribute.
         """
-        self.modifieddate = strftime("%Y-%m-%d %H:%M:%S", gmtime())
+        self.graph['modifieddate'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
 
     def get_name(self, node_index):
         """
@@ -193,7 +184,7 @@ class CandidateGraph(nx.Graph):
 
 
         """
-        return self.node[node_index].image_name
+        return self.node[node_index]['image_name']
 
     def add_image(self, *args, **kwargs):
         """
@@ -206,7 +197,7 @@ class CandidateGraph(nx.Graph):
 
         raise NotImplementedError
 
-    def extract_features(self, method='orb', extractor_parameters={}):
+    def extract_features(self, *args, **kwargs):
         """
         Extracts features from each image in the graph and uses the result to assign the
         node attributes for 'handle', 'image', 'keypoints', and 'descriptors'.
@@ -224,10 +215,9 @@ class CandidateGraph(nx.Graph):
         """
         for i, node in self.nodes_iter(data=True):
             image = node.get_array()
-            node.extract_features(image, method=method,
-                                  extractor_parameters=extractor_parameters)
+            node.extract_features(image, *args, **kwargs),
 
-    def save_features(self, out_path, nodes=[]):
+    def save_features(self, out_path, nodes=[], **kwargs):
         """
 
         Save the features (keypoints and descriptors) for the
@@ -243,24 +233,12 @@ class CandidateGraph(nx.Graph):
                 of nodes to save features for.  If empty, save for all nodes
         """
 
-        if os.path.exists(out_path):
-            mode = 'a'
-        else:
-            mode = 'w'
+        for i, n in self.nodes_iter(data=True):
+            if nodes and not i in nodes:
+                continue
+            n.save_features(out_path, **kwargs)
 
-        hdf = io_hdf.HDFDataset(out_path, mode=mode)
-
-        # Cleaner way to do this?
-        if nodes:
-            for i, n in self.subgraph(nodes).nodes_iter(data=True):
-                n.save_features(hdf)
-        else:
-            for i, n in self.nodes_iter(data=True):
-                n.save_features(hdf)
-
-        hdf = None
-
-    def load_features(self, in_path, nodes=[], nfeatures=None):
+    def load_features(self, in_path, nodes=[], nfeatures=None, **kwargs):
         """
         Load features (keypoints and descriptors) for the
         specified nodes.
@@ -274,18 +252,13 @@ class CandidateGraph(nx.Graph):
                 of nodes to load features for.  If empty, load features
                 for all nodes
         """
-        hdf = io_hdf.HDFDataset(in_path, 'r')
+        for i, n in self.nodes_iter(data=True):
+            if nodes and not i in nodes:
+                continue
+            else:
+                n.load_features(in_path, **kwargs)
 
-        if nodes:
-            for i, n in self.subgraph(nodes).nodes_iter(data=True):
-                n.load_features(hdf)
-        else:
-            for i, n in self.nodes_iter(data=True):
-                n.load_features(hdf)
-
-        hdf = None
-
-    def match_features(self, *args, **kwargs):
+    def match(self, *args, **kwargs):
         """
         For all connected edges in the graph, apply feature matching
 
@@ -294,6 +267,17 @@ class CandidateGraph(nx.Graph):
         autocnet.graph.edge.Edge.match
         """
         self.apply_func_to_edges('match', *args, **kwargs)
+
+    def decompose_and_match(self, *args, **kwargs):
+        """
+        For all edges in the graph, apply coupled decomposition followed by
+        feature matching.
+
+        See Also
+        --------
+        autocnet.graph.edge.Edge.decompose_and_match
+        """
+        self.apply_func_to_edges('decompose_and_match', *args, **kwargs)
 
     def compute_clusters(self, func=markov_cluster.mcl, *args, **kwargs):
         """
@@ -339,6 +323,20 @@ class CandidateGraph(nx.Graph):
                 if(s,n) in self.edges() and (d,n) in self.edges():
                     cycles.append((s,d,n))
         return cycles
+
+    def minimum_spanning_tree(self):
+        """
+        Calculates the minimum spanning tree of the graph
+
+        Returns
+        -------
+
+         : DataFrame
+           boolean mask for edges in the minimum spanning tree
+        """
+
+        mst = nx.minimum_spanning_tree(self)
+        return self.create_edge_subgraph(mst.edges())
 
     def apply_func_to_edges(self, function, *args, **kwargs):
         """
@@ -431,20 +429,6 @@ class CandidateGraph(nx.Graph):
         '''
         self.apply_func_to_edges('overlap')
 
-    def minimum_spanning_tree(self):
-        """
-        Calculates the minimum spanning tree of the graph
-
-        Returns
-        -------
-
-         : DataFrame
-           boolean mask for edges in the minimum spanning tree
-        """
-
-        mst = nx.minimum_spanning_tree(self)
-        return self.create_edge_subgraph(mst.edges())
-
     def to_filelist(self):
         """
         Generate a file list for the entire graph.
@@ -457,7 +441,7 @@ class CandidateGraph(nx.Graph):
         """
         filelist = []
         for i, node in self.nodes_iter(data=True):
-            filelist.append(node.image_path)
+            filelist.append(node['image_path'])
         return filelist
 
     def generate_cnet(self, *args, deepen=False, **kwargs):
@@ -476,21 +460,8 @@ class CandidateGraph(nx.Graph):
         """
         for i, n in self.nodes_iter(data=True):
             n.group_correspondences(self, *args, deepen=deepen, **kwargs)
-
-    def to_json_file(self, outputfile):
-        """
-        Write the edge structure to a JSON adjacency list
-
-        Parameters
-        ----------
-
-        outputfile : str
-                     PATH where the JSON will be written
-        """
-        adjacency_dict = {}
-        for n in self.nodes():
-            adjacency_dict[n] = self.neighbors(n)
-        io_json.write_json(adjacency_dict, outputfile)
+        self.cn = [n.point_to_correspondence_df for i, n in self.nodes_iter(data=True) if
+                   isinstance(n.point_to_correspondence_df, pd.DataFrame)]
 
     def island_nodes(self):
         """
@@ -523,12 +494,7 @@ class CandidateGraph(nx.Graph):
         filename : str
                    The relative or absolute PATH where the network is saved
         """
-        for i, node in self.nodes_iter(data=True):
-            # Close the file handle because pickle doesn't handle SwigPyObjects
-            node._handle = None
-
-        with open(filename, 'wb') as f:
-            pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
+        io_network.save(self, filename)
 
     def plot(self, ax=None, **kwargs):  # pragma: no cover
         """
@@ -545,6 +511,24 @@ class CandidateGraph(nx.Graph):
            A MatPlotLib axes object
         """
         return plot_graph(self, ax=ax, **kwargs)
+
+    def plot_cluster(self, ax=None, **kwargs):
+        """
+        Plot the graph based on the clusters generated by
+        the markov clustering algorithm
+
+        Parameters
+        ----------
+        ax : object
+             A MatPlotLib axes object.
+
+        Returns
+        -------
+        ax : object
+             A MatPlotLib axes object.
+
+        """
+        return cluster_plot(self, ax, **kwargs)
 
     def create_edge_subgraph(self, edges):
         """
@@ -630,6 +614,7 @@ class CandidateGraph(nx.Graph):
         bunch = set(self.nbunch_iter(nodes))
         # create new graph and copy subgraph into it
         H = self.__class__()
+
         # copy node and attribute dictionaries
         for n in bunch:
             H.node[n] = self.node[n]

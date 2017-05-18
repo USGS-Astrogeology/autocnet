@@ -1,6 +1,7 @@
 import warnings
 
 import cv2
+import numpy as np
 import pandas as pd
 
 FLANN_INDEX_KDTREE = 1  # Algorithm to set centers,
@@ -28,9 +29,10 @@ class FlannMatcher(object):
     def __init__(self, flann_parameters=DEFAULT_FLANN_PARAMETERS):
         self._flann_matcher = cv2.FlannBasedMatcher(flann_parameters, {})
         self.nid_lookup = {}
+        self.search_idx = {}
         self.node_counter = 0
 
-    def add(self, descriptor, nid):
+    def add(self, descriptor, nid, index=None):
         """
         Add a set of descriptors to the matcher and add the image
         index key to the image_indices attribute
@@ -46,6 +48,10 @@ class FlannMatcher(object):
         self._flann_matcher.add([descriptor])
         self.nid_lookup[self.node_counter] = nid
         self.node_counter += 1
+        if index is not None:
+            self.search_idx = dict((i, j) for i, j in enumerate(index))
+        else:
+            self.search_idx = dict((i,i) for i in range(len(descriptor)))
 
     def clear(self):
         """
@@ -55,6 +61,7 @@ class FlannMatcher(object):
         self._flann_matcher.clear()
         self.nid_lookup = {}
         self.node_counter = 0
+        self.search_idx = {}
 
     def train(self):
         """
@@ -62,7 +69,7 @@ class FlannMatcher(object):
         """
         self._flann_matcher.train()
 
-    def query(self, descriptor, query_image, k=3):
+    def query(self, descriptor, query_image, k=3, index=None):
         """
 
         Parameters
@@ -76,6 +83,10 @@ class FlannMatcher(object):
         k : int
             The number of nearest neighbors to search for
 
+        index : iterable
+                An iterable of observation indices to utilize for
+                the input descriptors
+
         Returns
         -------
         matched : dataframe
@@ -86,24 +97,31 @@ class FlannMatcher(object):
 
         matches = self._flann_matcher.knnMatch(descriptor, k=k)
         matched = []
-        for m in matches:
-            for i in m:
+        for i, m in enumerate(matches):
+            for j in m:
+                if index is not None:
+                    qid = index[i]
+                else:
+                    qid = j.queryIdx
                 source = query_image
-                destination = self.nid_lookup[i.imgIdx]
+                destination = self.nid_lookup[j.imgIdx]
                 if source < destination:
                     matched.append((query_image,
-                                    i.queryIdx,
+                                    qid,
                                     destination,
-                                    i.trainIdx,
-                                    i.distance))
+                                    self.search_idx[j.trainIdx],
+                                    j.distance))
                 elif source > destination:
                     matched.append((destination,
-                                    i.trainIdx,
+                                    self.search_idx[j.trainIdx],
                                     query_image,
-                                    i.queryIdx,
-                                    i.distance))
+                                    qid,
+                                    j.distance))
                 else:
                     warnings.warn('Likely self neighbor in query!')
         return pd.DataFrame(matched, columns=['source_image', 'source_idx',
                                               'destination_image', 'destination_idx',
-                                              'distance'])
+                                              'distance']).astype(np.float32)
+
+def cudamatcher():
+    pass

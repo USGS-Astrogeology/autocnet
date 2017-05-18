@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 import matplotlib
 
 
-def plot_graph(graph, ax=None, cmap='Spectral', **kwargs):
+def plot_graph(graph, ax=None, cmap='Spectral', labels=False, font_size=12, clusters=None, **kwargs):
     """
 
     Parameters
@@ -38,11 +38,17 @@ def plot_graph(graph, ax=None, cmap='Spectral', **kwargs):
         else:
             colors.append(cmap(0)[0])
 
-    nx.draw(graph, ax=ax, edge_color=colors)
+    pos = nx.spring_layout(graph)
+    nx.draw_networkx_nodes(graph, pos)
+    nx.draw_networkx_edges(graph, pos)
+    if labels:
+        labels = dict((i, d['image_name']) for i, d in graph.nodes_iter(data=True))
+        nx.draw_networkx_labels(graph, pos, labels, font_size=font_size)
+    ax.axis('off')
     return ax
 
 
-def plot_node(node, ax=None, clean_keys=[], **kwargs):
+def plot_node(node, ax=None, clean_keys=[], index_mask=None, **kwargs):
     """
     Plot the array and keypoints for a given node.
 
@@ -77,7 +83,7 @@ def plot_node(node, ax=None, clean_keys=[], **kwargs):
 
     array = node.get_array(band)
 
-    ax.set_title(node.image_name)
+    ax.set_title(node['image_name'])
     ax.margins(tight=True)
     ax.axis('off')
 
@@ -88,10 +94,11 @@ def plot_node(node, ax=None, clean_keys=[], **kwargs):
 
     ax.imshow(array, cmap=cmap)
 
-    keypoints = node.get_keypoints()
-    if clean_keys:
-        matches, mask = node._clean(clean_keys)
-        keypoints = node.get_keypoints()[mask]
+    keypoints = node.get_keypoints(index=index_mask)
+    # Node has no clean method
+    # if clean_keys:
+    #     matches, mask = node.clean(clean_keys)
+    #     keypoints = keypoints[mask]
 
     marker = '.'
     if 'marker' in kwargs.keys():
@@ -105,6 +112,75 @@ def plot_node(node, ax=None, clean_keys=[], **kwargs):
 
     return ax
 
+
+def plot_edge_decomposition(edge, ax=None, clean_keys=[], image_space=100,
+                            scatter_kwargs={}, line_kwargs={}, image_kwargs={}):
+
+    if ax is None:
+        ax = plt.gca()
+
+    # Plot setup
+    ax.set_title('Matching: {} to {}'.format(edge.source['image_name'],
+                                             edge.destination['image_name']))
+    ax.margins(tight=True)
+    ax.axis('off')
+
+    # Image plotting
+    source_array = edge.source.get_array()
+    destination_array = edge.destination.get_array()
+
+    s_shape = source_array.shape
+    d_shape = destination_array.shape
+
+    y = max(s_shape[0], d_shape[0])
+    x = s_shape[1] + d_shape[1] + image_space
+    composite = np.zeros((y, x))
+    composite_decomp = np.zeros((y, x), dtype=np.int16)
+
+    composite[0: s_shape[0], :s_shape[1]] = source_array
+    composite[0: d_shape[0], s_shape[1] + image_space:] = destination_array
+
+    composite_decomp[0: s_shape[0], :s_shape[1]] = edge.smembership
+    composite_decomp[0: d_shape[0], s_shape[1] + image_space:] = edge.dmembership
+
+    if 'cmap' in image_kwargs:
+        cmap = image_kwargs['cmap']
+    else:
+        cmap = 'Greys'
+
+    matches, mask = edge.clean(clean_keys)
+
+    source_keypoints = edge.source.get_keypoints(index=matches['source_idx'])
+    destination_keypoints = edge.destination.get_keypoints(index=matches['destination_idx'])
+
+    # Plot the source
+    source_idx = matches['source_idx'].values
+    s_kps = source_keypoints.loc[source_idx]
+    ax.scatter(s_kps['x'], s_kps['y'], **scatter_kwargs, cmap='gray')
+
+    # Plot the destination
+    destination_idx = matches['destination_idx'].values
+    d_kps = destination_keypoints.loc[destination_idx]
+    x_offset = s_shape[1] + image_space
+    newx = d_kps['x'] + x_offset
+    ax.scatter(newx, d_kps['y'], **scatter_kwargs)
+
+    ax.imshow(composite, cmap=cmap)
+    ax.imshow(composite_decomp, cmap='spectral', alpha=0.35)
+    # Draw the connecting lines
+    color = 'y'
+    if 'color' in line_kwargs.keys():
+        color = line_kwargs['color']
+        line_kwargs.pop('color', None)
+
+    s_kps = s_kps[['x', 'y']].values
+    d_kps = d_kps[['x', 'y']].values
+    d_kps[:, 0] += x_offset
+
+    for l in zip(s_kps, d_kps):
+        ax.plot((l[0][0], l[1][0]), (l[0][1], l[1][1]), color=color, **line_kwargs)
+
+    return ax
 
 def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
               scatter_kwargs={}, line_kwargs={}, image_kwargs={}):
@@ -145,8 +221,8 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
         ax = plt.gca()
 
     # Plot setup
-    ax.set_title('Matching: {} to {}'.format(edge.source.image_name,
-                                             edge.destination.image_name))
+    ax.set_title('Matching: {} to {}'.format(edge.source['image_name'],
+                                             edge.destination['image_name']))
     ax.margins(tight=True)
     ax.axis('off')
 
@@ -165,13 +241,11 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
     composite[0: d_shape[0], s_shape[1] + image_space:] = destination_array
 
     if 'cmap' in image_kwargs:
-        cmap = image_kwargs['cmap']
+        image_cmap = image_kwargs['cmap']
     else:
-        cmap = 'Greys'
+        image_cmap = 'Greys'
 
-    ax.imshow(composite, cmap=cmap)
-
-    matches, mask = edge._clean(clean_keys)
+    matches, mask = edge.clean(clean_keys)
 
     source_keypoints = edge.source.get_keypoints(index=matches['source_idx'])
     destination_keypoints = edge.destination.get_keypoints(index=matches['destination_idx'])
@@ -187,6 +261,8 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
     x_offset = s_shape[1] + image_space
     newx = d_kps['x'] + x_offset
     ax.scatter(newx, d_kps['y'], **scatter_kwargs)
+
+    ax.imshow(composite, cmap=image_cmap)
 
     # Draw the connecting lines
     color = 'y'
@@ -204,5 +280,40 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100,
     return ax
 
 
+def cluster_plot(graph, ax=None, cmap='Spectral'):  # pragma: no cover
+    """
+    Parameters
+    ----------
+    graph : object
+            A networkX or derived graph object
 
+    ax : object
+         A MatPlotLib axes object
 
+    cmap : str
+           A MatPlotLib color map string. Default 'Spectral'
+
+    Returns
+    -------
+    ax : object
+         A MatPlotLib axes object that was either passed in
+         or a new axes object
+    """
+    if ax is None:
+        ax = plt.gca()
+
+    if not hasattr(graph, 'clusters'):
+        raise AttributeError('Clusters have not been computed.')
+
+    cmap = matplotlib.cm.get_cmap(cmap)
+
+    colors = []
+
+    for i, n in graph.nodes_iter(data=True):
+        for j in enumerate(graph.clusters):
+            if i in graph.clusters.get(j[1]):
+                colors.append(cmap(j[1])[0])
+                continue
+
+    nx.draw(graph, ax=ax, node_color=colors)
+    return ax

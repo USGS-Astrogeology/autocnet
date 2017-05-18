@@ -1,6 +1,14 @@
 import math
 import numpy as np
 
+def crossform(a):
+    """
+    Convert a three element vector into a 3 x 3 skew matrix as per
+    Hartley and Zisserman pg. 581
+    """
+    return np.array([[0, -a[2], a[1]],
+                     [a[2], 0, -a[0]],
+                     [-a[1], a[0], 0]])
 
 def normalize(a):
     """

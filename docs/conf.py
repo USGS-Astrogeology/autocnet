@@ -18,8 +18,8 @@ import os
 from unittest.mock import MagicMock
 
 
-autodoc_mock_imports = ['proj4', 'gdal', 'osr','ogr', 'cv2', 'scikit-image',
-                        'skimage', 'skimage.feature', 'sklearn', 'osgeo']
+#autodoc_mock_imports = ['proj4', 'gdal', 'osr','ogr', 'cv2', 'scikit-image',
+#                        'skimage', 'skimage.feature', 'sklearn', 'osgeo', 'plio']
 
 '''
 class Mock(MagicMock):
@@ -54,14 +54,14 @@ needs_sphinx = '1.3'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode', 'sphinx.ext.napoleon']
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.viewcode', 'sphinx.ext.napoleon', 'nbsphinx']
 
 # NumpyDoc Options
 numpydoc_show_class_members = True
 numpydoc_class_members_toctree = False
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+#templates_path = ['_templates']
 
 # The suffix of source filenames.
 source_suffix = '.rst'
@@ -104,7 +104,7 @@ exclude_patterns = ['_build']
 # default_role = None
 
 # If true, '()' will be appended to :func: etc. cross-reference text.
-add_function_parentheses = False
+add_function_parentheses = True
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
@@ -129,15 +129,18 @@ pygments_style = 'sphinx'
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-html_theme = 'alabaster'
+html_theme = 'scipy'
 
 # Theme options are theme-specific and customize the look and feel of a
 # theme further.  For a list of options available for each theme, see the
 # documentation.
-#html_theme_options = {}
+html_theme_options = {
+    'edit_link': "true",
+    "rootlinks":[]
+}
 
 # Add any paths that contain custom themes here, relative to this directory.
-# html_theme_path = []
+html_theme_path = ['_theme']
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".
@@ -171,7 +174,7 @@ html_last_updated_fmt = '%b %d, %Y'
 # html_use_smartypants = True
 
 # Custom sidebar templates, maps document names to template names.
-# html_sidebars = {}
+#html_sidebars = {}
 
 # Additional templates that should be rendered to pages, maps page names
 # to template names.
@@ -290,4 +293,3 @@ texinfo_documents = [
 
 # If true, do not generate a @detailmenu in the "Top" node's menu.
 # texinfo_no_detailmenu = False
-

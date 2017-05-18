@@ -6,7 +6,7 @@ channels:
 dependencies:
   - python=3
   - libpng
-  - opencv3=3.0.0
+  - opencv
   - gdal
   - h5py
   - cython
@@ -23,5 +23,5 @@ dependencies:
   - pip:
     - pillow
     - pvl
-    - pysal
+    - libpysal
     - protobuf

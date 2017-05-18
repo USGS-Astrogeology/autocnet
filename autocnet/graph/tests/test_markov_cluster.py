@@ -7,12 +7,12 @@ from .. import markov_cluster
 
 from autocnet.examples import get_path
 from autocnet.graph.network import CandidateGraph
-
+from autocnet.io.network import load
 
 class TestMarkovCluster(unittest.TestCase):
 
     def setUp(self):
-        self.g = CandidateGraph.from_graph(get_path('sixty_four_apollo.graph'))
+        self.g = load(get_path('sixty_four_apollo.proj'))
 
     def test_mcl_from_network(self):
         self.g.compute_clusters(inflate_factor=15)

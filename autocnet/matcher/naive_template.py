@@ -65,7 +65,6 @@ def pattern_match(template, image, upsampling=16, func=cv2.TM_CCOEFF_NORMED, err
     y += (u_template.shape[0] / 2)
     x += (u_template.shape[1] / 2)
 
-    x = (ideal_x - x) / upsampling
+    x = (x - ideal_x) / upsampling
     y = (ideal_y - y) / upsampling
     return x, y, max_corr
-

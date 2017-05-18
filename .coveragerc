@@ -2,19 +2,9 @@
 source = autocnet
 [report]
 omit =
-    autocnet/fileio/ControlNetFileV0002_pb2.py
     autocnet/vis/graph_view.py
-    autocnet/fileio/sqlalchemy_json/*
-    autocnet/fileio/io_multibandimager.py
-    autocnet/fileio/io_moon_minerology_mapper.py
-    autocnet/fileio/header_parser.py
-    autocnet/fileio/io_ccs.py
-    autocnet/fileio/io_jsc.py
-    autocnet/fileio/io_edr.py
-    autocnet/fileio/lookup.py
-    autocnet/fileio/utils.py
-    autocnet/utils/folds.py
-    autocnet/spectral/*
+    autocnet/__init__.py
+    autocnet/matcher/cuda_*
     bin/*
     */tests/*
 exclude_lines =

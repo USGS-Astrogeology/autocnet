@@ -75,3 +75,23 @@ class TestC(unittest.TestCase):
     def test_to_dataframe(self):
         self.C.to_dataframe()
 
+    def test_point_repr(self):
+        expected = 0
+        p = control.Point(expected)
+        self.assertEqual(str(expected), p.__repr__())
+
+    def test_correspondence_repr(self):
+        expected = 0
+        c = control.Correspondence(expected, 1, 1)
+        self.assertEqual(str(expected), c.__repr__())
+
+    def test_correspondence_eq(self):
+        expected = 0
+        c = control.Correspondence(expected, 1, 1)
+        self.assertTrue(c == expected)
+
+    def test_correspondence_hash(self):
+        expected = 200
+        c = control.Correspondence(expected, 1, 1)
+        self.assertEqual(hash(expected), hash(c))
+

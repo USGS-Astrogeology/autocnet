@@ -205,16 +205,22 @@ def make_homogeneous(points):
 
     Parameters
     ----------
-    points : ndarray
+    points : arraylike
              n x m array of points, where n is the number
              of points.
 
     Returns
     -------
-     : ndarray
+     : arraylike
        n x m + 1 array of homogeneous points
     """
-    return np.hstack((points, np.ones((points.shape[0], 1))))
+    homogeneous = np.hstack((points, np.ones((points.shape[0], 1))))
+    if isinstance(points, pd.DataFrame):
+        columns = points.columns.values.tolist() + ['z']
+        homogeneous = pd.DataFrame(homogeneous, index=points.index,
+                                    columns=columns)
+    return homogeneous
+
 
 
 def remove_field_name(a, name):
@@ -334,3 +340,49 @@ def array_to_poly(array):
     poly = ogr.CreateGeometryFromJson(json.dumps(geom))
     return poly
 
+
+def reproj_corner(H, corner):
+    """
+    Reproject a pixel in one image into another image
+
+    Parameters
+    ----------
+    H : object
+        (3,3) ndarray or Homography object
+
+    corner : iterable
+             A 2 element iterable in the form x, y
+    """
+    if len(corner) == 2:
+        coords = np.array([corner[0], corner[1], 1])
+    elif len(corner) == 3:
+        coords = np.asarray(corner)
+        coords *= coords[-1]
+    return H.dot(coords)
+
+
+def scale_point(point, centroid, scale):
+    """
+    Given a point, centroid, and a scalar scales the given pointer
+    around the given centroid
+
+    Parameters
+    ----------
+    point : tuple
+            (x, y) coordinates for a given point
+
+    centroid : tuple
+               (x, y, 0) coordinates for the centroid of a polygon
+
+    scale : int
+            The multiplier to scale by
+
+    Returns
+    -------
+    vector : ndarray
+             (2, 1) array of the scaled point returned in x, y form
+    """
+    point = np.asarray(point)
+    centroid = centroid[:2]
+    vector = ((point - centroid)*scale) + centroid
+    return vector

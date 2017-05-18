@@ -481,8 +481,8 @@ def tefi(template, search_image, candidate_pixels, best_scales, best_angles,
 
     # check for upsampling
     if upsampling > 1:
-        template = zoom(template, upsampling, order=3)
-        search_image = zoom(search_image, upsampling, order=3)
+        u_template = zoom(template, upsampling, order=3)
+        u_search_image = zoom(search_image, upsampling, order=3)
 
     alpha_list = np.arange(0, 2*math.pi, alpha)
     candidate_pixels *= int(upsampling)
@@ -505,13 +505,13 @@ def tefi(template, search_image, candidate_pixels, best_scales, best_angles,
 
         max_coeff = -math.inf
         for j in range(scalesxalphas.shape[0]):
-            transformed_template = imresize(template, scalesxalphas[j][0])
+            transformed_template = imresize(u_template, scalesxalphas[j][0])
             transformed_template = rotate(transformed_template, scalesxalphas[j][1])
 
             y_window, x_window = (math.floor(transformed_template.shape[0]/2),
                                   math.floor(transformed_template.shape[1]/2))
 
-            cropped_search = search_image[y-y_window:y+y_window+1, x-x_window:x+x_window+1]
+            cropped_search = u_search_image[y-y_window:y+y_window+1, x-x_window:x+x_window+1]
 
             if(y < y_window or x < x_window or cropped_search.shape < transformed_template.shape or
                cropped_search.shape != transformed_template.shape):
@@ -531,16 +531,24 @@ def tefi(template, search_image, candidate_pixels, best_scales, best_angles,
     if use_percentile:
         thresh = np.percentile(tefi_coeffs, int(thresh))
 
-    candidate_pixels = candidate_pixels/upsampling
+    result_points = candidate_pixels[np.where(tefi_coeffs >= thresh)]
+    result_coeffs = tefi_coeffs[np.where(tefi_coeffs >= thresh)]
 
-    results = candidate_pixels[np.where(tefi_coeffs >= thresh)]
+    x = result_points[0][1]
+    y = result_points[0][0]
 
-    if verbose: # pragma: no cover
+    ideal_y = u_search_image.shape[0] / 2
+    ideal_x = u_search_image.shape[1] / 2
+
+    if verbose:  # pragma: no cover
         plt.imshow(image_pixels, interpolation='none')
-        plt.scatter(y=results[:, 0], x=results[:, 1], c='w', s=80)
+        plt.scatter(y=y/upsampling, x=x/upsampling, c='w', s=80)
         plt.show()
 
-    return results
+    x = (ideal_x - x)/upsampling
+    y = (ideal_y - y)/upsampling
+
+    return x, y, result_coeffs[0]
 
 
 def ciratefi(template, search_image, upsampling=1, cifi_thresh=95, rafi_thresh=95, tefi_thresh=100,

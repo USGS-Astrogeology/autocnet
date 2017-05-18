@@ -153,11 +153,13 @@ class CorrespondenceNetwork(object):
 
         # Load the correspondence to point data structure
         for k, source_idx in df['source_idx'].items():
+            source_idx = int(source_idx)
             p = Point(self.point_id)
-            destination_idx = df['destination_idx'][k]
 
-            sidx = Correspondence(source_idx, *s_kps[source_idx], serial=edge.source.isis_serial)
-            didx = Correspondence(destination_idx, *d_kps[destination_idx], serial=edge.destination.isis_serial)
+            destination_idx = int(df['destination_idx'][k])
+
+            sidx = Correspondence(source_idx, *s_kps[int(source_idx)], serial=edge.source.isis_serial)
+            didx = Correspondence(destination_idx, *d_kps[int(destination_idx)], serial=edge.destination.isis_serial)
 
             p.correspondences = [sidx, didx]
 

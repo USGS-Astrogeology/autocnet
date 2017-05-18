@@ -60,7 +60,6 @@ class TestCamera(unittest.TestCase):
         c = camera.triangulate(coords1, coords2, p, p1)
         np.testing.assert_array_almost_equal(c, truth)
 
-        truth = np.array([  3.09866357e-02, 2.60295132e-01,
-                            8.12871690e-02, 5.57281224e-01,   4.72226586e-04])
-        residuals, reproj_error = camera.projection_error(p1, p, coords1, coords2)
+        truth = np.array([0.17603 ,  0.510191,  0.285109,  0.746513,  0.021731])
+        residuals = camera.projection_error(p1, p, coords1.T, coords2.T)
         np.testing.assert_array_almost_equal(residuals, truth)

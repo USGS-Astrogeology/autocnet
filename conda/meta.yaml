@@ -1,0 +1,42 @@
+package:
+  name: autocnet-dev
+  version: 0.1.0
+
+source:
+   #git_url: https://github.com/USGS-Astrogeology/autocnet.git
+   path: ../
+requirements:
+  build:
+    - python
+    - plio
+    - opencv3
+    - vlfeat
+    - cyvlfeat
+    - pillow
+    - matplotlib
+    - scipy
+    - networkx
+    - numexpr
+    - cython
+    - pyyaml
+    - pysal
+
+  run:
+    - python
+    - plio
+    - opencv3
+    - vlfeat
+    - cyvlfeat
+    - pillow
+    - matplotlib
+    - scipy
+    - networkx
+    - numexpr
+    - cython
+    - pyyaml
+    - jupyter
+
+test:
+  imports:
+    - autocnet
+    - autocnet.graph.network
