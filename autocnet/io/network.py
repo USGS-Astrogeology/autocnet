@@ -13,7 +13,8 @@ import autocnet
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
-        """If input object is an ndarray it will be converted into a dict
+        """
+        If input object is an ndarray it will be converted into a dict
         holding dtype, shape and the data, base64 encoded.
         """
         if isinstance(obj, np.ndarray):
@@ -95,6 +96,14 @@ def json_numpy_obj_hook(dct):
     return dct
 
 def load(projectname):
+    """
+    Loads an autocnet project.
+
+    Parameters
+    ----------
+    projectname : str
+                  PATH to the file.
+    """
     with ZipFile(projectname, 'r') as pzip:
         # Read the graph object
         with pzip.open('graph.json', 'r') as g:
@@ -138,7 +147,6 @@ def load(projectname):
                 di = e
             # Read the data and populate edge attrs
             for k, v in di.items():
-                print(k)
                 if k == 'target' or k == 'source':
                     continue
                 edge[k] = v
