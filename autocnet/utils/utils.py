@@ -78,10 +78,9 @@ def compare_dicts(d, o):
             return False
         if isinstance(v, pd.DataFrame):
             if not v.equals(o[k]):
-                print(v, o[k])
                 return False
         elif isinstance(v, np.ndarray):
-            if not np.sum(np.abs(v - o[k])) < 0.01:
+            if not np.allclose(v, o[k]):
                 return False
         else:
             if k == '_geodata':
