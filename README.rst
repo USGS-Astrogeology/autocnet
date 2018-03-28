@@ -31,13 +31,13 @@ Installation Instructions
 -------------------------
 We suggest using Anaconda Python to install Autocnet within a virtual environment.  These steps will walk you through the process.
 
-1. [Download](https://www.continuum.io/downloads) and install the Python 3.x Miniconda installer.  Respond ``Yes`` when
-   prompted to add conda to your BASH profile.
-1. (Optional) We like to sequester applications in their own environments to avoid any dependency conflicts.  To do this:
-  * ``conda create -n <your_environment_name> python=3.5 && source activate <your_environment_name>``
-1. Bring up a command line and add three channels to your conda config (``~/condarc``):
-  * ``conda config --add channels conda-forge``
-  * ``conda config --add channels jlaura``
-  * ``conda config --add channels menpo``
-1. Install plio with ``conda install -c usgs-astrogeology plio``
-1. Finally, install autocnet: ``conda install -c jlaura autocnet-dev``
+#. [Download](https://www.continuum.io/downloads) and install the Python 3.x Miniconda installer.  Respond ``Yes`` when
+   prompted to add conda to your BASH profile.  
+#. (Optional) We like to sequester applications in their own environments to avoid any dependency conflicts.  To do this:
+   * ``conda create -n <your_environment_name> python=3.5 && source activate <your_environment_name>``
+#. Bring up a command line and add three channels to your conda config (``~/condarc``):
+   * ``conda config --add channels conda-forge``
+   * ``conda config --add channels jlaura``
+   * ``conda config --add channels menpo``
+#. Install plio with ``conda install -c usgs-astrogeology plio``
+#. Finally, install autocnet: ``conda install -c jlaura autocnet-dev``
