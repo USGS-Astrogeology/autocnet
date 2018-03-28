@@ -39,5 +39,5 @@ We suggest using Anaconda Python to install Autocnet within a virtual environmen
   * ``conda config --add channels conda-forge``
   * ``conda config --add channels jlaura``
   * ``conda config --add channels menpo``
-1. Install plio with conda install -c usgs-astrogeology plio
+1. Install plio with ``conda install -c usgs-astrogeology plio``
 1. Finally, install autocnet: ``conda install -c jlaura autocnet-dev``
