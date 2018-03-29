@@ -408,7 +408,7 @@ def test_get_matches(candidategraph):
 
 def test_apply(graph):
     def set_matches(e):
-        e.matches = ['fake', 'fake', 'fake']
+        e.matches = pd.DataFrame(['fake', 'fake', 'fake'])
 
     def get_matches(e):
         return e.matches

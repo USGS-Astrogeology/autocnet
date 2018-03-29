@@ -37,7 +37,7 @@ class TestThreeImageMatching(unittest.TestCase):
         # Step: Create an adjacency graph
         adjacency = get_path('three_image_adjacency.json')
         basepath = get_path('Apollo15')
-        cg = CandidateGraph.from_adjacency(adjacency, basepath)
+        cg = CandidateGraph.from_adjacency(adjacency, basepath=basepath)
         self.assertEqual(3, cg.number_of_nodes())
         self.assertEqual(3, cg.number_of_edges())
 

@@ -364,6 +364,7 @@ class Node(dict, MutableMapping):
                   PATH to the hdf file or a HDFDataset object handle
 
         format : {'npy', 'hdf'}
+                 The format that the features are stored in.  Default: npy.
         """
         if format == 'npy':
             keypoints, descriptors = io_keypoints.from_npy(in_path)

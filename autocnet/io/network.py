@@ -13,7 +13,8 @@ import autocnet
 
 class NumpyEncoder(json.JSONEncoder):
     def default(self, obj):
-        """If input object is an ndarray it will be converted into a dict
+        """
+        If input object is an ndarray it will be converted into a dict
         holding dtype, shape and the data, base64 encoded.
         """
         if isinstance(obj, np.ndarray):
@@ -75,6 +76,10 @@ def save(network, projectname):
                     ndarrays_to_write[k] = v
                     ndarrays_to_write[k+'_idx'] = v.index
                     ndarrays_to_write[k+'_columns'] = v.columns
+            # Handle the matches dataframe that is a property
+            ndarrays_to_write['matches'] = data.matches
+            ndarrays_to_write['matches_idx'] = data.matches.index
+            ndarrays_to_write['matches_columns'] = data.matches.columns
             np.savez('{}_{}.npz'.format(s, d),**ndarrays_to_write)
             pzip.write('{}_{}.npz'.format(s, d))
             os.remove('{}_{}.npz'.format(s, d))
@@ -91,6 +96,14 @@ def json_numpy_obj_hook(dct):
     return dct
 
 def load(projectname):
+    """
+    Loads an autocnet project.
+
+    Parameters
+    ----------
+    projectname : str
+                  PATH to the file.
+    """
     with ZipFile(projectname, 'r') as pzip:
         # Read the graph object
         with pzip.open('graph.json', 'r') as g:

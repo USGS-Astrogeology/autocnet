@@ -329,3 +329,11 @@ class TestEdge(unittest.TestCase):
         overlap_matches, overlap_mask = e.clean(clean_keys=['overlap'])
         self.assertTrue(expected_mask.equals(overlap_mask))
         self.assertTrue(overlap_matches.equals(e.matches[overlap_mask]))
+
+    def test_bad_matches_type(self):
+        with self.assertRaises(TypeError):
+            s = node.Node(node_id=0)
+            d = node.Node(node_id=1)
+
+            e = edge.Edge(s, d)
+            e.matches = ['a', 'b', 'c']
