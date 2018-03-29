@@ -35,11 +35,12 @@ We suggest using Anaconda Python to install Autocnet within a virtual environmen
    prompted to add conda to your BASH profile.  
 #. (Optional) We like to sequester applications in their own environments to avoid any dependency conflicts.  To do this:
    
-   * ``conda create -n <your_environment_name> python=3.5 && source activate <your_environment_name>``
+   * ``conda create -n <your_environment_name> python=3 && source activate <your_environment_name>``
+   
+   Note, that you might want to specify either ``python=3.5`` or ``python=3.6``, depending on your requirements. Both are currently supported by auctonet.
 #. Bring up a command line and add three channels to your conda config (``~/condarc``):
    
    * ``conda config --add channels conda-forge``
-   * ``conda config --add channels jlaura``
    * ``conda config --add channels menpo``
-#. Install plio with ``conda install -c usgs-astrogeology plio``
+   * ``conda config --add channels usgs-astrogeology``
 #. Finally, install autocnet: ``conda install -c jlaura autocnet-dev``
