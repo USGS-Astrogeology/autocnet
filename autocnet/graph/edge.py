@@ -47,8 +47,9 @@ class Edge(dict, MutableMapping):
         self['fundamental_matrix'] = None
         self.masks = pd.DataFrame()
         self.subpixel_matches = pd.DataFrame()
+        self._matches = pd.DataFrame()
         self['weights'] = {}
-
+        
         self['source_mbr'] = None
         self['destin_mbr'] = None
         self['overlap_latlon_coords'] = None
@@ -70,7 +71,13 @@ class Edge(dict, MutableMapping):
             self._matches = pd.DataFrame()
         return self._matches
 
-
+    @matches.setter
+    def matches(self, value):
+        if isinstance(value, pd.DataFrame):
+            self._matches = value
+        else:
+            raise(TypeError)
+            
     def match(self, k=2, **kwargs):
 
         """
