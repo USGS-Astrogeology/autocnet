@@ -8,33 +8,32 @@ source:
 requirements:
   build:
     - python
-    - plio
-    - opencv3
     - vlfeat
     - cyvlfeat
     - pillow
-    - matplotlib
     - scipy
     - networkx
     - numexpr
     - cython
-    - pyyaml
-    - pysal
-
+    - matplotlib
+    - geopandas
+    - opencv3
+    - numpy
+    - plio
   run:
     - python
-    - plio
-    - opencv3
     - vlfeat
     - cyvlfeat
     - pillow
-    - matplotlib
     - scipy
     - networkx
     - numexpr
     - cython
-    - pyyaml
-    - jupyter
+    - matplotlib
+    - geopandas
+    - opencv3
+    - numpy
+    - plio
 
 test:
   imports:

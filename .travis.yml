@@ -43,8 +43,7 @@ before_install:
   - conda config --set ssl_verify false
   - conda install -c conda-forge vlfeat
   - conda install -c menpo cyvlfeat
-  - pip install pillow pysal
-  - conda install -c conda-forge scipy networkx numexpr dill cython pyyaml matplotlib runipy geopandas opencv numpy gdal
+  - conda install -c conda-forge scipy networkx numexpr cython matplotlib pillow runipy geopandas opencv numpy
   - conda install -c usgs-astrogeology plio
 
   # Development installation
