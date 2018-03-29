@@ -41,7 +41,7 @@ before_install:
   - conda config --add channels menpo
   - conda config --add channels usgs-astrogeology
   - conda config --set ssl_verify false
-  - conda install -c conda-forge vlfeat cyvlfeat plio scipy networkx numexpr cython matplotlib pillow runipy geopandas opencv numpy
+  - conda install -c conda-forge vlfeat cyvlfeat plio scipy networkx numexpr cython matplotlib pillow runipy geopandas opencv numpy gdal
 
   # Development installation
   - conda install pytest pytest-cov coverage sh anaconda-client
