@@ -8,7 +8,7 @@ import warnings
 import numpy as np
 import pandas as pd
 import pytest
-from shapely.geometry import Polygon
+from shapely.geometry import LinearRing
 
 
 from autocnet.examples import get_path
@@ -178,5 +178,6 @@ class TestNode(object):
 
     def test_footprint(self, geo_node, node_a):
         # Esnure that a shapely compliant poly is being returned
-        assert isinstance(geo_node.footprint, Polygon)
+        print(geo_node.footprint)
+        assert isinstance(geo_node.footprint, LinearRing)
         assert node_a.footprint == None
