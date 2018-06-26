@@ -42,7 +42,7 @@ def idealized_camera():
     i[:,-1] = 0
     return i
 
-def estimated_camera_from_f(f):
+def camera_from_f(F):
     """
     Estimate a camera matrix using a fundamental matrix.
 
@@ -57,9 +57,9 @@ def estimated_camera_from_f(f):
          Estimated camera matrix
     """
 
-    e, e1 = compute_epipoles(f)
+    e, e1 = compute_epipoles(F)
     p1 = np.empty((3, 4))
-    p1[:, :3] = e1.dot(f)
+    p1[:, :3] = -e1.dot(F)
     p1[:, 3] = e
 
     return p1

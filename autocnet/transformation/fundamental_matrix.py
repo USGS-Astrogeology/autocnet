@@ -297,10 +297,10 @@ def compute_fundamental_matrix(kp1, kp2, method='mle', reproj_threshold=2.0,
     # OpenCV wants arrays
     try: # OpenCV < 3.4.1
         F, mask = cv2.findFundamentalMat(np.asarray(kp1),
-                                        np.asarray(kp2),
-                                        method_,
-                                        param1=reproj_threshold,
-                                        param2=confidence)
+                                         np.asarray(kp2),
+                                         method_,
+                                         param1=reproj_threshold,
+                                         param2=confidence)
     except: # OpenCV >= 3.4.1
         F, mask = cv2.findFundamentalMat(np.asarray(kp1),
                                          np.asarray(kp2),
@@ -330,21 +330,16 @@ def compute_fundamental_matrix(kp1, kp2, method='mle', reproj_threshold=2.0,
             kp2 = make_homogeneous(kp2)
 
         # Generate an idealized and to be updated camera model
-        p1 = camera.estimated_camera_from_f(F)
+        p1 = camera.camera_from_f(F)
         p = camera.idealized_camera()
-
-        # Grab the points used to estimate F
-        pt = kp1.loc[mask].T
-        pt1 = kp2.loc[mask].T
-
-        if pt.shape[1] <=12 or pt1.shape[1] <=12:
+        if kp1[mask].shape[0] <=12 or kp2[mask].shape[0] <=12:
             warnings.warn("Unable to apply MLE.  Not enough correspondences.  Returning with a RANSAC computed F matrix.")
             return F, mask
 
         # Apply Levenber-Marquardt to perform a non-linear lst. squares fit
         #  to minimize triangulation error (this is a local bundle)
         result = optimize.least_squares(camera.projection_error, p1.ravel(),
-                                        args=(p, pt, pt1),
+                                        args=(p, kp1[mask].T, kp2[mask].T),
                                         method='lm')
 
         gold_standard_p = result.x.reshape(3, 4) # SciPy Lst. Sq. requires a vector, camera is 3x4
