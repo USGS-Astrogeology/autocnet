@@ -44,7 +44,7 @@ before_install:
   - conda install -c usgs-astrogeology plio
   
   # Development installation
-  - conda install -c pytest pytest-cov coverage anaconda-client
+  - conda install -c conda-forge pytest pytest-cov coverage anaconda-client
   - pip install coveralls
 
 script:
