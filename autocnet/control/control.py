@@ -9,31 +9,37 @@ from autocnet.matcher import subpixel as sp
 
 from plio.io.io_controlnetwork import to_isis, write_filelist
 
-def subpixel_match(cg, cn,threshold=0.9, template_size=19, search_size=53, max_x_shift=1.0,max_y_shift=1.0, **kwargs):
 
-    def subpixel_group(group, threshold=0.9, template_size=19, search_size=53, max_x_shift=1.0,max_y_shift=1.0, **kwargs):
+def subpixel_match(cg, cn, threshold=0.9, template_size=19, search_size=53, max_x_shift=1.0, max_y_shift=1.0, **kwargs):
+
+    def subpixel_group(group, threshold=0.9, template_size=19, search_size=53, max_x_shift=1.0, max_y_shift=1.0, **kwargs):
         offs = []
-        for i,(idx, r) in enumerate(group.iterrows()):
+        for i, (idx, r) in enumerate(group.iterrows()):
             if i == 0:
                 x = r.x
                 y = r.y
-                offs.append([0,0, np.inf])
+                offs.append([0, 0, np.inf])
                 continue
 
             e = r.edge
             s_img = cg.edge[e[0]][e[1]].source.geodata
             s_template = sp.clip_roi(s_img, (x, y), template_size)
-            #s_template = cv2.Canny(bytescale(s_template), 50,100) # Canny - bad idea
+            # s_template = cv2.Canny(bytescale(s_template), 50,100) # Canny - bad idea
             d_img = cg.edge[e[0]][e[1]].destination.geodata
             d_search = sp.clip_roi(d_img, (r.x, r.y), search_size)
             #d_search = cv2.Canny(bytescale(d_search), 50,100)
 
-            xoff,yoff,corr = sp.subpixel_offset(s_template, d_search, **kwargs)
-            offs.append([xoff,yoff,corr])
-        df = pd.DataFrame(offs, columns=['x_off', 'y_off', 'corr'], index=group.index)
+            xoff, yoff, corr = sp.subpixel_offset(
+                s_template, d_search, **kwargs)
+            offs.append([xoff, yoff, corr])
+        df = pd.DataFrame(
+            offs, columns=['x_off', 'y_off', 'corr'], index=group.index)
         return df
-    gps = cn.data.groupby('point_id').apply(subpixel_group,threshold=0.9,max_x_shift=5, max_y_shift=5,template_size=template_size, search_size=search_size,**kwargs)
-    cn.data[['x_off', 'y_off', 'corr']] = gps.reset_index()[['x_off', 'y_off', 'corr']]
+    gps = cn.data.groupby('point_id').apply(subpixel_group, threshold=0.9, max_x_shift=5,
+                                            max_y_shift=5, template_size=template_size, search_size=search_size, **kwargs)
+    cn.data[['x_off', 'y_off', 'corr']] = gps.reset_index()[
+        ['x_off', 'y_off', 'corr']]
+
 
 def identify_potential_overlaps(cg, cn, overlap=True):
     """
@@ -55,7 +61,6 @@ def identify_potential_overlaps(cg, cn, overlap=True):
                         and the value as an iterable of image ids to search
                         for a new point.
     """
-
 
     fc = cg.compute_fully_connected_components()
 
@@ -82,18 +87,18 @@ def identify_potential_overlaps(cg, cn, overlap=True):
         # Determine whether a 'real' lat/lon are to be used and reproject
         if overlap:
             row = p.iloc[0]
-            lat, lon = cg.node[row.image_index]['data'].geodata.pixel_to_latlon(row.x, row.y)
+            lat, lon = cg.node[row.image_index]['data'].geodata.pixel_to_latlon(
+                row.x, row.y)
         else:
-            lat, lon = 0,0
+            lat, lon = 0, 0
 
         # Build the data for the geodataframe - can the index be cleaner?
         geoms.append(Point(lon, lat))
         candidate_cliques.append([uncovered, cycle_to_punch])
         idx.append(i)
 
-
     candidate_cliques = gpd.GeoDataFrame(candidate_cliques, index=idx,
-                                     columns=['candidates', 'subgraph'], geometry=geoms)
+                                         columns=['candidates', 'subgraph'], geometry=geoms)
 
     def overlaps(group):
         """
@@ -104,7 +109,8 @@ def identify_potential_overlaps(cg, cn, overlap=True):
         """
         cycle_to_punch = group.subgraph.iloc[0]
         subgraph = cg.create_node_subgraph(cycle_to_punch)
-        union, _ = subgraph.compute_intersection(cycle_to_punch[0])#.query('overlaps_all == True')
+        union, _ = subgraph.compute_intersection(
+            cycle_to_punch[0])  # .query('overlaps_all == True')
         intersection = group.intersects(union.unary_union)
         return intersection
 
@@ -116,7 +122,8 @@ def identify_potential_overlaps(cg, cn, overlap=True):
             candidate_cliques.loc[intersection.index, 'overlap'] = intersection
         return candidate_cliques.query('overlap == True')['candidates']
     else:
-         return candidate_cliques.candidates
+        return candidate_cliques.candidates
+
 
 def deepen_correspondences(cg, cn):
     pass

@@ -33,6 +33,7 @@ MAXSIZE = {0: None,
            8: 12500,
            12: 15310}
 
+
 class CandidateGraph(nx.Graph):
     """
     A NetworkX derived directed graph to store candidate overlap images.
@@ -57,7 +58,8 @@ class CandidateGraph(nx.Graph):
 
     node_factory = Node
     edge_factory = Edge
-    measures_keys = ['point_id', 'image_index', 'keypoint_index', 'edge', 'match_idx', 'x', 'y', 'x_off', 'y_off', 'corr', 'valid']
+    measures_keys = ['point_id', 'image_index', 'keypoint_index',
+                     'edge', 'match_idx', 'x', 'y', 'x_off', 'y_off', 'corr', 'valid']
 
     def __init__(self, *args, basepath=None, node_id_map=None, overlaps=False, **kwargs):
         super(CandidateGraph, self).__init__(*args, **kwargs)
@@ -84,7 +86,8 @@ class CandidateGraph(nx.Graph):
                 node_id = self.graph['node_counter']
                 self.graph['node_counter'] += 1
 
-            n['data'] = self.node_factory(image_name=i, image_path=image_path, node_id=node_id)
+            n['data'] = self.node_factory(
+                image_name=i, image_path=image_path, node_id=node_id)
 
             self.graph['node_name_map'][i] = node_id
 
@@ -92,15 +95,15 @@ class CandidateGraph(nx.Graph):
         nx.relabel_nodes(self, self.graph['node_name_map'], copy=False)
         for s, d, e in self.edges(data=True):
             if s > d:
-                s,d = d,s
-            edge = self.edge_factory(self.nodes[s]['data'],self.nodes[d]['data'])
+                s, d = d, s
+            edge = self.edge_factory(
+                self.nodes[s]['data'], self.nodes[d]['data'])
             # Unidrected graph - both representation point at the same data
-            self.edges[s,d]['data'] = edge
-            self.edges[d,s]['data'] = edge
+            self.edges[s, d]['data'] = edge
+            self.edges[d, s]['data'] = edge
 
         if overlaps:
             self.compute_overlaps()
-
 
     def __eq__(self, other):
         # Check the nodes
@@ -112,14 +115,12 @@ class CandidateGraph(nx.Graph):
         if sorted(self.edges()) != sorted(other.edges()):
             return False
         for s, d, e in self.edges.data('data'):
-            if not e == other.edges[s,d]['data']:
+            if not e == other.edges[s, d]['data']:
                 return False
         return True
 
-
     def _order_adjacency(self):  # pragma: no cover
         self.adj = OrderedDict(sorted(self.adj.items()))
-
 
     @property
     def maxsize(self):
@@ -127,14 +128,13 @@ class CandidateGraph(nx.Graph):
             self._maxsize = MAXSIZE[0]
         return self._maxsize
 
-
     @maxsize.setter
     def maxsize(self, value):
         if not value in MAXSIZE.keys():
-            raise KeyError('Value must be in {}'.format(','.join(map(str,MAXSIZE.keys()))))
+            raise KeyError('Value must be in {}'.format(
+                ','.join(map(str, MAXSIZE.keys()))))
         else:
             self._maxsize = MAXSIZE[value]
-
 
     @classmethod
     def from_filelist(cls, filelist, basepath=None):
@@ -157,7 +157,8 @@ class CandidateGraph(nx.Graph):
             filelist = io_utils.file_to_list(filelist)
         # TODO: Reject unsupported file formats + work with more file formats
         if basepath:
-            datasets = [GeoDataset(os.path.join(basepath, f)) for f in filelist]
+            datasets = [GeoDataset(os.path.join(basepath, f))
+                        for f in filelist]
         else:
             datasets = [GeoDataset(f) for f in filelist]
 
@@ -172,7 +173,8 @@ class CandidateGraph(nx.Graph):
             if fp and fp.IsValid():
                 valid_datasets.append(i)
             else:
-                warnings.warn('Missing or invalid geospatial data for {}'.format(i.base_name))
+                warnings.warn(
+                    'Missing or invalid geospatial data for {}'.format(i.base_name))
 
         # Grab the footprints and test for intersection
         for i, j in itertools.permutations(valid_datasets, 2):
@@ -184,9 +186,9 @@ class CandidateGraph(nx.Graph):
                     adjacency_dict[i.file_name].append(j.file_name)
                     adjacency_dict[j.file_name].append(i.file_name)
             except:
-                warnings.warn('Failed to calculate intersection between {} and {}'.format(i, j))
+                warnings.warn(
+                    'Failed to calculate intersection between {} and {}'.format(i, j))
         return cls.from_adjacency(adjacency_dict)
-
 
     @classmethod
     def from_adjacency(cls, input_adjacency, node_id_map=None, basepath=None, **kwargs):
@@ -216,7 +218,6 @@ class CandidateGraph(nx.Graph):
             input_adjacency = io_json.read_json(input_adjacency)
         return cls(input_adjacency, basepath=basepath, node_id_map=node_id_map, **kwargs)
 
-
     @classmethod
     def from_save(cls, input_file):
         return io_network.load(input_file)
@@ -245,7 +246,6 @@ class CandidateGraph(nx.Graph):
         """
         return self.node[node_index]['data']['image_name']
 
-
     def get_matches(self, clean_keys=[]):
         matches = []
         for s, d, e in self.edges.data('edge'):
@@ -260,7 +260,6 @@ class CandidateGraph(nx.Graph):
             match = match.join(dkps, on='destination_idx')
             matches.append(match)
         return matches
-
 
     def add_node(self, n=None, **attr):
         """
@@ -297,7 +296,8 @@ class CandidateGraph(nx.Graph):
             new_node = Node(image_name=image_name,
                             image_path=image_path,
                             node_id=n)
-            self.graph["node_name_map"][new_node["image_name"]] = new_node["node_id"]
+            self.graph["node_name_map"][new_node["image_name"]
+                                        ] = new_node["node_id"]
             attr["data"] = new_node
 
         # Add the new node to the graph using networkx
@@ -313,7 +313,6 @@ class CandidateGraph(nx.Graph):
                 adj_idx = self.graph["node_name_map"][adj_img]
                 self.add_edge(adj_img, new_node["image_name"])
 
-
     def add_edge(self, u, v, **attr):
         """
         Adds an edge with the given src and dst nodes to the graph
@@ -328,7 +327,7 @@ class CandidateGraph(nx.Graph):
         """
         if ("node_name_map" in self.graph.keys() and
             u in self.graph["node_name_map"].keys() and
-            v in self.graph["node_name_map"].keys()):
+                v in self.graph["node_name_map"].keys()):
             # Grab node ids & create edge obj
             s_id = self.graph["node_name_map"][u]
             d_id = self.graph["node_name_map"][v]
@@ -340,7 +339,6 @@ class CandidateGraph(nx.Graph):
         # Add the new edge to the graph using networkx
         super(CandidateGraph, self).add_edge(u, v, **attr)
 
-
     def extract_features(self, band=1, *args, **kwargs):  # pragma: no cover
         """
         Extracts features from each image in the graph and uses the result to assign the
@@ -350,8 +348,7 @@ class CandidateGraph(nx.Graph):
             array = node.geodata.read_array(band=band)
             node.extract_features(array, *args, **kwargs),
 
-
-    def extract_features_with_downsampling(self, downsample_amount=None, *args, **kwargs): # pragma: no cover
+    def extract_features_with_downsampling(self, downsample_amount=None, *args, **kwargs):  # pragma: no cover
         """
         Extract interest points from a downsampled array.  The array is downsampled
         by the downsample_amount keyword using the Lanconz downsample amount.  If the
@@ -366,16 +363,17 @@ class CandidateGraph(nx.Graph):
         """
         for node in self.nodes:
             if downsample_amount == None:
-                total_size = node.geodata.raster_size[0] * node.geodata.raster_size[1]
+                total_size = node.geodata.raster_size[0] * \
+                    node.geodata.raster_size[1]
                 downsample_amount = math.ceil(total_size / self.maxsize**2)
-            node.extract_features_with_downsampling(downsample_amount, *args, **kwargs)
+            node.extract_features_with_downsampling(
+                downsample_amount, *args, **kwargs)
 
-
-    def extract_features_with_tiling(self, tilesize=1000, overlap=500, *args, **kwargs): #pragma: no cover
+    def extract_features_with_tiling(self, tilesize=1000, overlap=500, *args, **kwargs):  # pragma: no cover
         for i, node in self.nodes(data='data'):
             print('Processing {}'.format(node['image_name']))
-            node.extract_features_with_tiling(tilesize=tilesize, overlap=overlap, *args, **kwargs)
-
+            node.extract_features_with_tiling(
+                tilesize=tilesize, overlap=overlap, *args, **kwargs)
 
     def save_features(self, out_path):
         """
@@ -390,10 +388,7 @@ class CandidateGraph(nx.Graph):
                    features are appended.  Otherwise, the file is created.
         """
 
-
-
         self.apply(Node.save_features, args=(out_path,), on='node')
-
 
     def load_features(self, in_path, nodes=[], nfeatures=None, **kwargs):
         """
@@ -415,7 +410,6 @@ class CandidateGraph(nx.Graph):
             else:
                 n.load_features(in_path, **kwargs)
 
-
     def match(self, *args, **kwargs):
         """
         For all connected edges in the graph, apply feature matching
@@ -425,7 +419,6 @@ class CandidateGraph(nx.Graph):
         autocnet.graph.edge.Edge.match
         """
         self.apply_func_to_edges('match', *args, **kwargs)
-
 
     def decompose_and_match(self, *args, **kwargs):
         """
@@ -438,7 +431,6 @@ class CandidateGraph(nx.Graph):
         """
         self.apply_func_to_edges('decompose_and_match', *args, **kwargs)
 
-
     def estimate_mbrs(self, *args, **kwargs):
         """
         For each edge, estimate the overlap and compute a minimum bounding
@@ -449,7 +441,6 @@ class CandidateGraph(nx.Graph):
         autocnet.graoh.edge.Edge.compute_mbr
         """
         self.apply_func_to_edges('estimate_mbr', *args, **kwargs)
-
 
     def compute_clusters(self, func=markov_cluster.mcl, *args, **kwargs):
         """
@@ -469,7 +460,6 @@ class CandidateGraph(nx.Graph):
                  of keyword arguments to be passed through to the func
         """
         _, self.clusters = func(self, *args, **kwargs)
-
 
     def compute_triangular_cycles(self):
         """
@@ -493,10 +483,9 @@ class CandidateGraph(nx.Graph):
         cycles = []
         for s, d in self.edges:
             for n in self.nodes:
-                if(s,n) in self.edges and (d,n) in self.edges:
-                    cycles.append(tuple(sorted([s,d,n])))
+                if(s, n) in self.edges and (d, n) in self.edges:
+                    cycles.append(tuple(sorted([s, d, n])))
         return set(cycles)
-
 
     def minimum_spanning_tree(self):
         """
@@ -511,7 +500,6 @@ class CandidateGraph(nx.Graph):
 
         mst = nx.minimum_spanning_tree(self)
         return self.create_edge_subgraph(mst.edges())
-
 
     def apply_func_to_edges(self, function, nodes=[], *args, **kwargs):
         """
@@ -542,8 +530,7 @@ class CandidateGraph(nx.Graph):
         if any(return_lis):
             return return_lis
 
-
-    def apply(self, function, on='edge',out=None, args=(), **kwargs):
+    def apply(self, function, on='edge', out=None, args=(), **kwargs):
         """
         Applys a function to every node or edge, returns collected return
         values.
@@ -568,14 +555,14 @@ class CandidateGraph(nx.Graph):
                  keyword args to pass into function.
         """
         options = {
-            'edge' : self.edges,
-            'edges' : self.edges,
-            'e' : self.edges,
-            0 : self.edges,
-            'node' : self.nodes,
-            'nodes' : self.nodes,
-            'n' : self.nodes,
-            1 : self.nodes
+            'edge': self.edges,
+            'edges': self.edges,
+            'e': self.edges,
+            0: self.edges,
+            'node': self.nodes,
+            'nodes': self.nodes,
+            'n': self.nodes,
+            1: self.nodes
         }
 
         if not callable(function):
@@ -589,16 +576,16 @@ class CandidateGraph(nx.Graph):
         for elem in options[on].data('data'):
             res.append(function(elem[obj], *args, **kwargs))
 
-        if out: out=res
-        else: return res
-
+        if out:
+            out = res
+        else:
+            return res
 
     def symmetry_checks(self):
         '''
         Apply a symmetry check to all edges in the graph
         '''
         self.apply_func_to_edges('symmetry_check')
-
 
     def ratio_checks(self, *args, **kwargs):
         '''
@@ -610,20 +597,17 @@ class CandidateGraph(nx.Graph):
         '''
         self.apply_func_to_edges('ratio_check', *args, **kwargs)
 
-
     def compute_overlaps(self, *args, **kwargs):
         '''
         Computes overlap MBRs for all edges
         '''
         self.apply_func_to_edges('compute_overlap', *args, **kwargs)
 
-
     def overlap_checks(self, *args, **kwargs):
         '''
         Apply overlap check to all edges in the graph
         '''
         self.apply_func_to_edges('overlap_check', *args, **kwargs)
-
 
     def compute_homographies(self, *args, **kwargs):
         '''
@@ -636,7 +620,6 @@ class CandidateGraph(nx.Graph):
         '''
         self.apply_func_to_edges('compute_homography', *args, **kwargs)
 
-
     def compute_fundamental_matrices(self, *args, **kwargs):
         '''
         Compute fundmental matrices for all edges using identical parameters
@@ -646,7 +629,6 @@ class CandidateGraph(nx.Graph):
         autocnet.matcher.cpu_outlier_detector.compute_fundamental_matrix
         '''
         self.apply_func_to_edges('compute_fundamental_matrix', *args, **kwargs)
-
 
     def subpixel_register(self, *args, **kwargs):
         '''
@@ -658,7 +640,6 @@ class CandidateGraph(nx.Graph):
         '''
         self.apply_func_to_edges('subpixel_register', *args, **kwargs)
 
-
     def suppress(self, *args, **kwargs):
         '''
         Apply a metric of point suppression to the graph
@@ -669,7 +650,6 @@ class CandidateGraph(nx.Graph):
         '''
         self.apply_func_to_edges('suppress', *args, **kwargs)
 
-
     def overlap(self):
         '''
         Compute the percentage and area coverage of two images
@@ -679,7 +659,6 @@ class CandidateGraph(nx.Graph):
         autocnet.cg.cg.two_image_overlap
         '''
         self.apply_func_to_edges('overlap')
-
 
     def to_filelist(self):
         """
@@ -696,7 +675,6 @@ class CandidateGraph(nx.Graph):
             filelist.append(node['image_path'])
         return filelist
 
-
     def island_nodes(self):
         """
         Finds single nodes that are completely disconnected from the rest of the graph
@@ -707,7 +685,6 @@ class CandidateGraph(nx.Graph):
           A list of disconnected nodes, nodes of degree zero, island nodes, etc.
         """
         return nx.isolates(self)
-
 
     def connected_subgraphs(self):
         """
@@ -720,7 +697,6 @@ class CandidateGraph(nx.Graph):
            A list of connected sub-graphs of nodes, with the largest sub-graph first. Each subgraph is a set.
         """
         return sorted(nx.connected_components(self), key=len, reverse=True)
-
 
     def serials(self):
         """
@@ -738,13 +714,11 @@ class CandidateGraph(nx.Graph):
             serials[n] = generate_serial_number(node['image_path'])
         return serials
 
-
     def files(self):
         """
         Return a list of all full file PATHs in the CandidateGraph
         """
         return [node['image_path'] for node in self.nodes]
-
 
     def save(self, filename):
         """
@@ -755,7 +729,6 @@ class CandidateGraph(nx.Graph):
                    The relative or absolute PATH where the network is saved
         """
         io_network.save(self, filename)
-
 
     def plot(self, ax=None, **kwargs):  # pragma: no cover
         """
@@ -772,7 +745,6 @@ class CandidateGraph(nx.Graph):
            A MatPlotLib axes object
         """
         return plot_graph(self, ax=ax, **kwargs)
-
 
     def plot_cluster(self, ax=None, **kwargs):  # pragma: no cover
         """
@@ -791,7 +763,6 @@ class CandidateGraph(nx.Graph):
 
         """
         return cluster_plot(self, ax, **kwargs)
-
 
     def create_node_subgraph(self, nodes):
         """
@@ -815,7 +786,6 @@ class CandidateGraph(nx.Graph):
         """
         induced_nodes = nx.filters.show_nodes(self.nbunch_iter(nodes))
         return SubCandidateGraph(self, induced_nodes)
-
 
     def create_edge_subgraph(self, edges):
         """
@@ -857,7 +827,6 @@ class CandidateGraph(nx.Graph):
         else:
             return len(self.edges())
 
-
     def subgraph_from_matches(self):
         """
         Returns a sub-graph where all edges have matches.
@@ -875,7 +844,6 @@ class CandidateGraph(nx.Graph):
 
         return self.create_edge_subgraph(matches)
 
-
     def filter_nodes(self, func, *args, **kwargs):
         """
         Filters graph and returns a sub-graph from matches. Mimics
@@ -891,7 +859,8 @@ class CandidateGraph(nx.Graph):
           A networkX graph object
 
         """
-        nodes = [node for i, node in self.nodes.data('data') if func(node, *args, **kwargs)]
+        nodes = [node for i, node in self.nodes.data(
+            'data') if func(node, *args, **kwargs)]
         return self.create_node_subgraph(nodes)
 
     def filter_edges(self, func, *args, **kwargs):
@@ -908,7 +877,8 @@ class CandidateGraph(nx.Graph):
         : Object
           A networkX graph object
         """
-        edges = [(u, v) for u, v, edge in self.edges.data('data') if func(edge, *args, **kwargs)]
+        edges = [(u, v) for u, v, edge in self.edges.data(
+            'data') if func(edge, *args, **kwargs)]
         return self.create_edge_subgraph(edges)
 
     def compute_cliques(self, node_id=None):  # pragma: no cover
@@ -932,7 +902,7 @@ class CandidateGraph(nx.Graph):
         else:
             return list(nx.find_cliques(self))
 
-    def compute_weight(self, clean_keys, **kwargs): # pragma: no cover
+    def compute_weight(self, clean_keys, **kwargs):  # pragma: no cover
         """
         Computes a voronoi weight for each edge in a given graph.
         Can function as is, but is slightly optimized for complete subgraphs.
@@ -947,23 +917,30 @@ class CandidateGraph(nx.Graph):
         """
 
         if not self.is_connected():
-            warnings.warn('The given graph is not complete and may yield garbage.')
+            warnings.warn(
+                'The given graph is not complete and may yield garbage.')
 
         for s, d, edge in self.edges.data('edge'):
             source_node = edge.source
-            overlap, _ = self.compute_intersection(source_node, clean_keys = clean_keys)
+            overlap, _ = self.compute_intersection(
+                source_node, clean_keys=clean_keys)
 
             matches, _ = edge.clean(clean_keys)
-            kps = edge.get_keypoints(edge.source, index=matches['source_idx'])[['x', 'y']]
-            reproj_geom = source_node.reproject_geom(overlap.geometry.values[0].__geo_interface__['coordinates'][0])
+            kps = edge.get_keypoints(edge.source, index=matches['source_idx'])[
+                ['x', 'y']]
+            reproj_geom = source_node.reproject_geom(
+                overlap.geometry.values[0].__geo_interface__['coordinates'][0])
             initial_mask = geom_mask(kps, reproj_geom)
 
             if (len(kps[initial_mask]) <= 0):
                 continue
 
-            kps['geometry'] = kps.apply(lambda x: shapely.geometry.Point(x['x'], x['y']), axis=1)
-            kps_mask = kps['geometry'][initial_mask].apply(lambda x: reproj_geom.contains(x))
-            voronoi_df = compute_voronoi(kps[initial_mask][kps_mask], reproj_geom, **kwargs)
+            kps['geometry'] = kps.apply(
+                lambda x: shapely.geometry.Point(x['x'], x['y']), axis=1)
+            kps_mask = kps['geometry'][initial_mask].apply(
+                lambda x: reproj_geom.contains(x))
+            voronoi_df = compute_voronoi(
+                kps[initial_mask][kps_mask], reproj_geom, **kwargs)
 
             edge['weights']['voronoi'] = voronoi_df
 
@@ -1018,7 +995,6 @@ class CandidateGraph(nx.Graph):
                 fc[j].append(tuple(i))
         return fc
 
-
     def compute_intersection(self, source, clean_keys=[]):
         """
         Computes the intercetion of all images in a graph
@@ -1042,9 +1018,11 @@ class CandidateGraph(nx.Graph):
         if type(source) is int:
             source = self.node[source]['data']
         # May want to use a try except block here, but what error to raise?
-        source_poly = swkt.loads(source.geodata.footprint.GetGeometryRef(0).ExportToWkt())
+        source_poly = swkt.loads(
+            source.geodata.footprint.GetGeometryRef(0).ExportToWkt())
 
-        source_gdf = gpd.GeoDataFrame({'geometry': [source_poly], 'source_node': [source['node_id']]})
+        source_gdf = gpd.GeoDataFrame(
+            {'geometry': [source_poly], 'source_node': [source['node_id']]})
 
         proj_gdf = gpd.GeoDataFrame(columns=['geometry', 'proj_node'])
         proj_poly_list = []
@@ -1052,21 +1030,26 @@ class CandidateGraph(nx.Graph):
         # Begin iterating through the edges in the graph that include the source node
         for s, d, edge in self.edges.data('data'):
             if s == source['node_id']:
-                proj_poly = swkt.loads(edge.destination.geodata.footprint.GetGeometryRef(0).ExportToWkt())
+                proj_poly = swkt.loads(
+                    edge.destination.geodata.footprint.GetGeometryRef(0).ExportToWkt())
                 proj_poly_list.append(proj_poly)
                 proj_node_list.append(d)
 
             elif d == source['node_id']:
-                proj_poly = swkt.loads(edge.source.geodata.footprint.GetGeometryRef(0).ExportToWkt())
+                proj_poly = swkt.loads(
+                    edge.source.geodata.footprint.GetGeometryRef(0).ExportToWkt())
                 proj_poly_list.append(proj_poly)
                 proj_node_list.append(s)
 
-        proj_gdf = gpd.GeoDataFrame({"geometry": proj_poly_list, "proj_node": proj_node_list})
+        proj_gdf = gpd.GeoDataFrame(
+            {"geometry": proj_poly_list, "proj_node": proj_node_list})
         # Overlay all geometry and find the one geometry element that overlaps all of the images
         intersect_gdf = gpd.overlay(source_gdf, proj_gdf, how='intersection')
         if len(intersect_gdf) == 0:
-            raise ValueError('Node ' + str(source['node_id']) +  ' does not overlap with any other images in the candidate graph.')
-        overlaps_mask = intersect_gdf.geometry.apply(lambda x:proj_gdf.geometry.contains(shapely.affinity.scale(x, .9, .9)).all())
+            raise ValueError(
+                'Node ' + str(source['node_id']) + ' does not overlap with any other images in the candidate graph.')
+        overlaps_mask = intersect_gdf.geometry.apply(
+            lambda x: proj_gdf.geometry.contains(shapely.affinity.scale(x, .9, .9)).all())
         overlaps_all = intersect_gdf[overlaps_mask]
 
         # If there is no intersection polygon that overlaps all of the images, union all of the intersection
@@ -1078,7 +1061,6 @@ class CandidateGraph(nx.Graph):
 
         return overlaps_all, intersect_gdf
 
-
     def is_complete(self):
         """
         Checks if the graph is a complete graph
@@ -1089,7 +1071,6 @@ class CandidateGraph(nx.Graph):
                 return False
         return True
 
-
     def footprints(self):
         geoms = []
         names = []
@@ -1099,22 +1080,20 @@ class CandidateGraph(nx.Graph):
 
         return gpd.GeoDataFrame(names, geometry=geoms)
 
-
     def create_control_network(self, clean_keys=[]):
         matches = self.get_matches(clean_keys=clean_keys)
-        self.controlnetwork = control.ControlNetwork.from_candidategraph(matches)
-
+        self.controlnetwork = control.ControlNetwork.from_candidategraph(
+            matches)
 
     def identify_potential_overlaps(self, **kwargs):
-        cc = control.identify_potential_overlaps(self, self.controlnetwork, **kwargs)
+        cc = control.identify_potential_overlaps(
+            self, self.controlnetwork, **kwargs)
         return cc
-
 
     def to_isis(self, outname, *args, **kwargs):
         serials = self.serials()
         files = self.files()
         self.controlnetwork.to_isis(outname, serials, files, *args, **kwargs)
-
 
     def nodes_iter(self, data=False):
         for i, n in self.nodes.data('data'):
@@ -1122,7 +1101,6 @@ class CandidateGraph(nx.Graph):
                 yield i, n
             else:
                 yield i
-
 
     def edges_iter(self, data=False):
         for s, d, e in self.edges.data('data'):
@@ -1143,18 +1121,19 @@ class CandidateGraph(nx.Graph):
                 destin_fields = row[['destination_x', 'destination_y']]
                 if cls.measure_to_point.get(source_key, None) is not None:
                     tempid = cls.measure_to_point[source_key]
-                    cls.add_measure(destin_key, edge, row.name, destin_fields, point_id=tempid)
+                    cls.add_measure(destin_key, edge, row.name,
+                                    destin_fields, point_id=tempid)
                 elif cls.measure_to_point.get(destin_key, None) is not None:
                     tempid = cls.measure_to_point[destin_key]
-                    cls.add_measure(source_key, edge, row.name,  source_fields, point_id=tempid)
+                    cls.add_measure(source_key, edge, row.name,
+                                    source_fields, point_id=tempid)
                 else:
                     cls.add_measure(source_key, edge, row.name,  source_fields)
-                    cls.add_measure(destin_key, edge,row.name,  destin_fields)
+                    cls.add_measure(destin_key, edge, row.name,  destin_fields)
                     cls._point_id += 1
 
         cls.data.index.name = 'measure_id'
         return cls
-
 
     def add_measure(self, key, edge, match_idx, fields, point_id=None):
         """
@@ -1180,15 +1159,15 @@ class CandidateGraph(nx.Graph):
         # The node_id is a composite key (image_id, correspondence_id), so just grab the image
         image_id = key[0]
         match_id = key[1]
-        self.controlnetwork.loc[self._measure_id] = [point_id, image_id, match_id, edge, match_idx, *fields, 0, 0, np.inf, True]
+        self.controlnetwork.loc[self._measure_id] = [
+            point_id, image_id, match_id, edge, match_idx, *fields, 0, 0, np.inf, True]
         self._measure_id += 1
 
-
     def remove_measure(self, idx):
-        self.controlnetwork = self.controlnetwork.drop(self.controlnetwork.index[idx])
+        self.controlnetwork = self.controlnetwork.drop(
+            self.controlnetwork.index[idx])
         for r in idx:
             self.measure_to_point.pop(r, None)
-
 
     def validate_points(self):
         """
@@ -1208,7 +1187,8 @@ class CandidateGraph(nx.Graph):
             # One and only one measure constraint
             if g.image_index.duplicated().any():
                 return True
-            else: return False
+            else:
+                return False
         return self.controlnetwork.groupby('point_id').apply(func)
 
     def clean_singles(self):
@@ -1219,13 +1199,14 @@ class CandidateGraph(nx.Graph):
         """
         return self.controlnetwork.groupby('point_id').apply(lambda g: g if len(g) > 1 else None)
 
-    def to_isis(self, outname, serials, olist, *args, **kwargs): #pragma: no cover
+    def to_isis(self, outname, serials, olist, *args, **kwargs):  # pragma: no cover
         """
         Write the control network out to the ISIS3 control network format.
         """
 
         if self.validate_points().any() == True:
-            warnings.warn('Control Network is not ISIS3 compliant.  Please run the validate_points method on the control network.')
+            warnings.warn(
+                'Control Network is not ISIS3 compliant.  Please run the validate_points method on the control network.')
             return
 
         # Apply the subpixel shift
@@ -1240,7 +1221,6 @@ class CandidateGraph(nx.Graph):
         self.controlnetwork.x -= self.controlnetwork.x_off
         self.controlnetwork.y -= self.controlnetwork.y_off
 
-
     def to_bal(self):
         """
         Write the control network out to the Bundle Adjustment in the Large
@@ -1253,5 +1233,6 @@ class CandidateGraph(nx.Graph):
 class SubCandidateGraph(nx.graphviews.SubGraph, CandidateGraph):
     def __init__(self, *args, **kwargs):
         super(SubCandidateGraph, self).__init__(*args, **kwargs)
+
 
 nx.graphviews.SubGraph = SubCandidateGraph
