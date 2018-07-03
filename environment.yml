@@ -1,5 +1,6 @@
 name: autocnet
 channels:
+  - usgs-astrogeology
   - conda-forge
   - jlaura
   - menpo

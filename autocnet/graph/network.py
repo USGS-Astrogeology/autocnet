@@ -57,6 +57,7 @@ class CandidateGraph(nx.Graph):
 
     node_factory = Node
     edge_factory = Edge
+    measures_keys = ['point_id', 'image_index', 'keypoint_index', 'edge', 'match_idx', 'x', 'y', 'x_off', 'y_off', 'corr', 'valid']
 
     def __init__(self, *args, basepath=None, node_id_map=None, overlaps=False, **kwargs):
         super(CandidateGraph, self).__init__(*args, **kwargs)
@@ -65,6 +66,12 @@ class CandidateGraph(nx.Graph):
         self.graph['modifieddate'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         self.graph['node_name_map'] = {}
         self.graph['node_counter'] = 0
+
+        self._point_id = 0
+        self._measure_id = 0
+        self.measure_to_point = {}
+        self.controlnetwork = pd.DataFrame(columns=self.measures_keys)
+
         for i, n in self.nodes(data=True):
             if basepath:
                 image_path = os.path.join(basepath, i)
@@ -94,6 +101,7 @@ class CandidateGraph(nx.Graph):
         if overlaps:
             self.compute_overlaps()
 
+
     def __eq__(self, other):
         # Check the nodes
         if sorted(self.nodes()) != sorted(other.nodes()):
@@ -108,8 +116,10 @@ class CandidateGraph(nx.Graph):
                 return False
         return True
 
+
     def _order_adjacency(self):  # pragma: no cover
         self.adj = OrderedDict(sorted(self.adj.items()))
+
 
     @property
     def maxsize(self):
@@ -117,12 +127,14 @@ class CandidateGraph(nx.Graph):
             self._maxsize = MAXSIZE[0]
         return self._maxsize
 
+
     @maxsize.setter
     def maxsize(self, value):
         if not value in MAXSIZE.keys():
             raise KeyError('Value must be in {}'.format(','.join(map(str,MAXSIZE.keys()))))
         else:
             self._maxsize = MAXSIZE[value]
+
 
     @classmethod
     def from_filelist(cls, filelist, basepath=None):
@@ -175,6 +187,7 @@ class CandidateGraph(nx.Graph):
                 warnings.warn('Failed to calculate intersection between {} and {}'.format(i, j))
         return cls.from_adjacency(adjacency_dict)
 
+
     @classmethod
     def from_adjacency(cls, input_adjacency, node_id_map=None, basepath=None, **kwargs):
         """
@@ -202,6 +215,7 @@ class CandidateGraph(nx.Graph):
         if not isinstance(input_adjacency, dict):
             input_adjacency = io_json.read_json(input_adjacency)
         return cls(input_adjacency, basepath=basepath, node_id_map=node_id_map, **kwargs)
+
 
     @classmethod
     def from_save(cls, input_file):
@@ -231,6 +245,7 @@ class CandidateGraph(nx.Graph):
         """
         return self.node[node_index]['data']['image_name']
 
+
     def get_matches(self, clean_keys=[]):
         matches = []
         for s, d, e in self.edges.data('edge'):
@@ -245,6 +260,7 @@ class CandidateGraph(nx.Graph):
             match = match.join(dkps, on='destination_idx')
             matches.append(match)
         return matches
+
 
     def add_node(self, n=None, **attr):
         """
@@ -324,6 +340,7 @@ class CandidateGraph(nx.Graph):
         # Add the new edge to the graph using networkx
         super(CandidateGraph, self).add_edge(u, v, **attr)
 
+
     def extract_features(self, band=1, *args, **kwargs):  # pragma: no cover
         """
         Extracts features from each image in the graph and uses the result to assign the
@@ -332,6 +349,7 @@ class CandidateGraph(nx.Graph):
         for i, node in self.nodes.data('data'):
             array = node.geodata.read_array(band=band)
             node.extract_features(array, *args, **kwargs),
+
 
     def extract_features_with_downsampling(self, downsample_amount=None, *args, **kwargs): # pragma: no cover
         """
@@ -352,10 +370,12 @@ class CandidateGraph(nx.Graph):
                 downsample_amount = math.ceil(total_size / self.maxsize**2)
             node.extract_features_with_downsampling(downsample_amount, *args, **kwargs)
 
+
     def extract_features_with_tiling(self, tilesize=1000, overlap=500, *args, **kwargs): #pragma: no cover
         for i, node in self.nodes(data='data'):
             print('Processing {}'.format(node['image_name']))
             node.extract_features_with_tiling(tilesize=tilesize, overlap=overlap, *args, **kwargs)
+
 
     def save_features(self, out_path):
         """
@@ -373,6 +393,7 @@ class CandidateGraph(nx.Graph):
 
 
         self.apply(Node.save_features, args=(out_path,), on='node')
+
 
     def load_features(self, in_path, nodes=[], nfeatures=None, **kwargs):
         """
@@ -394,6 +415,7 @@ class CandidateGraph(nx.Graph):
             else:
                 n.load_features(in_path, **kwargs)
 
+
     def match(self, *args, **kwargs):
         """
         For all connected edges in the graph, apply feature matching
@@ -403,6 +425,7 @@ class CandidateGraph(nx.Graph):
         autocnet.graph.edge.Edge.match
         """
         self.apply_func_to_edges('match', *args, **kwargs)
+
 
     def decompose_and_match(self, *args, **kwargs):
         """
@@ -415,6 +438,7 @@ class CandidateGraph(nx.Graph):
         """
         self.apply_func_to_edges('decompose_and_match', *args, **kwargs)
 
+
     def estimate_mbrs(self, *args, **kwargs):
         """
         For each edge, estimate the overlap and compute a minimum bounding
@@ -425,6 +449,7 @@ class CandidateGraph(nx.Graph):
         autocnet.graoh.edge.Edge.compute_mbr
         """
         self.apply_func_to_edges('estimate_mbr', *args, **kwargs)
+
 
     def compute_clusters(self, func=markov_cluster.mcl, *args, **kwargs):
         """
@@ -444,6 +469,7 @@ class CandidateGraph(nx.Graph):
                  of keyword arguments to be passed through to the func
         """
         _, self.clusters = func(self, *args, **kwargs)
+
 
     def compute_triangular_cycles(self):
         """
@@ -471,6 +497,7 @@ class CandidateGraph(nx.Graph):
                     cycles.append(tuple(sorted([s,d,n])))
         return set(cycles)
 
+
     def minimum_spanning_tree(self):
         """
         Calculates the minimum spanning tree of the graph
@@ -484,6 +511,7 @@ class CandidateGraph(nx.Graph):
 
         mst = nx.minimum_spanning_tree(self)
         return self.create_edge_subgraph(mst.edges())
+
 
     def apply_func_to_edges(self, function, nodes=[], *args, **kwargs):
         """
@@ -513,6 +541,7 @@ class CandidateGraph(nx.Graph):
 
         if any(return_lis):
             return return_lis
+
 
     def apply(self, function, on='edge',out=None, args=(), **kwargs):
         """
@@ -563,11 +592,13 @@ class CandidateGraph(nx.Graph):
         if out: out=res
         else: return res
 
+
     def symmetry_checks(self):
         '''
         Apply a symmetry check to all edges in the graph
         '''
         self.apply_func_to_edges('symmetry_check')
+
 
     def ratio_checks(self, *args, **kwargs):
         '''
@@ -579,17 +610,20 @@ class CandidateGraph(nx.Graph):
         '''
         self.apply_func_to_edges('ratio_check', *args, **kwargs)
 
+
     def compute_overlaps(self, *args, **kwargs):
         '''
         Computes overlap MBRs for all edges
         '''
         self.apply_func_to_edges('compute_overlap', *args, **kwargs)
 
+
     def overlap_checks(self, *args, **kwargs):
         '''
         Apply overlap check to all edges in the graph
         '''
         self.apply_func_to_edges('overlap_check', *args, **kwargs)
+
 
     def compute_homographies(self, *args, **kwargs):
         '''
@@ -602,6 +636,7 @@ class CandidateGraph(nx.Graph):
         '''
         self.apply_func_to_edges('compute_homography', *args, **kwargs)
 
+
     def compute_fundamental_matrices(self, *args, **kwargs):
         '''
         Compute fundmental matrices for all edges using identical parameters
@@ -611,6 +646,7 @@ class CandidateGraph(nx.Graph):
         autocnet.matcher.cpu_outlier_detector.compute_fundamental_matrix
         '''
         self.apply_func_to_edges('compute_fundamental_matrix', *args, **kwargs)
+
 
     def subpixel_register(self, *args, **kwargs):
         '''
@@ -622,6 +658,7 @@ class CandidateGraph(nx.Graph):
         '''
         self.apply_func_to_edges('subpixel_register', *args, **kwargs)
 
+
     def suppress(self, *args, **kwargs):
         '''
         Apply a metric of point suppression to the graph
@@ -632,6 +669,7 @@ class CandidateGraph(nx.Graph):
         '''
         self.apply_func_to_edges('suppress', *args, **kwargs)
 
+
     def overlap(self):
         '''
         Compute the percentage and area coverage of two images
@@ -641,6 +679,7 @@ class CandidateGraph(nx.Graph):
         autocnet.cg.cg.two_image_overlap
         '''
         self.apply_func_to_edges('overlap')
+
 
     def to_filelist(self):
         """
@@ -657,20 +696,6 @@ class CandidateGraph(nx.Graph):
             filelist.append(node['image_path'])
         return filelist
 
-    def generate_control_network(self, clean_keys=['fundamental']):
-        """
-        Generate a correspondence graph from the current candidate graph object.
-        The control network is a single graph object, composed of n-sub graphs,
-        where each sub-graph is the aggregation of all assocaited correspondences.
-
-        Parameters
-        ----------
-        clean_keys : list
-                     of strings used to mask the matches on each edge of the
-                     Candidate Graph object
-
-        """
-        return generate_control_network(self)
 
     def island_nodes(self):
         """
@@ -683,6 +708,7 @@ class CandidateGraph(nx.Graph):
         """
         return nx.isolates(self)
 
+
     def connected_subgraphs(self):
         """
         Finds and returns a list of each connected subgraph of nodes. Each subgraph is a set.
@@ -694,6 +720,7 @@ class CandidateGraph(nx.Graph):
            A list of connected sub-graphs of nodes, with the largest sub-graph first. Each subgraph is a set.
         """
         return sorted(nx.connected_components(self), key=len, reverse=True)
+
 
     def serials(self):
         """
@@ -711,11 +738,13 @@ class CandidateGraph(nx.Graph):
             serials[n] = generate_serial_number(node['image_path'])
         return serials
 
+
     def files(self):
         """
         Return a list of all full file PATHs in the CandidateGraph
         """
         return [node['image_path'] for node in self.nodes]
+
 
     def save(self, filename):
         """
@@ -726,6 +755,7 @@ class CandidateGraph(nx.Graph):
                    The relative or absolute PATH where the network is saved
         """
         io_network.save(self, filename)
+
 
     def plot(self, ax=None, **kwargs):  # pragma: no cover
         """
@@ -742,6 +772,7 @@ class CandidateGraph(nx.Graph):
            A MatPlotLib axes object
         """
         return plot_graph(self, ax=ax, **kwargs)
+
 
     def plot_cluster(self, ax=None, **kwargs):  # pragma: no cover
         """
@@ -760,6 +791,7 @@ class CandidateGraph(nx.Graph):
 
         """
         return cluster_plot(self, ax, **kwargs)
+
 
     def create_node_subgraph(self, nodes):
         """
@@ -783,6 +815,7 @@ class CandidateGraph(nx.Graph):
         """
         induced_nodes = nx.filters.show_nodes(self.nbunch_iter(nodes))
         return SubCandidateGraph(self, induced_nodes)
+
 
     def create_edge_subgraph(self, edges):
         """
@@ -824,6 +857,7 @@ class CandidateGraph(nx.Graph):
         else:
             return len(self.edges())
 
+
     def subgraph_from_matches(self):
         """
         Returns a sub-graph where all edges have matches.
@@ -840,6 +874,7 @@ class CandidateGraph(nx.Graph):
                    if not edge.matches.empty]
 
         return self.create_edge_subgraph(matches)
+
 
     def filter_nodes(self, func, *args, **kwargs):
         """
@@ -983,6 +1018,7 @@ class CandidateGraph(nx.Graph):
                 fc[j].append(tuple(i))
         return fc
 
+
     def compute_intersection(self, source, clean_keys=[]):
         """
         Computes the intercetion of all images in a graph
@@ -1042,6 +1078,7 @@ class CandidateGraph(nx.Graph):
 
         return overlaps_all, intersect_gdf
 
+
     def is_complete(self):
         """
         Checks if the graph is a complete graph
@@ -1052,6 +1089,7 @@ class CandidateGraph(nx.Graph):
                 return False
         return True
 
+
     def footprints(self):
         geoms = []
         names = []
@@ -1061,18 +1099,22 @@ class CandidateGraph(nx.Graph):
 
         return gpd.GeoDataFrame(names, geometry=geoms)
 
+
     def create_control_network(self, clean_keys=[]):
         matches = self.get_matches(clean_keys=clean_keys)
         self.controlnetwork = control.ControlNetwork.from_candidategraph(matches)
+
 
     def identify_potential_overlaps(self, **kwargs):
         cc = control.identify_potential_overlaps(self, self.controlnetwork, **kwargs)
         return cc
 
+
     def to_isis(self, outname, *args, **kwargs):
         serials = self.serials()
         files = self.files()
         self.controlnetwork.to_isis(outname, serials, files, *args, **kwargs)
+
 
     def nodes_iter(self, data=False):
         for i, n in self.nodes.data('data'):
@@ -1081,12 +1123,132 @@ class CandidateGraph(nx.Graph):
             else:
                 yield i
 
+
     def edges_iter(self, data=False):
         for s, d, e in self.edges.data('data'):
             if data:
                 yield s, d, e
             else:
                 yield s, d
+
+    @classmethod
+    def generate_control_network(cls, matches):
+        cls = ControlNetwork()
+        for match in matches:
+            for idx, row in match.iterrows():
+                edge = (row.source_image, row.destination_image)
+                source_key = (row.source_image, row.source_idx)
+                source_fields = row[['source_x', 'source_y']]
+                destin_key = (row.destination_image, row.destination_idx)
+                destin_fields = row[['destination_x', 'destination_y']]
+                if cls.measure_to_point.get(source_key, None) is not None:
+                    tempid = cls.measure_to_point[source_key]
+                    cls.add_measure(destin_key, edge, row.name, destin_fields, point_id=tempid)
+                elif cls.measure_to_point.get(destin_key, None) is not None:
+                    tempid = cls.measure_to_point[destin_key]
+                    cls.add_measure(source_key, edge, row.name,  source_fields, point_id=tempid)
+                else:
+                    cls.add_measure(source_key, edge, row.name,  source_fields)
+                    cls.add_measure(destin_key, edge,row.name,  destin_fields)
+                    cls._point_id += 1
+
+        cls.data.index.name = 'measure_id'
+        return cls
+
+
+    def add_measure(self, key, edge, match_idx, fields, point_id=None):
+        """
+        Create a new measure that is coincident to a given point.  This method does not
+        create the point if is missing.  When a measure is added to the graph, an associated
+        row is added to the measures dataframe.
+
+        Parameters
+        ----------
+        key : hashable
+                  Some hashable id.  In the case of an autocnet graph object the
+                  id should be in the form (image_id, match_id)
+
+        point_id : hashable
+                   The point to link the node to.  This is most likely an integer, but
+                   any hashable should work.
+        """
+        if key in self.measure_to_point.keys():
+            return
+        if point_id == None:
+            point_id = self._point_id
+        self.measure_to_point[key] = point_id
+        # The node_id is a composite key (image_id, correspondence_id), so just grab the image
+        image_id = key[0]
+        match_id = key[1]
+        self.controlnetwork.loc[self._measure_id] = [point_id, image_id, match_id, edge, match_idx, *fields, 0, 0, np.inf, True]
+        self._measure_id += 1
+
+
+    def remove_measure(self, idx):
+        self.controlnetwork = self.controlnetwork.drop(self.controlnetwork.index[idx])
+        for r in idx:
+            self.measure_to_point.pop(r, None)
+
+
+    def validate_points(self):
+        """
+        Ensure that all control points currently in the nework are valid.
+
+        Criteria for validity:
+
+          * Singularity: A control point can have one and only one measure from any image
+
+        Returns
+        -------
+         : pd.Series
+
+        """
+
+        def func(g):
+            # One and only one measure constraint
+            if g.image_index.duplicated().any():
+                return True
+            else: return False
+        return self.controlnetwork.groupby('point_id').apply(func)
+
+    def clean_singles(self):
+        """
+        Take the `data` dataframe and return only those points with
+        at least two measures.  This is automatically called before writing
+        as functions such as subpixel matching can result in orphaned measures.
+        """
+        return self.controlnetwork.groupby('point_id').apply(lambda g: g if len(g) > 1 else None)
+
+    def to_isis(self, outname, serials, olist, *args, **kwargs): #pragma: no cover
+        """
+        Write the control network out to the ISIS3 control network format.
+        """
+
+        if self.validate_points().any() == True:
+            warnings.warn('Control Network is not ISIS3 compliant.  Please run the validate_points method on the control network.')
+            return
+
+        # Apply the subpixel shift
+        self.controlnetwork.x += self.controlnetwork.x_off
+        self.controlnetwork.y += self.controlnetwork.y_off
+
+        to_isis(outname + '.net', self.controlnetwork.query('valid == True'),
+                serials, *args, **kwargs)
+        write_filelist(olist, outname + '.lis')
+
+        # Back out the subpixel shift
+        self.controlnetwork.x -= self.controlnetwork.x_off
+        self.controlnetwork.y -= self.controlnetwork.y_off
+
+
+    def to_bal(self):
+        """
+        Write the control network out to the Bundle Adjustment in the Large
+        (BAL) file format.  For more information see:
+        http://grail.cs.washington.edu/projects/bal/
+        """
+        pass
+
 
 class SubCandidateGraph(nx.graphviews.SubGraph, CandidateGraph):
     def __init__(self, *args, **kwargs):

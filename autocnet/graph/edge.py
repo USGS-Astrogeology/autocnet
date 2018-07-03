@@ -49,10 +49,11 @@ class Edge(dict, MutableMapping):
         self.subpixel_matches = pd.DataFrame()
         self._matches = pd.DataFrame()
         self['weights'] = {}
-        
+
         self['source_mbr'] = None
         self['destin_mbr'] = None
         self['overlap_latlon_coords'] = None
+
 
     def __repr__(self):
         return """
@@ -61,9 +62,11 @@ class Edge(dict, MutableMapping):
         Available Masks: {}
         """.format(self.source, self.destination, self.masks)
 
+
     def __eq__(self, other):
         return utils.compare_dicts(self.__dict__, other.__dict__) *\
                utils.compare_dicts(self, other)
+
 
     @property
     def matches(self):
@@ -71,13 +74,15 @@ class Edge(dict, MutableMapping):
             self._matches = pd.DataFrame()
         return self._matches
 
+
     @matches.setter
     def matches(self, value):
         if isinstance(value, pd.DataFrame):
             self._matches = value
         else:
             raise(TypeError)
-            
+
+
     def match(self, k=2, **kwargs):
 
         """
@@ -183,7 +188,7 @@ class Edge(dict, MutableMapping):
         # Replace the index with the matches index.
         s_keypoints.index = matches.index
         d_keypoints.index = matches.index
-        
+
         self['fundamental_matrix'], fmask = fm.compute_fundamental_matrix(s_keypoints, d_keypoints, **kwargs)
 
         if isinstance(self['fundamental_matrix'], np.ndarray):
@@ -366,7 +371,7 @@ class Edge(dict, MutableMapping):
         self.masks['subpixel'] = mask
         return pts
 
-    def suppress(self, suppression_func=spf.correlation, clean_keys=[], maskname='suppression', **kwargs):
+    def suppress(self, suppression_func=spf.distance, clean_keys=[], maskname='suppression', **kwargs):
         """
         Apply a disc based suppression algorithm to get a good spatial
         distribution of high quality points, where the user defines some
@@ -395,6 +400,7 @@ class Edge(dict, MutableMapping):
         # Massage the dataframe into the correct structure
         coords = self.source.get_keypoint_coordinates()
         merged = matches.merge(coords, left_on=['source_idx'], right_index=True)
+        print(merged.columns)
         merged['strength'] = merged.apply(suppression_func, axis=1, args=([self]))
 
         smask, k = od.spatial_suppression(merged, domain, **kwargs)

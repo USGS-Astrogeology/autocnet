@@ -18,7 +18,6 @@ from autocnet.io import keypoints as io_keypoints
 from autocnet.matcher.add_depth import deepen_correspondences
 from autocnet.matcher import cpu_extractor as fe
 from autocnet.matcher import cpu_outlier_detector as od
-from autocnet.matcher import suppression_funcs as spf
 from autocnet.cg.cg import convex_hull_ratio
 
 from autocnet.vis.graph_view import plot_node
