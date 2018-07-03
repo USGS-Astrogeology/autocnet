@@ -45,146 +45,133 @@ def distance_ratio(edge, matches, ratio=0.8, single=False):
     return mask
 
 
-def spatial_suppression(df, domain, min_radius=1.5, k=250, error_k=0.1):
+def spatial_suppression(df, bounds, xkey='lon', ykey='lat', k=60, error_k=0.05, nsteps=250):
     """
-    Spatial suppression using disc based method.
+    Apply the spatial suppression algorithm over an arbitrary domain for all of the spatial
+    data in the provided data frame.
 
-    Attributes
+    Parameters
     ----------
-    df : dataframe
-         Input dataframe used for suppressing
 
-    mask : series
-           pandas boolean series
+    df : object
+         Pandas data frame with coordinates
 
-    max_radius : float
-                 Maximum allowable point radius
+    bounds : list
+             In the form xmin, ymin, xmax, ymax
 
-    min_radius : float
-                 The smallest allowable radius size
+    xkey : str
+           The column name for the x coordinates
 
-    nvalid : int
-             The number of valid points after suppression
-
+    ykey : str
+           The column name for the y coordinates
+    
     k : int
-        The number of points to be saved
+        The desired number of points after suppression
 
     error_k : float
-              [0,1] the acceptable error in k
+              The percentage of allowable error in the domain [0,1]
 
-    domain : tuple
-             The (x,y) extent of the input domain
+    nsteps : int
+             The granularity of the search. This controls the number of
+             buckets in the x and y dimension. More granular search adds processing
+             time, but can result in a more accurate solution.
 
     Returns
     -------
-    mask : pd.Series
-           Boolean suppression mask
+    mask : nd.array
+           A boolean mask of the valid points
 
-    k : int
-        The number of unsuppressed observations
-
-    References
-    ----------
-    [Gauglitz2011]_
-
+    len(result) : int
+                  The numer of valud points
     """
-    columns = df.columns
-    for i in ['x', 'y', 'strength']:
-        if i not in columns:
-            raise ValueError('The dataframe is missing a {} column.'.format(i))
-    df = df.sort_values(by=['strength'], ascending=False).copy()
-    max_radius = max(domain)
-    mask = pd.Series(False, index=df.index)
+    # Compute the bounding area inside of which the suppression will be applied
+    minx = min(bounds[0], bounds[2])
+    maxx = max(bounds[0], bounds[2])
+    miny = min(bounds[1], bounds[3])
+    maxy = max(bounds[1], bounds[3])
+    domain = (maxx-minx),(maxy-miny)
 
-    process = True
-    if k > len(df):
-        warnings.warn('Only {} valid points, but {} points requested'.format(len(df), k))
-        k = len(df)
-        result = df.index
-        process = False
-    nsteps = max(domain) * 0.95
+    min_radius = min(domain) / 20
+    max_radius = max(domain)
     search_space = np.linspace(min_radius, max_radius, nsteps)
     cell_sizes = search_space / math.sqrt(2)
     min_idx = 0
     max_idx = len(search_space) - 1
 
+    # Setup flags to watch for looping
     prev_min = None
     prev_max = None
 
+    # Sort the dataframe (hard coded to ascending as lower strength (cost) is better)
+    df = df.sort_values(by=['strength'], ascending=True).copy()
+    df = df.reset_index(drop=True)
+    mask = pd.Series(False, index=df.index)
+
+    process = True
     while process:
-        # Setup to store results
-        result = []
-
+        # Binary search
         mid_idx = int((min_idx + max_idx) / 2)
-
         if min_idx == mid_idx or mid_idx == max_idx:
-            warnings.warn('Unable to optimally solve.  Returning with {} points'.format(len(result)))
+            warnings.warn('Unable to optimally solve.')
             process = False
+        else:
+            # Setup to store results
+            result = []
 
+        # Get the current cell size and grid the domain
         cell_size = cell_sizes[mid_idx]
-        n_x_cells = int(domain[0] / cell_size)
-        n_y_cells = int(domain[1] / cell_size)
-        grid = np.zeros((n_x_cells, n_y_cells), dtype=np.bool)
+        n_x_cells = int(round(domain[0] / cell_size, 0)) - 1
+        n_y_cells = int(round(domain[1] / cell_size, 0)) - 1
 
+        if n_x_cells <= 0:
+            n_x_cells = 1
+        if n_y_cells <= 0:
+            n_y_cells = 1
+
+        grid = np.zeros((n_y_cells, n_x_cells), dtype=np.bool)
         # Assign all points to bins
-        x_edges = np.linspace(0, domain[0], n_x_cells)
-        y_edges = np.linspace(0, domain[1], n_y_cells)
-        xbins = np.digitize(df['x'], bins=x_edges)
-        ybins = np.digitize(df['y'], bins=y_edges)
+        x_edges = np.linspace(minx, maxx, n_x_cells)
+        y_edges = np.linspace(miny, maxy, n_y_cells)
+        xbins = np.digitize(df[xkey], bins=x_edges)
+        ybins = np.digitize(df[ykey], bins=y_edges)
 
-        # Convert bins to cells
-        xbins -= 1
-        ybins -= 1
-        pts = []
+        # Starting with the best point, start assigning points to grid cells
         for i, (idx, p) in enumerate(df.iterrows()):
-            x_center = xbins[i]
-            y_center = ybins[i]
+            x_center = xbins[i] - 1
+            y_center = ybins[i] - 1
             cell = grid[y_center, x_center]
 
             if cell == False:
                 result.append(idx)
-                pts.append((p[['x', 'y']]))
-                if len(result) > k + k * error_k:
-                    # Too many points, break
-                    min_idx = mid_idx
-                    break
+                # Set the cell to True
+                grid[y_center, x_center] = True
 
-                y_min = y_center - int(round(cell_size, 0))
-                if y_min < 0:
-                    y_min = 0
+            # If everything is already 'covered' break from the list
+            if grid.all() == False:
+                continue
 
-                x_min = x_center - int(round(cell_size, 0))
-                if x_min < 0:
-                    x_min = 0
-
-                y_max = y_center + int(round(cell_size, 0))
-                if y_max > grid.shape[0]:
-                    y_max = grid.shape[0]
-
-                x_max = x_center + int(round(cell_size, 0))
-                if x_max > grid.shape[1]:
-                    x_max = grid.shape[1]
-
-                # Cover the necessary cells
-                grid[y_min: y_max,
-                     x_min: x_max] = True
-
-        #  Check break conditions
+        # Check to see if the algorithm is completed, or if the grid size needs to be larger or smaller
         if k - k * error_k <= len(result) <= k + k * error_k:
+            # Success, in bounds
             process = False
+
         elif len(result) < k - k * error_k:
             # The radius is too large
             max_idx = mid_idx
             if max_idx == 0:
                 warnings.warn('Unable to retrieve {} points. Consider reducing the amount of points you request(k)'
-                              .format(k))
+                            .format(k))
                 process = False
             if min_idx == max_idx:
                 process = False
-    mask = pd.Series(False, df.index)
-    mask.loc[list(result)] = True
 
-    return mask, k
+        elif len(result) > k + k * error_k:
+            # Too many points, break
+            min_idx = mid_idx
+
+    mask.loc[list(result)] = True
+    
+    return mask, len(result)
 
 
 def self_neighbors(matches):

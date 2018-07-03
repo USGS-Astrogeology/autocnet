@@ -71,7 +71,7 @@ class TestTwoImageMatching(unittest.TestCase):
             assert matches.index.all() == err.index.all()
 
         # Apply AMNS
-        cg.suppress(k=30, suppression_func=error)
+        cg.suppress(k=30, xkey='x', ykey='y', suppression_func=error)
 
         # Step: Compute subpixel offsets for candidate points
         cg.subpixel_register(clean_keys=['suppression'], tiled=True)

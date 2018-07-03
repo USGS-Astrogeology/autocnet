@@ -395,8 +395,8 @@ class Edge(dict, MutableMapping):
             raise AttributeError('This edge does not yet have any matches computed.')
 
         matches, mask = self.clean(clean_keys)
-        domain = self.source.geodata.raster_size
-
+        rs = self.source.geodata.raster_size
+        domain = [0, 0, rs[0], rs[1]]
         # Massage the dataframe into the correct structure
         coords = self.source.get_keypoint_coordinates()
         merged = matches.merge(coords, left_on=['source_idx'], right_index=True)
