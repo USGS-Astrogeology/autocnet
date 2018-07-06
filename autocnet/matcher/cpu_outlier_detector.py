@@ -45,7 +45,7 @@ def distance_ratio(edge, matches, ratio=0.8, single=False):
     return mask
 
 
-def spatial_suppression(df, bounds, xkey='lon', ykey='lat', k=60, error_k=0.05, nsteps=250):
+def spatial_suppression(df, bounds, xkey='x', ykey='y', k=60, error_k=0.05, nsteps=250):
     """
     Apply the spatial suppression algorithm over an arbitrary domain for all of the spatial
     data in the provided data frame.

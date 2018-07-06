@@ -400,7 +400,6 @@ class Edge(dict, MutableMapping):
         # Massage the dataframe into the correct structure
         coords = self.source.get_keypoint_coordinates()
         merged = matches.merge(coords, left_on=['source_idx'], right_index=True)
-        print(merged.columns)
         merged['strength'] = merged.apply(suppression_func, axis=1, args=([self]))
 
         smask, k = od.spatial_suppression(merged, domain, **kwargs)

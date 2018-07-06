@@ -1160,9 +1160,9 @@ class CandidateGraph(nx.Graph):
             for row in match.to_records():
                 edge = (row.source_image, row.destination_image)
                 source_key = (row.source_image, row.source_idx)
-                source_fields = row[['source_x', 'source_y']]
+                source_fields = [row.source_x, row.source_y]
                 destin_key = (row.destination_image, row.destination_idx)
-                destin_fields = row[['destination_x', 'destination_y']]
+                destin_fields = [row.destination_x, row.destination_y]
                 if self.measure_to_point.get(source_key, None) is not None:
                     tempid = self.measure_to_point[source_key]
                     add_measure(cnet_lis, destin_key, edge, row[0],
