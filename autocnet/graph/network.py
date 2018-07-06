@@ -8,6 +8,7 @@ import warnings
 import networkx as nx
 import geopandas as gpd
 import pandas as pd
+import numpy as np
 import shapely.affinity
 import shapely.geometry
 import shapely.wkt as swkt
@@ -25,6 +26,8 @@ from autocnet.graph.node import Node
 from autocnet.io import network as io_network
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
+
+np.warnings.filterwarnings('ignore')
 
 # The total number of pixels squared that can fit into the keys number of GB of RAM for SIFT.
 MAXSIZE = {0: None,
@@ -59,7 +62,14 @@ class CandidateGraph(nx.Graph):
     node_factory = Node
     edge_factory = Edge
     measures_keys = ['point_id', 'image_index', 'keypoint_index',
-                     'edge', 'match_idx', 'x', 'y', 'x_off', 'y_off', 'corr', 'valid']
+                     'edge', 'match_idx', 'x', 'y', 'x_off', 'y_off', 'corr']
+    # dtypes are usful for allowing merges, otherwise they default to object
+    cnet_dtypes = {
+        'match_idx' : int,
+        'point_id' : int,
+        'image_index' : int,
+        'keypoint_index' : int
+    }
 
     def __init__(self, *args, basepath=None, node_id_map=None, overlaps=False, **kwargs):
         super(CandidateGraph, self).__init__(*args, **kwargs)
@@ -72,7 +82,8 @@ class CandidateGraph(nx.Graph):
         self._point_id = 0
         self._measure_id = 0
         self.measure_to_point = {}
-        self.controlnetwork = pd.DataFrame(columns=self.measures_keys)
+        self.controlnetwork = pd.DataFrame(columns=self.measures_keys).astype(self.cnet_dtypes)
+        self.masks = pd.DataFrame()
 
         for i, n in self.nodes(data=True):
             if basepath:
@@ -248,7 +259,7 @@ class CandidateGraph(nx.Graph):
 
     def get_matches(self, clean_keys=[]):
         matches = []
-        for s, d, e in self.edges.data('edge'):
+        for s, d, e in self.edges_iter(data=True):
             match, _ = e.clean(clean_keys=clean_keys)
             match = match[['source_image', 'source_idx',
                            'destination_image', 'destination_idx']]
@@ -419,6 +430,7 @@ class CandidateGraph(nx.Graph):
         autocnet.graph.edge.Edge.match
         """
         self.apply_func_to_edges('match', *args, **kwargs)
+        # self.generate_control_network()
 
     def decompose_and_match(self, *args, **kwargs):
         """
@@ -527,6 +539,8 @@ class CandidateGraph(nx.Graph):
                 ret = func(*args, **kwargs)
                 return_lis.append(ret)
 
+        self.update_masks()
+
         if any(return_lis):
             return return_lis
 
@@ -555,14 +569,14 @@ class CandidateGraph(nx.Graph):
                  keyword args to pass into function.
         """
         options = {
-            'edge': self.edges,
-            'edges': self.edges,
-            'e': self.edges,
-            0: self.edges,
-            'node': self.nodes,
-            'nodes': self.nodes,
-            'n': self.nodes,
-            1: self.nodes
+            'edge': self.edges_iter,
+            'edges': self.edges_iter,
+            'e': self.edges_iter,
+            0: self.edges_iter,
+            'node': self.nodes_iter,
+            'nodes': self.nodes_iter,
+            'n': self.nodes_iter,
+            1: self.nodes_iter
         }
 
         if not callable(function):
@@ -570,10 +584,10 @@ class CandidateGraph(nx.Graph):
 
         res = []
         obj = 1
-        # We just want to the object, not the indices, so slcie appropriately
-        if options[on] == self.edges:
+        # We just want to the object, not the indices, so slice appropriately
+        if options[on] == self.edges_iter:
             obj = 2
-        for elem in options[on].data('data'):
+        for elem in options[on](data=True):
             res.append(function(elem[obj], *args, **kwargs))
 
         if out:
@@ -1109,31 +1123,104 @@ class CandidateGraph(nx.Graph):
             else:
                 yield s, d
 
-    @classmethod
-    def generate_control_network(cls, matches):
-        cls = ControlNetwork()
+    def generate_control_network(self, clean_keys=[], mask=None):
+        """
+        TODO: Find a way to make this less dirt slow
+        """
+        def add_measure(lis, key, edge, match_idx, fields, point_id=None):
+            """
+            Create a new measure that is coincident to a given point.  This method does not
+            create the point if is missing.  When a measure is added to the graph, an associated
+            row is added to the measures dataframe.
+
+            Parameters
+            ----------
+            key : hashable
+                      Some hashable id.  In the case of an autocnet graph object the
+                      id should be in the form (image_id, match_id)
+
+            point_id : hashable
+                       The point to link the node to.  This is most likely an integer, but
+                       any hashable should work.
+            """
+            if key in self.measure_to_point.keys():
+                return
+            if point_id == None:
+                point_id = self._point_id
+            self.measure_to_point[key] = point_id
+            # The node_id is a composite key (image_id, correspondence_id), so just grab the image
+            image_id = int(key[0])
+            match_id = int(key[1])
+            lis.append([point_id, image_id, match_id, edge, int(match_idx), *fields, 0, 0, np.inf])
+            self._measure_id += 1
+
+        matches = self.get_matches(clean_keys)
+        cnet_lis = []
         for match in matches:
-            for idx, row in match.iterrows():
+            for row in match.to_records():
                 edge = (row.source_image, row.destination_image)
                 source_key = (row.source_image, row.source_idx)
                 source_fields = row[['source_x', 'source_y']]
                 destin_key = (row.destination_image, row.destination_idx)
                 destin_fields = row[['destination_x', 'destination_y']]
-                if cls.measure_to_point.get(source_key, None) is not None:
-                    tempid = cls.measure_to_point[source_key]
-                    cls.add_measure(destin_key, edge, row.name,
+                if self.measure_to_point.get(source_key, None) is not None:
+                    tempid = self.measure_to_point[source_key]
+                    add_measure(cnet_lis, destin_key, edge, row[0],
                                     destin_fields, point_id=tempid)
-                elif cls.measure_to_point.get(destin_key, None) is not None:
-                    tempid = cls.measure_to_point[destin_key]
-                    cls.add_measure(source_key, edge, row.name,
+                elif self.measure_to_point.get(destin_key, None) is not None:
+                    tempid = self.measure_to_point[destin_key]
+                    add_measure(cnet_lis, source_key, edge, row[0],
                                     source_fields, point_id=tempid)
                 else:
-                    cls.add_measure(source_key, edge, row.name,  source_fields)
-                    cls.add_measure(destin_key, edge, row.name,  destin_fields)
-                    cls._point_id += 1
+                    add_measure(cnet_lis, source_key, edge, row[0],  source_fields)
+                    add_measure(cnet_lis, destin_key, edge, row[0],  destin_fields)
+                    self._point_id += 1
 
-        cls.data.index.name = 'measure_id'
-        return cls
+        self.controlnetwork = pd.DataFrame(cnet_lis, columns=self.measures_keys)
+        self.controlnetwork.index.name = 'measure_id'
+        self.masks = self.controlnetwork[['edge', 'match_idx']].reset_index(drop=True)
+        self.update_masks()
+        return self.controlnetwork
+
+    def update_masks(self):
+        """
+        Collect masks from all edges and updates the control network's masks.
+        This is automatically called whenever the candidate graph changes
+        graph state.
+        """
+        if self.controlnetwork.empty:
+            return
+
+        mask_list = self.apply(lambda x:(x.source, x.destination, x.masks))
+
+        # if all dataframes are empty
+        if all(map(lambda x:x[2].empty, mask_list)):
+            return
+
+        new_graph_mask = pd.DataFrame()
+        for s,d, mask in mask_list:
+                mask = mask.reset_index().rename(columns={'index':'match_idx'})
+                mask['edge'] = [(s['node_id'], d['node_id'])]*mask.shape[0]
+                if 'source' in mask.columns and 'destination' in mask.columns:
+                    mask = mask.drop(['source', 'destination'], axis=1)
+                new_graph_mask = new_graph_mask.append(mask)
+
+        # reset index so that index is 0-len(df)
+        new_mask_sorted = new_graph_mask.sort_values(['edge', 'match_idx']).reset_index(drop=True)
+
+        try:
+            current_mask_sorted = self.masks.sort_values(['edge', 'match_idx'])
+        except KeyError:
+            # Dataframe is empty or otherwise compromised
+            current_mask_sorted = pd.DataFrame()
+
+        # updated previous column
+        for column in new_mask_sorted:
+            current_mask_sorted[column] = new_mask_sorted[column]
+
+        self.masks = current_mask_sorted
+        return self.masks
+
 
     def add_measure(self, key, edge, match_idx, fields, point_id=None):
         """
@@ -1157,10 +1244,10 @@ class CandidateGraph(nx.Graph):
             point_id = self._point_id
         self.measure_to_point[key] = point_id
         # The node_id is a composite key (image_id, correspondence_id), so just grab the image
-        image_id = key[0]
-        match_id = key[1]
+        image_id = int(key[0])
+        match_id = int(key[1])
         self.controlnetwork.loc[self._measure_id] = [
-            point_id, image_id, match_id, edge, match_idx, *fields, 0, 0, np.inf, True]
+            point_id, image_id, match_id, edge, int(match_idx), *fields, 0, 0, np.inf, True]
         self._measure_id += 1
 
     def remove_measure(self, idx):
@@ -1189,11 +1276,13 @@ class CandidateGraph(nx.Graph):
                 return True
             else:
                 return False
-        return self.controlnetwork.groupby('point_id').apply(func)
+
+        self.masks['valid'] = self.controlnetwork[['image_index', 'point_id']].groupby('point_id').apply(func)
+        return self.masks['valid']
 
     def clean_singles(self):
         """
-        Take the `data` dataframe and return only those points with
+        Take the `controlnetwork` dataframe and return only those points with
         at least two measures.  This is automatically called before writing
         as functions such as subpixel matching can result in orphaned measures.
         """
