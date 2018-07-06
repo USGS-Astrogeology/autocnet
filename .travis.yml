@@ -39,7 +39,7 @@ before_install:
   # Install dependencies
   - conda config --add channels conda-forge
   - conda config --set ssl_verify false
-  - conda install -c conda-forge vlfeat scipy networkx numexpr cython matplotlib pillow runipy geopandas opencv numpy libgdal gdal
+  - conda install -c conda-forge vlfeat scipy networkx numexpr cython matplotlib pillow runipy geopandas opencv numpy libgdal gdal scikit-image
   - conda install -c menpo cyvlfeat
   - conda install -c usgs-astrogeology plio
   
