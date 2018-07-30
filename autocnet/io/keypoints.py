@@ -47,7 +47,6 @@ def from_hdf(in_path, index=None, keypoints=True, descriptors=True):
     outd = '/descriptors'
     outk = '/keypoints'
 
-
     if index is not None:
         index=np.asarray(index)
 
@@ -69,11 +68,13 @@ def from_hdf(in_path, index=None, keypoints=True, descriptors=True):
             desc = hdf[outd][:]
         if keypoints:
             raw_kps = hdf[outk][:]
-    index = raw_kps['index']
-    clean_kps = utils.remove_field_name(raw_kps, 'index')
-    columns = clean_kps.dtype.names
+    
+    if keypoints:
+        index = raw_kps['index']
+        clean_kps = utils.remove_field_name(raw_kps, 'index')
+        columns = clean_kps.dtype.names
 
-    allkps = pd.DataFrame(data=clean_kps, columns=columns, index=index)
+        allkps = pd.DataFrame(data=clean_kps, columns=columns, index=index)
 
     if isinstance(in_path, str):
         hdf = None
@@ -86,7 +87,7 @@ def from_hdf(in_path, index=None, keypoints=True, descriptors=True):
         return desc
 
 
-def to_hdf(keypoints, descriptors, out_path, key=None):
+def to_hdf(out_path, keypoints=None, descriptors=None, key=None):
     """
     Save keypoints and descriptors to HDF at a given out_path at either
     the root or at some arbitrary path given by a key.
@@ -108,20 +109,33 @@ def to_hdf(keypoints, descriptors, out_path, key=None):
     """
     # If the out_path is a string, access the HDF5 file
     if isinstance(out_path, str):
-        hdf = io_hdf.HDFDataset(out_path, mode='w')
+        hdf = io_hdf.HDFDataset(out_path, mode='a')
     else:
         hdf = out_path
 
+    grps = list(hdf.keys())
+
     outd = '/descriptors'
     outk = '/keypoints'
-    hdf.create_dataset(outd,
-                       data=descriptors,
-                       compression=io_hdf.DEFAULT_COMPRESSION,
-                       compression_opts=io_hdf.DEFAULT_COMPRESSION_VALUE)
-    hdf.create_dataset(outk,
-                       data=hdf.df_to_sarray(keypoints.reset_index()),
-                       compression=io_hdf.DEFAULT_COMPRESSION,
-                       compression_opts=io_hdf.DEFAULT_COMPRESSION_VALUE)
+    if descriptors is not None:
+        # Strip the leading slash
+        if outd[1:] in grps:
+            del hdf[outd] # Prep to replace
+
+        hdf.create_dataset(outd,
+                        data=descriptors,
+                        compression=io_hdf.DEFAULT_COMPRESSION,
+                        compression_opts=io_hdf.DEFAULT_COMPRESSION_VALUE)
+
+    if keypoints is not None:
+        if outk[1:] in grps:
+            del hdf[outk]
+
+        hdf.create_dataset(outk,
+                        data=hdf.df_to_sarray(keypoints.reset_index()),
+                        compression=io_hdf.DEFAULT_COMPRESSION,
+                        compression_opts=io_hdf.DEFAULT_COMPRESSION_VALUE)
+
     #except:
         #warnings.warn('Descriptors for the node {} are already stored'.format(self['image_name']))
 

@@ -28,27 +28,30 @@ def img():
 
 @pytest.fixture
 def img_coord():
-    return (482.09783936, 652.40679932)
+    return 482.09783936, 652.40679932
 
 @pytest.fixture
 def template(img, img_coord):
-    template = sp.clip_roi(img, img_coord, 5)
+    coord_x, coord_y = img_coord
+    template, _, _ = sp.clip_roi(img, coord_x, coord_y, 5, 5)
     template = rotate(template, 90)
     template = imresize(template, 1.)
     return template
 
 @pytest.fixture
 def search(img, img_coord):
-    search = sp.clip_roi(img, img_coord, 21)
+    coord_x, coord_y = img_coord
+    search, _, _ = sp.clip_roi(img, coord_x, coord_y, 21, 21)
     search = rotate(search, 0)
     search = imresize(search, 1.)
     return search
 
 @pytest.fixture
 def offset_template(img, img_coord):
-    offset = (1, 1)
-
-    offset_template = sp.clip_roi(img, np.add(img_coord, offset), 5)
+    coord_x, coord_y = img_coord
+    coord_x += 1
+    coord_y += 1
+    offset_template, _, _ = sp.clip_roi(img, coord_x, coord_y, 5, 5)
     offset_template = rotate(offset_template, 0)
     offset_template = imresize(offset_template, 1.)
 
@@ -135,7 +138,7 @@ def test_rafi(template, search, rafi_thresh, radii, alpha):
                                    thresh=rafi_thresh, radii=radii, use_percentile=True,
                                    alpha=alpha)
 
-    assert (np.floor(search.shape[0]/2), np.floor(search.shape[1]/2)) in pixels
+    assert (np.floor(search.shape[0]/4), np.floor(search.shape[1]/4)) in pixels
     assert pixels.size in range(0, search.size)
 
 # Alternate approach to the more verbose tests above - this tests all combinations
@@ -162,7 +165,7 @@ def test_tefi(template, search):
                                    thresh=tefi_thresh, use_percentile=True, alpha=math.pi/2,
                                    upsampling=10)
 
-    assert np.equal((.5, .5), (pixel[1], pixel[0])).all()
+    assert np.equal((11.5, 11.5), (pixel[1], pixel[0])).all()
 
 @pytest.mark.parametrize("cifi_thresh, rafi_thresh, tefi_thresh, alpha, radii",[(90,90,100,math.pi/2,list(range(1, 3)))])
 def test_ciratefi(template, search, cifi_thresh, rafi_thresh, tefi_thresh, alpha, radii):

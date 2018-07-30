@@ -122,7 +122,6 @@ def compute_reprojection_error(F, x, x1, index=None):
 
     return err
 
-
 def compute_fundamental_error(F, x, x1):
     """
     Compute the fundamental error using the idealized error metric.

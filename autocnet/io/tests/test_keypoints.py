@@ -25,7 +25,7 @@ def test_read_write_npy(tmpdir, kd):
 def test_read_write_hdf(tmpdir, kd):
     kps, desc = kd
     path = tmpdir.join('out.h5')
-    keypoints.to_hdf(kps, desc, path.strpath)
+    keypoints.to_hdf(path.strpath, keypoints=kps, descriptors=desc)
     reloaded_kps, reloaded_desc = keypoints.from_hdf(path.strpath)
 
     assert reloaded_kps.equals(kps)
@@ -35,7 +35,7 @@ def test_read_write_hdf_with_live_file(tmpdir, kd):
     kps, desc = kd
     path = tmpdir.join('live.h5')
     hf = io_hdf.HDFDataset(path.strpath, mode='w')
-    keypoints.to_hdf(kps, desc, hf)
+    keypoints.to_hdf(hf, keypoints=kps, descriptors=desc)
     reloaded_kps, reloaded_desc = keypoints.from_hdf(hf)
 
     assert reloaded_kps.equals(kps)

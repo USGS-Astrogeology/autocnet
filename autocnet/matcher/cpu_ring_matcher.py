@@ -1,5 +1,23 @@
 import numpy as np
 
+def check_pidx_duplicates(pidx):
+    """
+    Given a ring match generted set of indices, 
+    apply outlier detection to ensure no duplicates
+    exist in either the reference column or the
+    source column. If duplicates do exist, remove the 
+    rows; the solution is ambiguous.
+    """
+    # Check for duplicates
+    l = pidx[:,1].tolist()
+    clean = [i for i, x in enumerate(l) if l.count(x) == 1]
+    pidx = pidx[clean, :]
+
+    l = pidx[:,0].tolist()
+    clean = [i for i, x in enumerate(l) if l.count(x) == 1]
+    pidx = pidx[clean, :]
+    return pidx
+
 def ransac_permute(ref_points, tar_points, tolerance_val, target_points):
     """
     Given a set of reference points and target points, compute the
@@ -199,7 +217,6 @@ def ring_match(ref_feats, tar_feats, ref_desc, tar_desc, ring_radius=4000, max_r
     tar_xy = tar_feats[:,:2]
     tar_xmym = tar_feats[:,2:4]
 
-    print('Ring Matcher Started: ', ref_feats.shape, tar_feats.shape)
     # Boolean mask for those reference points that have already been matched
     ref_mask = np.ones(len(ref_xy), dtype=bool)
 

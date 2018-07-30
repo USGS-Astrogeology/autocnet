@@ -64,17 +64,15 @@ class TestTwoImageMatching(unittest.TestCase):
         cg.compute_fundamental_matrices()
 
         for s, d, e in cg.edges.data('data'):
-            assert isinstance(e['fundamental_matrix'], np.ndarray)
-            err = e.compute_fundamental_error(clean_keys=['fundamental'])
-            assert isinstance(err, pd.Series)
+            assert isinstance(e.fundamental_matrix, np.ndarray)
+            e.compute_fundamental_error(clean_keys=['fundamental'])
+            assert 'fundamental_equality' in e.costs.columns
             matches, _ = e.clean(clean_keys=['fundamental'])
-            assert matches.index.all() == err.index.all()
 
         # Apply AMNS
         cg.suppress(k=30, xkey='x', ykey='y', suppression_func=error)
 
         # Step: Compute subpixel offsets for candidate points
-        cg.subpixel_register(clean_keys=['suppression'], tiled=True)
         cg.subpixel_register(clean_keys=['suppression'])
 
     def tearDown(self):

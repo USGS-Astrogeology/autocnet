@@ -116,6 +116,13 @@ class CandidateGraph(nx.Graph):
         if overlaps:
             self.compute_overlaps()
 
+    def __key(self):
+        # TODO: This needs to be a real self identifying key
+        return 'abcde'
+
+    def __hash__(self):
+        return hash(self.__key())
+
     def __eq__(self, other):
         # Check the nodes
         if sorted(self.nodes()) != sorted(other.nodes()):
@@ -146,6 +153,19 @@ class CandidateGraph(nx.Graph):
                 ','.join(map(str, MAXSIZE.keys()))))
         else:
             self._maxsize = MAXSIZE[value]
+
+    @property
+    def unmatched_edges(self):
+        """
+        Returns a list of edges (source, destination) that do not have
+        entries in the matches dataframe.
+        """
+        unmatched = []
+        for s, d, e in self.edges(data='data'):
+            if len(e.matches) == 0:
+                unmatched.append((s,d))
+
+        return unmatched
 
     @classmethod
     def from_filelist(cls, filelist, basepath=None):
@@ -384,15 +404,14 @@ class CandidateGraph(nx.Graph):
             node.extract_features_with_downsampling(
                 downsample_amount, *args, **kwargs)
 
-    def extract_features_with_tiling(self, tilesize=1000, overlap=500, *args, **kwargs):  # pragma: no cover
-        for i, node in self.nodes(data='data'):
-            print('Processing {}'.format(node['image_name']))
-            node.extract_features_with_tiling(
-                tilesize=tilesize, overlap=overlap, *args, **kwargs)
+    def extract_features_with_tiling(self, *args, **kwargs): #pragma: no cover
+        """
+
+        """
+        self.apply(Node.extract_features_with_tiling, args=args, **kwargs)
 
     def save_features(self, out_path):
         """
-
         Save the features (keypoints and descriptors) for the
         specified nodes.
 
@@ -419,6 +438,7 @@ class CandidateGraph(nx.Graph):
                 of nodes to load features for.  If empty, load features
                 for all nodes
         """
+        self.apply(Nodes.load_features, args=(in_path, nfeatures), on='node', **kwargs)
         for n in self.nodes:
             if node['node_id'] not in nodes:
                 continue
