@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+"""from unittest.mock import MagicMock
 import geopandas as gpd
 import pandas as pd
 from shapely.geometry import Polygon
@@ -66,3 +66,4 @@ def test_potential_overlap(controlnetwork, candidategraph):
                                  (1,), (1,),
                                  (0,), (0,)],
                                  index=[6,7,8,9,10,11]))
+"""

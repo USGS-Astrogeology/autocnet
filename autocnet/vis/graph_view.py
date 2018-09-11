@@ -304,7 +304,6 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100, downsampling=1,
 
     return ax
 
-
 def cluster_plot(graph, ax=None, cmap='Spectral'):  # pragma: no cover
     """
     Parameters
@@ -342,3 +341,22 @@ def cluster_plot(graph, ax=None, cmap='Spectral'):  # pragma: no cover
 
     nx.draw(graph, ax=ax, node_color=colors)
     return ax
+
+def plot_matches(matches, a, b, extent=200):
+    nsubplots = len(matches)
+    figs = []
+    for i, (idx, row) in enumerate(matches.iterrows()):   
+        fig, axes = plt.subplots(1, 2)     
+        sx = row.source_x
+        sy = row.source_y
+        dx = row.destination_x
+        dy = row.destination_y
+                
+        suba = a.read_array(pixels=[int(sx-extent), int(sy-extent), int(2*extent), int(2*extent)])
+        subb = b.read_array(pixels=[int(dx-extent), int(dy-extent), int(2*extent), int(2*extent)])
+        
+        axes[0].imshow(suba, cmap='Greys')
+        axes[1].imshow(subb, cmap='Greys')
+        figs.append(fig)
+
+    return figs

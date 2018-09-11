@@ -27,7 +27,7 @@ from autocnet.io import network as io_network
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
 
-np.warnings.filterwarnings('ignore')
+#np.warnings.filterwarnings('ignore')
 
 # The total number of pixels squared that can fit into the keys number of GB of RAM for SIFT.
 MAXSIZE = {0: None,
@@ -421,7 +421,6 @@ class CandidateGraph(nx.Graph):
                    Location of the output file.  If the file exists,
                    features are appended.  Otherwise, the file is created.
         """
-
         self.apply(Node.save_features, args=(out_path,), on='node')
 
     def load_features(self, in_path, nodes=[], nfeatures=None, **kwargs):

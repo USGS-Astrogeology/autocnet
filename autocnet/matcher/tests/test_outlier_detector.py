@@ -56,15 +56,15 @@ class TestSpatialSuppression(unittest.TestCase):
         self.domain = (0,0, 100, 100)
 
     def test_suppress(self):
-        mask, k = cpu_outlier_detector.spatial_suppression(self.df, self.domain, k=25)
+        mask, k = cpu_outlier_detector.spatial_suppression(self.df, self.domain, k=25, xkey='lon', ykey='lat')
         self.assertEqual(mask.sum(), 25)
 
-        mask, k = cpu_outlier_detector.spatial_suppression(self.df, self.domain, k=30, error_k=.15)
+        mask, k = cpu_outlier_detector.spatial_suppression(self.df, self.domain, k=30, error_k=.15, xkey='lon', ykey='lat')
         self.assertEqual(mask.sum(), 34)
 
     def test_suppress_non_optimal(self):
         with warnings.catch_warnings(record=True) as w:
-            mask, k = cpu_outlier_detector.spatial_suppression(self.df, self.domain, k=30)
+            mask, k = cpu_outlier_detector.spatial_suppression(self.df, self.domain, k=30, xkey='lon', ykey='lat')
             self.assertEqual(len(w), 1)
             self.assertEqual(k, 59)
             self.assertTrue(issubclass(w[0].category, UserWarning))
@@ -77,12 +77,12 @@ class testSuppressionRanges(unittest.TestCase):
 
     def test_min_max(self):
         df = pd.DataFrame(self.r.uniform(0,2,(500, 3)), columns=['lon', 'lat', 'strength'])
-        mask, k = cpu_outlier_detector.spatial_suppression(df, (0, 0, 1.5, 1.5), k = 1)
+        mask, k = cpu_outlier_detector.spatial_suppression(df, (0, 0, 1.5, 1.5), k = 1, xkey='lon', ykey='lat')
         self.assertEqual(len(df[mask]), 1)
 
     def test_point_overload(self):
         df = pd.DataFrame(self.r.uniform(0,15,(500, 3)), columns=['lon', 'lat', 'strength'])
-        mask, k = cpu_outlier_detector.spatial_suppression(df, (0, 0, 15, 15), k = 200)
+        mask, k = cpu_outlier_detector.spatial_suppression(df, (0, 0, 15, 15), k = 200, xkey='lon', ykey='lat')
         self.assertEqual(len(df[mask]), 195)
 
     def test_small_distribution(self):

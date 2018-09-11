@@ -37,15 +37,10 @@ before_install:
   - source activate test
 
   # Install dependencies
+  - conda config --add channels menpo
+  - conda config --add channels usgs-astrogeology
   - conda config --add channels conda-forge
-  - conda config --set ssl_verify false
-  - conda install -c conda-forge vlfeat scipy networkx numexpr cython matplotlib pillow runipy geopandas opencv numpy libgdal gdal scikit-image
-  - conda install -c menpo cyvlfeat
-  - conda install -c usgs-astrogeology plio
-  
-  # Development installation
-  - conda install -c conda-forge pytest pytest-cov coverage anaconda-client
-  - pip install coveralls
+  - conda install -c conda-forge vlfeat scipy networkx numexpr cython matplotlib pillow runipy geopandas opencv numpy libgdal gdal scikit-image pytest pytest-cov coverage anaconda-client coveralls plio cyvlfeat ncurses csmapi
 
 script:
   - pytest autocnet tests
