@@ -93,7 +93,7 @@ def geodata_c():
     return c
 
 @pytest.fixture(scope='session')
-def controlnetwork_data():
+def controlnetwork():
     df = pd.DataFrame([[0, 0.0, 0.0, (0.0, 1.0), 0, 0.0, 0.0, 0, 0, np.inf, True],
                        [0, 1.0, 0.0, (0.0, 1.0), 0, 0.0, 0.0, 0, 0, np.inf, True],
                        [1, 0.0, 1.0, (0.0, 1.0), 1, 0.0, 0.0, 0, 0, np.inf, True],
@@ -136,14 +136,7 @@ def controlnetwork_data():
 
     return df
 
-@pytest.fixture(scope='session')
-def controlnetwork(controlnetwork_data):
-    cn = control.ControlNetwork()
-    cn.data = controlnetwork_data
-    # Patching data this way does NOT update the internal _measure_id and _point_id attributes
-    return cn
-
-@pytest.fixture(scope='session')
+"""@pytest.fixture(scope='session')
 def bad_controlnetwork(controlnetwork_data):
     cn = control.ControlNetwork()
     cn.data = controlnetwork_data
@@ -151,4 +144,4 @@ def bad_controlnetwork(controlnetwork_data):
     cn._measure_id = len(cn.data) + 1
     # Add a duplicate measure in image 0 to point 0
     cn.add_measure((0,11), (0,1), 2, [1,1], point_id=0)
-    return cn
+    return cn"""

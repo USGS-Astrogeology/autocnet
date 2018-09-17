@@ -67,7 +67,7 @@ def identify_potential_overlaps(cg, cn, overlap=True):
     candidate_cliques = []
     geoms = []
     idx = []
-    for i, p in cn.data.groupby('point_id'):
+    for i, p in cn.groupby('point_id'):
         # Which images are covered already.  This finds any connected cycles that
         #  a node is in (this can be more than one - an hourglass network for example)
         # Extract the fully connected subgraph for each covered image in order to
@@ -123,7 +123,3 @@ def identify_potential_overlaps(cg, cn, overlap=True):
         return candidate_cliques.query('overlap == True')['candidates']
     else:
         return candidate_cliques.candidates
-
-
-def deepen_correspondences(cg, cn):
-    pass
