@@ -12,11 +12,22 @@ import autocnet.matcher
 import autocnet.transformation
 import autocnet.utils
 
+from pkg_resources import get_distribution, DistributionNotFound
+try:
+    _dist = get_distribution('autocnet')
+    # Normalize case for Windows systems
+    dist_loc = os.path.normcase(_dist.location)
+    here = os.path.normcase(__file__)
+    if not here.startswith(os.path.join(dist_loc, 'autocnet')):
+        # not installed, but there is another version that *is*
+        raise DistributionNotFound
+except DistributionNotFound:
+    __version__ = 'Please install this project with setup.py'
+else:
+    __version__ = _dist.version
 
 # Patch the candidate graph into the root namespace
 from autocnet.graph.network import CandidateGraph
-
-__version__ = "0.1.0"
 
 def get_data(filename):
     packagdir = autocnet.__path__[0]
