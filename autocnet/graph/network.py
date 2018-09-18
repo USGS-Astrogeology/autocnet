@@ -1116,11 +1116,6 @@ class CandidateGraph(nx.Graph):
 
         return gpd.GeoDataFrame(names, geometry=geoms)
 
-    def create_control_network(self, clean_keys=[]):
-        matches = self.get_matches(clean_keys=clean_keys)
-        self.controlnetwork = control.ControlNetwork.from_candidategraph(
-            matches)
-
     def identify_potential_overlaps(self, **kwargs):
         cc = control.identify_potential_overlaps(
             self, self.controlnetwork, **kwargs)
@@ -1147,7 +1142,7 @@ class CandidateGraph(nx.Graph):
 
     def generate_control_network(self, clean_keys=[], mask=None):
         """
-        Generates a fresh control network from edge matchesself.
+        Generates a fresh control network from edge matches.
 
         parameters
         ----------

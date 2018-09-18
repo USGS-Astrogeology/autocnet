@@ -113,14 +113,6 @@ def test_serials(geo_graph):
     for s in serials:
         assert s in geo_graph.serials().values()
 
-"""def test_fully_connected_components():
-    G = network.CandidateGraph()
-    G.add_edges_from([('A', 'B'), ('A', 'C'), ('B', 'C'), ('B', 'D'), ('A', 'E'), ('A', 'F'), ('E', 'F') ])
-    fc = G.compute_fully_connected_components()
-    truth = [['A', 'B', 'C'], ['A', 'E', 'F']]
-    sorted_fca = sorted(list(map(sorted, fc['A'])))
-    assert truth == sorted_fca"""
-
 def test_unique_fully_connected():
     G = network.CandidateGraph()
     G.add_edges_from([('A', 'B'), ('A', 'C'), ('B', 'C'), ('B', 'D'), ('A', 'E'), ('A', 'F'), ('E', 'F') ])
@@ -334,54 +326,13 @@ def test_apply_func_to_edges(graph):
         graph.apply_func_to_edges(graph[0][1]['data'].symmetry_check)
         assert not graph[0][2]['data'].masks.symmetry.all()
 
-
-'''def test_intersection():
-    # Generate the footprints for the mock nodes
-    ogr_poly_list = []
-    wkt0 = "MULTIPOLYGON (((2.5 7.5,7.5 7.5,7.5 12.5,2.5 12.5,2.5 7.5)))"
-    ogr_poly_list.append(ogr.CreateGeometryFromWkt(wkt0))
-    wkt1 = "MULTIPOLYGON (((0 10, 5 10, 5 15, 0 15, 0 10)))"
-    ogr_poly_list.append(ogr.CreateGeometryFromWkt(wkt1))
-    wkt2 = "MULTIPOLYGON (((5.5 5.0,10.5 5.0,10.5 10.0,5.5 10.0,5.5 5.0)))"
-    ogr_poly_list.append(ogr.CreateGeometryFromWkt(wkt2))
-    wkt3 = "MULTIPOLYGON (((5.5 7.5,10.5 7.5,10.5 12.5,5.5 12.5,5.5 7.5)))"
-    ogr_poly_list.append(ogr.CreateGeometryFromWkt(wkt3))
-    wkt4 = "MULTIPOLYGON (((8 11,13 11,13 16,8 16,8 11)))"
-    ogr_poly_list.append(ogr.CreateGeometryFromWkt(wkt4))
-    wkt5 = "MULTIPOLYGON (((8 14,13 14,13 19,8 19,8 14)))"
-    ogr_poly_list.append(ogr.CreateGeometryFromWkt(wkt5))
-    wkt6 = "MULTIPOLYGON (((11 11,16 11,16 16,11 16,11 11)))"
-    ogr_poly_list.append(ogr.CreateGeometryFromWkt(wkt6))
-    wkt7 = "MULTIPOLYGON (((11 14,16 14,16 19,11 19,11 14)))"
-    ogr_poly_list.append(ogr.CreateGeometryFromWkt(wkt7))
-
-    adj = {0: [1,2,3],
-           1: [0],
-           2: [0,3],
-           3: [0,2,4],
-           4: [3,5,7,6],
-           5: [4,6,7],
-           6: [4,5,7],
-           7: [4,5,6]}
-
-    cang = network.CandidateGraph.from_adjacency(adj)
-    i = 0
-    for d, node in cang.nodes.data('data'):
-        #print(node, type(node), dir(node), node.geodata, type(node.geodata))
-        node._geodata = MagicMock(spec=io_gdal.GeoDataset)
-        node._geodata.footprint = ogr_poly_list[i]
-        i += 1
-
-    overlap, intersect_gdf = cang.compute_intersection(3)
-
-    # Test the correct areas were found for the overlap and
-    # the intersect_gdf
-    assert intersect_gdf.geometry[0].area == 7.5
-    assert intersect_gdf.geometry[1].area == 5
-    assert intersect_gdf.geometry[2].area == 5
-    assert intersect_gdf.geometry[3].area == 3.75
-    assert overlap.geometry.area.values == 21.25'''
-
+def test_generate_control_network(candidategraph):
+    candidategraph.generate_control_network()
+    cn = candidategraph.controlnetwork
+    
+    # Confirm that points are being created with measures.
+    for i, g in cn.groupby('point_id'):
+        assert len(g) == 2
 
 def test_set_maxsize(graph):
     maxsizes = network.MAXSIZE
