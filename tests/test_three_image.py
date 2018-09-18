@@ -42,9 +42,9 @@ class TestThreeImageMatching(unittest.TestCase):
         self.assertEqual(3, cg.number_of_edges())
 
         # Step: Extract image data and attribute nodes
-        cg.extract_features(extractor_parameters={'nfeatures':500})
+        cg.extract_features(extractor_method='vlfeat')
         for i, node, in cg.nodes_iter(data=True):
-            self.assertIn(node.nkeypoints, range(490, 511))
+            self.assertIn(node.nkeypoints, range(5800, 6000))
 
         cg.match(k=2)
         cg.symmetry_checks()

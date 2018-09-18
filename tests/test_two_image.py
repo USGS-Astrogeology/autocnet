@@ -51,15 +51,15 @@ class TestTwoImageMatching():
         assert 1 == cg.number_of_edges()
 
         # Step: Extract image data and attribute nodes
-        cg.extract_features(extractor_method='sift', extractor_parameters={"nfeatures":500})
+        cg.extract_features(extractor_method='vlfeat', extractor_parameters={"nfeatures":500})
         for i, node in cg.nodes.data('data'):
-            assert node.nkeypoints in range(490, 510)
+            assert node.nkeypoints in range(5800, 6000)
 
         # Step: Compute the coverage ratios
         for i, node in cg.nodes.data('data'):
             ratio = node.coverage()
-            assert 0.93 < round(ratio, 8) < 0.96
-
+            assert 0.98 < round(ratio, 8) < 0.99
+        
         cg.decompose_and_match(k=2, maxiteration=2)
         assert isinstance(cg.edges[0,1]['data'].smembership, np.ndarray)
 

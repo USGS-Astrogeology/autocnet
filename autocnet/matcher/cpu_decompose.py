@@ -54,7 +54,7 @@ def decompose_and_match(self, k=2, maxiteration=3, size=18, buf_dist=3, **kwargs
         ratio = 0.8
         res = [False] * len(group)
         if len(res) == 1:
-            return [single]
+            return [False]
         if group.iloc[0] < group.iloc[1] * ratio:
             res[0] = True
         return res
@@ -79,7 +79,7 @@ def decompose_and_match(self, k=2, maxiteration=3, size=18, buf_dist=3, **kwargs
     pcounter = 0
 
     # FLANN Matcher
-    fl= FlannMatcher()
+    fl = FlannMatcher()
 
     for k in range(maxiteration):
         partitions = np.unique(self.smembership)
@@ -137,11 +137,9 @@ def decompose_and_match(self, k=2, maxiteration=3, size=18, buf_dist=3, **kwargs
                 mid = np.array([[smx, smy]])
                 dists = cdist(mid, sub_skp[['x', 'y']])
                 closest = sub_skp.iloc[np.argmin(dists)]
-                closest_idx = closest.name
                 soriginx, soriginy = closest[['x', 'y']]
-
                 # Grab the corresponding point in the destination
-                q = candidate_matches.query('source_idx == {}'.format(closest.name))
+                q = matches.query('source_idx == {}'.format(closest.name))
                 dest_idx = int(q['destination_idx'].iat[0])
                 doriginx = dkp.at[dest_idx, 'x']
                 doriginy = dkp.at[dest_idx, 'y']
@@ -206,4 +204,4 @@ def decompose_and_match(self, k=2, maxiteration=3, size=18, buf_dist=3, **kwargs
         # If the candidates < k, OpenCV throws an error
         if len(sidx) > k and len(didx) > k:
             match(self, aidx=sidx, bidx=didx)
-            match(self, aidx=didx, bidx=sidx)
+            #match(self, aidx=didx, bidx=sidx)

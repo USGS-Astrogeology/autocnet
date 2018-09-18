@@ -23,12 +23,6 @@ class TestFeatureExtractor(unittest.TestCase):
                           "edgeThreshold": 10,
                           "sigma": 1.6}
 
-    def test_extract_features(self):
-        features, descriptors = cpu_extractor.extract_features(self.data_array,
-                                                                   extractor_method='sift',
-                                                                   extractor_parameters=self.parameters)
-        self.assertEquals(len(features), 10)
-
     def test_extract_vlfeat(self):
         kps, descriptors = cpu_extractor.extract_features(self.data_array,
                                                               extractor_method='vlfeat',

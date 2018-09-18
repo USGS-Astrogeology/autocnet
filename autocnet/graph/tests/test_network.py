@@ -244,8 +244,11 @@ def test_filter(graph):
 
     test_sub_graph = graph.create_node_subgraph([0, 1])
 
-    test_sub_graph.extract_features(extractor_parameters={'nfeatures': 25})
-    test_sub_graph.match(k=2)
+    for n, d in test_sub_graph.nodes(data='data'):
+        d.descriptors = np.arange(10)
+
+    for u, v, e in test_sub_graph.edges(data='data'):
+        e.matches = pd.DataFrame(np.arange(9).reshape(3,3))
 
     filtered_nodes = graph.filter_nodes(lambda node: node.descriptors is not None)
     filtered_edges = graph.filter_edges(lambda edge: edge.matches.empty is not True)
@@ -265,9 +268,10 @@ def test_subset_graph(graph):
 
 def test_subgraph_from_matches(graph):
     test_sub_graph = graph.create_node_subgraph([0, 1])
-    test_sub_graph.extract_features(extractor_parameters={'nfeatures': 25})
-    test_sub_graph.match(k=2)
-
+    #test_sub_graph.extract_features(extractor_parameters={'nfeatures': 25})
+    #test_sub_graph.match(k=2)
+    for u, v, k in test_sub_graph.edges(data='data'):
+        k.matches = pd.DataFrame([1,2,3])
     sub_graph_from_matches = graph.subgraph_from_matches()
 
     assert test_sub_graph.edges() == sub_graph_from_matches.edges()
@@ -322,14 +326,13 @@ def test_apply_func_to_edges(graph):
     except AttributeError:
         pass
 
-    graph.extract_features(extractor_parameters={'nfeatures': 50})
-    graph.match()
-    graph.apply_func_to_edges("symmetry_check")
+    return_value = pd.DataFrame(np.arange(36).reshape(6,6), columns=['a', 'b', 'c', 'source_idx', 'destination_idx', 'distance'])
+    with patch('autocnet.graph.edge.Edge.matches', new_callable=PropertyMock, return_value=return_value):
+        graph.apply_func_to_edges("symmetry_check")
 
-    # Test passing the func by signature
-    graph.apply_func_to_edges(graph[0][1]['data'].symmetry_check)
-    assert not graph[0][2]['data'].masks.symmetry.all()
-    #assert not mst_graph[0][1]['data'].masks.symmetry.all()
+        # Test passing the func by signature
+        graph.apply_func_to_edges(graph[0][1]['data'].symmetry_check)
+        assert not graph[0][2]['data'].masks.symmetry.all()
 
 
 '''def test_intersection():

@@ -2,7 +2,7 @@ import os
 import sys
 
 import unittest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch, PropertyMock
 import warnings
 
 import numpy as np
@@ -14,7 +14,7 @@ from shapely.geometry import LinearRing
 from autocnet.examples import get_path
 from plio.io.io_gdal import GeoDataset
 
-from .. import node
+from autocnet.graph.node import Node
 
 sys.path.insert(0, os.path.abspath('..'))
 
@@ -23,21 +23,40 @@ class TestNode(object):
 
     @pytest.fixture
     def node(self):
-        img = get_path('AS15-M-0295_SML.png')
-        return node.Node(image_name='AS15-M-0295_SML',
-                              image_path=img)
+        return Node()
 
     @pytest.fixture
     def geo_node(self):
         img = get_path('AS15-M-0297_crop.cub')
-        return node.Node(image_name='AS15-M-0297_crop.cub', image_path=img)
+        return Node(image_name='AS15-M-0297_crop.cub', image_path=img)
 
-    def test_get_handle(self, node):
-        assert isinstance(node.geodata, GeoDataset)
+    def test_get_camera(self, node):
+        assert node.camera == None
+    
+    def test_create(self):
+        assert isinstance(Node.create(None, 1), Node)
+        n = Node.create('foo', 1, basepath='/')
+        assert isinstance(n, Node)
+        assert n['image_path'] == '/foo'
+        assert n['image_name'] == 'foo'
+
+    def test_set_camera(self, node):
+        node.camera = 'foo'
+        assert node.camera == 'foo'
+
+    def test_get_handle(self, geo_node):
+        assert isinstance(geo_node.geodata, GeoDataset)
 
     def test_get_byte_array(self, node):
+        dtype = np.float32
+        return_value = np.arange(9, dtype=dtype).reshape(3,3)
+        
+        mock_geodata = Mock(spec=GeoDataset)
+        mock_geodata.read_array = MagicMock(return_value=return_value)
+        node._geodata = mock_geodata
+
         image = node.get_byte_array()
-        assert (1012, 1012) == image.shape
+        assert return_value.shape == image.shape
         assert np.uint8 == image.dtype
 
     def test_equalities(self,node_a, node_b):
@@ -53,45 +72,46 @@ class TestNode(object):
         assert not (node_a == node_b)
 
     def test_get_array(self, node):
+        dtype = np.float32
+        return_value = np.arange(9, dtype=dtype).reshape(3,3)
+        
+        mock_geodata = Mock(spec=GeoDataset)
+        mock_geodata.read_array = MagicMock(return_value=return_value)
+        node._geodata = mock_geodata
+
         image = node.get_array()
-        assert (1012, 1012) == image.shape
-        assert np.float32 == image.dtype
+        assert return_value.shape == image.shape
+        assert dtype == image.dtype
 
     def test_extract_features(self, node):
-        image = node.get_array()
-        node.extract_features(image, extractor_parameters={'nfeatures': 10})
-        assert len(node.get_keypoints()) ==  10
-        assert len(node.descriptors) == 10
-        assert 10 == node.nkeypoints
+        desc = np.arange(9).reshape(3,3)
+        kps = pd.DataFrame(desc)
+        return_value = (kps, desc)
+        image = desc
+        with patch('autocnet.graph.node.Node._extract_features', return_value=return_value):
+            node.extract_features(image, extractor_parameters={'nfeatures': 10})
+            assert len(node.get_keypoints()) ==  3
+            assert len(node.descriptors) == 3
+            assert 3 == node.nkeypoints
 
-    def test_extract_downsampled_features(self, node):
-        # Trust that the
-        img = np.random.random(size=(1000,1000))
-        geodata = Mock(spec=GeoDataset)
-        geodata.raster_size = img.shape
-        geodata.read_array = MagicMock(return_value=img)
-        node.extract_features_with_downsampling(5,
-                                                extractor_parameters={'nfeatures':10})
+    def test_extract_downsampled_features(self, geo_node):
+        desc = np.arange(9).reshape(3,3)
+        kps = pd.DataFrame(desc, columns=['x', 'y', 'z'])
+        with patch('autocnet.graph.node.Node._extract_features', return_value=(kps, desc)) as ef:
+            geo_node.extract_features_with_downsampling(downsample_amount=3)
+            assert ef.call_count == 1
+            assert geo_node.keypoints[['x', 'y']].equals(kps[['x', 'y']] * 3)
 
-        assert len(node.keypoints) in range(8,12)
-        assert node.keypoints['x'].max() > 500
 
-    def test_extract_tiled_features(self, node):
-        tilesize = 500
-        node.extract_features_with_tiling(tilesize=tilesize, overlap=50,
-                                          extractor_parameters={'nfeatures':10})
-
-        kps = node.keypoints
-        assert kps['x'].min() < tilesize
-        assert kps['y'].min() < tilesize
-        assert len(kps) == pytest.approx(90, 3)
-
-        with pytest.raises(ValueError) as e_info:
-            node.extract_features_with_tiling(tilesize=10, overlap=20)
+    def test_extract_tiled_features(self, geo_node):
+        tilesize = 100
+        desc = np.arange(9).reshape(3,3)
+        kps = pd.DataFrame(desc, columns=['x', 'y', 'z'])
+        with patch('autocnet.graph.node.Node._extract_features', return_value=(kps, desc)) as ef:
+            geo_node.extract_features_with_tiling(tilesize=tilesize,overlap=5)
+            assert ef.call_count == 36 # 6 slices in the x and 6 slices in the y
 
     def test_masks(self, node):
-        image = node.get_array()
-        node.extract_features(image, extractor_parameters={'nfeatures': 5})
         assert isinstance(node.masks, pd.DataFrame)
         # Create an artificial mask
         node.masks['foo'] =  np.array([0, 0, 1, 1, 1], dtype=np.bool)
@@ -101,14 +121,6 @@ class TestNode(object):
         # Convex hull computation is checked lower in the hull computation
         #self.assertRaises(AttributeError, node.coverage_ratio)
         pass
-
-    def test_coverage(self):
-        image = self.node.get_array()
-        self.node.extract_features(image, method='sift', extractor_parameters={'nfeatures': 10})
-
-        coverage_percn = self.node.coverage()
-
-        self.assertAlmostEqual(coverage_percn, 38.06139557)
 
     def test_isis_serial(self, node):
         serial = node.isis_serial
@@ -132,10 +144,13 @@ class TestNode(object):
         assert node.keypoints.equals(reference)
 
     def test_coverage(self, node):
-        image = node.get_array()
-        node.extract_features(image, extractor_method='sift', extractor_parameters={'nfeatures': 10})
-        coverage_percn = node.coverage()
-        assert coverage_percn == pytest.approx(0.3806139557, 2)
+        kps = pd.DataFrame(np.array([[0,0],[1,1], [1,2], [2,2]]), columns=['x', 'y'])
+        extent = (2,2)
+        mock_geodata = Mock(spec=GeoDataset)
+        mock_geodata.raster_size = extent
+        node._geodata = mock_geodata
+        with patch('autocnet.graph.node.Node.keypoints', new_callable=PropertyMock, return_value=kps):
+            assert node.coverage() == 0.25
 
     def test_clean(self, node):
         with pytest.raises(AttributeError):
@@ -148,36 +163,35 @@ class TestNode(object):
         assert mask.equals(pd.Series([True, True, True, False, False]))
 
     def test_get_keypoints(self, node):
-        image = node.get_array()
-        node.extract_features(image, extractor_parameters={'nfeatures':5})
-        kps = node.get_keypoints(index=[1,3])
-        assert len(kps) == 2
-        assert 1 in kps.index and 3 in kps.index
+        kps = pd.DataFrame(np.arange(9).reshape(3,3))
+        with patch('autocnet.graph.node.Node.keypoints', new_callable=PropertyMock, return_value=kps):
+            assert len(node.get_keypoints()) == 3
+            assert len(node.get_keypoints(index=[1,2])) == 2
+            assert len(node.get_keypoints(index=[0])) == 1
 
     def test_get_keypoint_coordinates(self, node):
-        image = node.get_array()
-        node.extract_features(image, extractor_parameters={'nfeatures':5})
-        kpc = node.get_keypoint_coordinates()
-        assert 'x' in kpc.columns
-        assert 'y' in kpc.columns
-        kpc = node.get_keypoint_coordinates(index=[2,4])
-        assert len(kpc) == 2
-        kpc = node.get_keypoint_coordinates(homogeneous=True)
-        assert (kpc['homogeneous'] == 1).all()
+        kps = pd.DataFrame(np.arange(9).reshape(3,3), columns=['x', 'y', 'z'])
+        with patch('autocnet.graph.node.Node.keypoints', new_callable=PropertyMock, return_value=kps):
+            kpc = node.get_keypoint_coordinates()
+
+            assert 'x' in kpc.columns
+            assert 'y' in kpc.columns
+            kpc = node.get_keypoint_coordinates(index=[0,2])
+            assert len(kpc) == 2
+            kpc = node.get_keypoint_coordinates(homogeneous=True)
+            assert (kpc['homogeneous'] == 1).all()
 
     def test_get_raw_keypoint_coordinates(self, node):
-        image = node.get_array()
-        node.extract_features(image, extractor_parameters={'nfeatures':5})
-        kpc = node.get_raw_keypoint_coordinates()
-        assert isinstance(kpc, np.ndarray)
-        assert kpc.shape == (5,2)
-
-        kpc = node.get_raw_keypoint_coordinates(-1)
-        assert kpc.shape == (2,)
-
+        kps = pd.DataFrame(np.arange(9).reshape(3,3), columns=['x', 'y', 'z'])
+        with patch('autocnet.graph.node.Node.keypoints', new_callable=PropertyMock, return_value=kps):
+            kpc = node.get_raw_keypoint_coordinates()
+            assert isinstance(kpc, np.ndarray) 
+            assert kpc.shape == (3,2)
+            kpc = node.get_raw_keypoint_coordinates(-1)
+            assert kpc.shape == (2,)
 
     def test_footprint(self, geo_node, node_a):
         # Esnure that a shapely compliant poly is being returned
-        print(geo_node.footprint)
         assert isinstance(geo_node.footprint, LinearRing)
         assert node_a.footprint == None
+        
