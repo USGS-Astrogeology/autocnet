@@ -38,7 +38,7 @@ before_install:
   - conda config --add channels usgs-astrogeology
   - conda config --add channels conda-forge
   - conda env update -n test -f environment.yml
-
+  - export PROJ_LIB=$CONDA_PREFIX/share/proj  
 script:
   - pytest autocnet tests
 
