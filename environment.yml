@@ -17,6 +17,7 @@ dependencies:
   - plio
   - ncurses
   - geopandas
+  - imageio
   - pytest
   - pytest-cov
   - coveralls

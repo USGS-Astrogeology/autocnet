@@ -3,7 +3,7 @@ import unittest
 import warnings
 
 import numpy as np
-from matplotlib.pyplot import imread
+from imageio import imread
 from scipy.misc import imresize
 from scipy.ndimage.interpolation import rotate
 
@@ -24,7 +24,7 @@ radii = list(range(1, 3))
 
 @pytest.fixture
 def img():
-    return imread(get_path('AS15-M-0298_SML.png'), flatten=True)
+    return imread(get_path('AS15-M-0298_SML.png'), as_gray=True)
 
 @pytest.fixture
 def img_coord():
