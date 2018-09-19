@@ -5,7 +5,7 @@ import unittest
 import pytest
 
 import numpy as np
-from scipy.ndimage import imread
+from matplotlib.pyplot import imread
 
 from autocnet.examples import get_path
 import autocnet.matcher.subpixel as sp

@@ -3,7 +3,7 @@ import unittest
 import warnings
 
 import numpy as np
-from scipy.misc import imread
+from matplotlib.pyplot import imread
 from scipy.misc import imresize
 from scipy.ndimage.interpolation import rotate
 
