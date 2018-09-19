@@ -14,36 +14,32 @@ source:
 requirements:
   build:
     - python=3
-    - vlfeat
-    - cyvlfeat
-    - pillow
-    - scipy
-    - networkx
-    - numexpr
-    - cython
-    - matplotlib
+    - numpy                                                                          
+    - scipy                                                                          
+    - scikit-image                                                                   
+    - opencv                                                                         
+    - vlfeat                                                                         
+    - cyvlfeat                                                                       
+    - csmapi                                                                         
+    - networkx                                                                       
+    - pillow                                                                         
+    - plio                                                                           
+    - ncurses                                                                        
     - geopandas
-    - opencv
-    - numpy
-    - plio
-    - gdal
   run:
     - python=3
-    - vlfeat
-    - cyvlfeat
-    - pillow
-    - scipy
-    - networkx
-    - numexpr
-    - cython
-    - matplotlib
+    - numpy                                                                          
+    - scipy                                                                          
+    - scikit-image                                                                   
+    - opencv                                                                         
+    - vlfeat                                                                         
+    - cyvlfeat                                                                       
+    - csmapi                                                                         
+    - networkx                                                                       
+    - pillow                                                                         
+    - plio                                                                           
+    - ncurses                                                                        
     - geopandas
-    - opencv
-    - numpy
-    - plio
-    - gdal
-    - scikit-image
-
 test:
   imports:
     - autocnet
