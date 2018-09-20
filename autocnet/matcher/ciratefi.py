@@ -310,7 +310,6 @@ def rafi(template, search_image, candidate_pixels, best_scales, thresh=95,
 
         rad = radius if min(y, x) > radius else min(y, x)
         cropped_search = search_image[y-rad:y+rad+1, x-rad:x+rad+1]
-        print(best_scales[y,x])
         scaled_img = rescale(cropped_search, best_scales[y, x], preserve_range=True, multichannel=False)
 
         # Will except if image size too small after scaling
