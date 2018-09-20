@@ -94,10 +94,13 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200):
 
     # Read from the upper left origin
     pixels=(int(ax-size_x), int(ay-size_y), size_x * 2, size_y * 2)
-    try:
-        subarray = img.read_array(pixels=pixels)
-    except:
+    if isinstance(img, np.ndarray):
         subarray = img[pixels[1]:pixels[1] + pixels[3] + 1, pixels[0]:pixels[0] + pixels[2] + 1]
+    else:
+        try:
+            subarray = img.read_array(pixels=pixels)
+        except:
+            return None, 0, 0
     return subarray, axr, ayr
 
 def subpixel_phase(template, search, **kwargs):
@@ -129,7 +132,6 @@ def subpixel_phase(template, search, **kwargs):
     """
     if not template.shape == search.shape:
         raise ValueError('Both the template and search images must be the same shape.')
-
     (y_shift, x_shift), error, diffphase = register_translation(search, template, **kwargs)
     return x_shift, y_shift, (error, diffphase)
 
@@ -174,7 +176,8 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, search_size=251, template_si
                               size_x=template_size, size_y=template_size)
     search, dxr, dyr = clip_roi(s_img, sx, sy,
                                 size_x=search_size, size_y=search_size)
-
+    if template is None or search is None:
+        return None, None, None
     if 'method' in kwargs.keys():
         method = kwargs['method']
         kwargs.pop('method', None)
@@ -236,6 +239,9 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
                              size_x=size, size_y=size)
     d_search, dxr, dyr = clip_roi(d_img, dx, dy,
                            size_x=size, size_y=size)
+    if (s_template is None) or (d_search is None):
+        return None, None, None
+
     if s_template.shape != d_search.shape:
         s_size = s_template.shape
         d_size = d_search.shape
@@ -244,16 +250,22 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
                              size_x=updated_size, size_y=updated_size)
         d_search, dxr, dyr = clip_roi(d_img, dx, dy,
                             size_x=updated_size, size_y=updated_size)
+        if (s_template is None) or (d_search is None):
+            return None, None, None
+
     # Apply the phase matcher
-    shift_x, shift_y, metrics = subpixel_phase(s_template, d_search,**kwargs)
+    try:
+        shift_x, shift_y, metrics = subpixel_phase(s_template, d_search,**kwargs)
+    except:
+        return None, None, None
     # Apply the shift to d_search and compute the new correspondence location
     dx += (shift_x + dxr)
     dy += (shift_y + dyr)
     # Break if the solution has converged
-    if abs(shift_x) < convergence_threshold and abs(shift_y) < convergence_threshold:
+    size -= reduction
+    if size < 1:
+        return None, None, None
+    elif abs(shift_x) < convergence_threshold and abs(shift_y) < convergence_threshold:
         return dx, dy, metrics
     else:
-        size -= reduction
-        if size < 1:
-            return None, None, None
         return iterative_phase(sx, sy,  dx, dy, s_img, d_img, size)

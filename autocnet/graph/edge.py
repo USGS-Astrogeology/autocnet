@@ -474,8 +474,12 @@ class Edge(dict, MutableMapping):
                 dy = d_keypoint.y
 
             if method == 'phase':
-                new_x[i], new_y[i], strengths[i] = sp.iterative_phase(sx, sy, dx, dy, s_img, d_img, 
-                                                                   size=template_size, **kwargs)
+                res = sp.iterative_phase(sx, sy, dx, dy, s_img, d_img, size=template_size, **kwargs)
+                print(res)
+                if res[0]:
+                    new_x[i] = res[0]
+                    new_y[i] = res[1]
+                    strengths[i] = res[2]
             elif method == 'template':
                 new_x[i], new_y[i], strengths[i] = sp.subpixel_template(sx, sy, dx, dy, s_img, d_img,
                                                                      search_size=search_size, 
