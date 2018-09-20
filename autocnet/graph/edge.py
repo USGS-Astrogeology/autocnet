@@ -428,18 +428,13 @@ class Edge(dict, MutableMapping):
                      for subpixel accuracy
 
         template_size : int
-                        The size of the template in pixels, must be odd
+                        The size of the template in pixels, must be odd. If using phase, 
+                        only the template size is used.
 
         search_size : int
-                      The size of the search
+                      The size of the search area. When method='template', this size should
+                      be >= the template size
 
-        max_x_shift : float
-                      The maximum (positive) value that a pixel can shift in the x direction
-                      without being considered an outlier
-
-        max_y_shift : float
-                      The maximum (positive) value that a pixel can shift in the y direction
-                      without being considered an outlier
         """
         # Build up a composite mask from all of the user specified masks
         matches, mask = self.clean(clean_keys)
@@ -450,11 +445,12 @@ class Edge(dict, MutableMapping):
 
         # Determine which algorithm is going ot be used.
         if method == 'phase':
-            func = sp.subpixel_phase
-            shifts_x, shifts_y, strengths, new_x, new_y = sp._prep_subpixel(len(matches), 2)
+            func = sp.iterative_phase
+            nstrengths = 2
         elif method == 'template':
             func = sp.subpixel_template
-            shifts_x, shifts_y, strengths, new_x, new_y = sp._prep_subpixel(len(matches), 1)
+            nstrengths = 1
+        shifts_x, shifts_y, strengths, new_x, new_y = sp._prep_subpixel(len(matches), nstrengths)
 
         # for each edge, calculate this for each keypoint pair
         for i, (idx, row) in enumerate(matches.iterrows()):
@@ -477,31 +473,17 @@ class Edge(dict, MutableMapping):
                 dx = d_keypoint.x
                 dy = d_keypoint.y
 
-            s_template, _, _ = sp.clip_roi(s_img, sx, sy,
-                                     size_x=template_size, size_y=template_size)
-            d_search, dxr, dyr = sp.clip_roi(d_img, dx, dy,
-                                   size_x=search_size, size_y=search_size)
-            
-            # Now check to see if these are the same size.
-            if method == 'phase' and (s_template.shape != d_search.shape):
-                s_size = s_template.shape
-                d_size = d_search.shape
-                updated_size = int(min(s_size + d_size) / 2)
-                s_template, _, _ = sp.clip_roi(s_img, sx, sy,
-                                     size_x=updated_size, size_y=updated_size)
-                d_search, dxr, dyr = sp.clip_roi(d_img, dx, dy,
-                                    size_x=updated_size, size_y=updated_size)         
-            shift_x, shift_y, metrics = func(s_template, d_search, **kwargs)
+            if method == 'phase':
+                new_x[i], new_y[i], strengths[i] = sp.iterative_phase(sx, sy, dx, dy, s_img, d_img, 
+                                                                   size=template_size, **kwargs)
+            elif method == 'template':
+                new_x[i], new_y[i], strengths[i] = sp.subpixel_template(sx, sy, dx, dy, s_img, d_img,
+                                                                     search_size=search_size, 
+                                                                     template_size=template_size, **kwargs)
 
-            # ROIs and clipping all work using whole pixels. The clip_roi func returns
-            # the subpixel components that are lost when converting to whole pixels
-            # reapply those here.
-            shifts_x[i] = shift_x + dxr
-            shifts_y[i] = shift_y + dyr
-
-            new_x[i] = dx - shift_x
-            new_y[i] = dy - shift_y
-            strengths[i] = metrics
+            # Capture the shifts
+            shifts_x[i] = new_x[i] - dx
+            shifts_y[i] = new_y[i] - dy
 
         self.matches.loc[mask, 'shift_x'] = shifts_x
         self.matches.loc[mask, 'shift_y'] = shifts_y

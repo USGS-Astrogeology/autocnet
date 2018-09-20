@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from plio.io.io_gdal import GeoDataset
 from plio.io.isis_serial_number import generate_serial_number
-from scipy.misc import bytescale, imresize
+from skimage.transform import resize
 from shapely.geometry import Polygon
 from shapely import wkt
 
@@ -226,7 +226,7 @@ class Node(dict, MutableMapping):
         """
 
         array = self.geodata.read_array(band=band)
-        return bytescale(array)
+        return utils.bytescale(array)
 
     def get_array(self, band=1, **kwargs):
         """
@@ -353,8 +353,7 @@ class Node(dict, MutableMapping):
         pass
 
     def extract_features_with_downsampling(self, downsample_amount,
-                                           array_read_args={},
-                                           interp='lanczos', *args, **kwargs):
+                                           array_read_args={}, *args, **kwargs):
         """
         Extract interest points for the this node (image) by first downsampling,
         then applying the extractor, and then upsampling the results backin to
@@ -369,7 +368,7 @@ class Node(dict, MutableMapping):
         total_size = array_size[0] * array_size[1]
         shape = (int(array_size[0] / downsample_amount),
                  int(array_size[1] / downsample_amount))
-        array = imresize(self.geodata.read_array(**array_read_args), shape, interp=interp)
+        array = resize(self.geodata.read_array(**array_read_args), shape, preserve_range=True)
         self.extract_features(array, *args, **kwargs)
 
         self.keypoints['x'] *= downsample_amount

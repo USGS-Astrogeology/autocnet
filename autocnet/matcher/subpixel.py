@@ -133,18 +133,30 @@ def subpixel_phase(template, search, **kwargs):
     (y_shift, x_shift), error, diffphase = register_translation(search, template, **kwargs)
     return x_shift, y_shift, (error, diffphase)
 
-def subpixel_template(template, search, **kwargs):
+def subpixel_template(sx, sy, dx, dy, s_img, d_img, search_size=251, template_size=51, **kwargs):
     """
     Uses a pattern-matcher on subsets of two images determined from the passed-in keypoints and optional sizes to
     compute an x and y offset from the search keypoint to the template keypoint and an associated strength.
 
     Parameters
     ----------
-    template : ndarray
-               The template used to search
-
-    search : ndarray
-             The search image
+    sx : numeric
+         The x position of the center of the template to be matched to
+    sy : numeric
+         The y position of the center of the template to be matched to
+    dx : numeric
+         The x position of the center of the search to be matched from
+    dy : numeric
+         The y position of the center of the search to be matched to
+    s_img : object
+            A plio geodata object from which the template is extracted
+    d_img : object
+            A plio geodata object from which the search is extracted
+    search_size : int
+                  An odd integer for the size of the search image
+    template_size : int
+                    A odd integer for the size of the template that is iterated
+                    over the search images
 
     Returns
     -------
@@ -158,6 +170,11 @@ def subpixel_template(template, search, **kwargs):
                Strength of the correspondence in the range [-1, 1]
     """
 
+    template, _, _ = clip_roi(d_img, dx, dy,
+                              size_x=template_size, size_y=template_size)
+    search, dxr, dyr = clip_roi(s_img, sx, sy,
+                                size_x=search_size, size_y=search_size)
+
     if 'method' in kwargs.keys():
         method = kwargs['method']
         kwargs.pop('method', None)
@@ -166,6 +183,77 @@ def subpixel_template(template, search, **kwargs):
 
     functions = { 'naive' : naive_template.pattern_match,
                   'ciratefi' : ciratefi.ciratefi}
-
     x_offset, y_offset, strength = functions[method](template, search, **kwargs)
-    return x_offset, y_offset, strength
+    dx += (x_offset + dxr)
+    dy += (y_offset + dyr)
+    return dx, dy, strength
+
+def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, convergence_threshold=1.0, **kwargs):
+    """
+    Iteratively apply a subpixel phase matcher to source (s_img) amd destination (d_img)
+    images. The size parameter is used to set the initial search space. The algorithm
+    is recursively applied to reduce the total search space by reduction until the convergence criteria
+    are met. Convergence is defined as the point at which the computed shifts (x_shift,y_shift) are 
+    less than the convergence_threshold. In instances where the size is reducted to 1 pixel the
+    algorithm terminates and returns None.
+
+    Parameters
+    ----------
+    sx : numeric
+         The x position of the center of the template to be matched to
+    sy : numeric
+         The y position of the center of the template to be matched to
+    dx : numeric
+         The x position of the center of the search to be matched from
+    dy : numeric
+         The y position of the center of the search to be matched to
+    s_img : object
+            A plio geodata object from which the template is extracted
+    d_img : object
+            A plio geodata object from which the search is extracted
+    size : int
+           One half of the total size of the template, so a 251 default results in a 502 pixel search space
+    reduction : int
+                With each recursive call to this func, the size is reduced by this amount
+    convergence_threshold : float
+                            The value under which the result can shift in the x and y directions to force a break
+
+    Returns
+    -------
+    dx : float
+         The new x value for the match in the destination (d) image
+    dy : float
+         The new y value for the match in the destination (d) image
+    metrics : tuple
+              A tuple of metrics. In the case of the phase matcher this are difference
+              and RMSE in the phase dimension.
+
+    See Also
+    --------
+    subpixel_phase : the function that applies a single iteration of the phase matcher
+    """
+    s_template, _, _ = clip_roi(s_img, sx, sy,
+                             size_x=size, size_y=size)
+    d_search, dxr, dyr = clip_roi(d_img, dx, dy,
+                           size_x=size, size_y=size)
+    if s_template.shape != d_search.shape:
+        s_size = s_template.shape
+        d_size = d_search.shape
+        updated_size = int(min(s_size + d_size) / 2)
+        s_template, _, _ = clip_roi(s_img, sx, sy,
+                             size_x=updated_size, size_y=updated_size)
+        d_search, dxr, dyr = clip_roi(d_img, dx, dy,
+                            size_x=updated_size, size_y=updated_size)
+    # Apply the phase matcher
+    shift_x, shift_y, metrics = subpixel_phase(s_template, d_search,**kwargs)
+    # Apply the shift to d_search and compute the new correspondence location
+    dx += (shift_x + dxr)
+    dy += (shift_y + dyr)
+    # Break if the solution has converged
+    if abs(shift_x) < convergence_threshold and abs(shift_y) < convergence_threshold:
+        return dx, dy, metrics
+    else:
+        size -= reduction
+        if size < 1:
+            return None, None, None
+        return iterative_phase(sx, sy,  dx, dy, s_img, d_img, size)

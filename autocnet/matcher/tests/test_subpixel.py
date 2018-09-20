@@ -1,6 +1,8 @@
+import math
 import os
 import sys
 import unittest
+from unittest.mock import patch
 
 import pytest
 
@@ -13,8 +15,9 @@ import autocnet.matcher.subpixel as sp
 
 @pytest.fixture
 def apollo_subsets():
-    arr1 = imread(get_path('AS15-M-0295_SML(1).png'))[100:200, 123:223]
-    arr2 = imread(get_path('AS15-M-0295_SML(2).png'))[235:335, 95:195]
+    # These need to be geodata sets or just use mocks...
+    arr1 = imread(get_path('AS15-M-0295_SML(1).png'))[100:201, 123:224]
+    arr2 = imread(get_path('AS15-M-0295_SML(2).png'))[235:336, 95:196]
     return arr1, arr2
 
 @pytest.mark.parametrize("nmatches, nstrengths", [(10,1), (10,2)])
@@ -44,12 +47,43 @@ def test_subpixel_phase(apollo_subsets):
     assert len(err) == 2
 
 def test_subpixel_template(apollo_subsets):
+    def clip_side_effect(*args, **kwargs):
+        if np.array_equal(a, args[0]):
+            return a, 0, 0
+        else:
+            center_y = b.shape[0] / 2
+            center_x = b.shape[1] / 2
+            bxr, bx = math.modf(center_x)
+            byr, by = math.modf(center_y)
+            bx = int(bx)
+            by = int(by)
+            return b[by-10:by+11, bx-10:bx+11], bxr, byr
     a = apollo_subsets[0]
     b = apollo_subsets[1]
-    midy = int(b.shape[0] / 2)
-    midx = int(b.shape[1] / 2)
-    subb = b[midy-10:midy+10, midx-10:midx+10]
-    xoff, yoff, err = sp.subpixel_template(subb, a)
-    assert xoff == 0.0625 
-    assert yoff == 2.125 
-    assert err == 0.9905822277069092
+    with patch('autocnet.matcher.subpixel.clip_roi', side_effect=clip_side_effect):
+        nx, ny, strength = sp.subpixel_template(a.shape[1]/2, a.shape[0]/2,
+                                                b.shape[1]/2, b.shape[0]/2,
+                                                a, b, upsampling=16)
+    
+    assert strength >= 0.99
+    assert nx == 50.5625 
+    assert ny == 52.5625 
+
+@pytest.mark.parametrize("convergence_threshold, expected", [(1.0, (None, None, None)),
+                                                             (2.0, (50.49, 52.44, (0.039507129157318646, -9.516675327485582e-20)))])
+def test_iterative_phase(apollo_subsets, convergence_threshold, expected):
+    def clip_side_effect(*args, **kwargs):
+        if np.array_equal(a, args[0]):
+            return a, 0, 0
+        else:
+            return b, 0, 0
+    a = apollo_subsets[0]
+    b = apollo_subsets[1]
+    with patch('autocnet.matcher.subpixel.clip_roi', side_effect=clip_side_effect):
+        nx, ny, strength = sp.iterative_phase(a.shape[1]/2, a.shape[0]/2,
+                                              b.shape[1]/2, b.shape[1]/2,
+                                              a, b, convergence_threshold=convergence_threshold,
+                                              upsample_factor=100)
+        assert nx == expected[0]
+        assert ny == expected[1]
+        assert strength == expected[2]    

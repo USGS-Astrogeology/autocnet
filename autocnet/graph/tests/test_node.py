@@ -94,6 +94,7 @@ class TestNode(object):
             assert len(node.descriptors) == 3
             assert 3 == node.nkeypoints
 
+    @pytest.mark.filterwarnings("ignore::UserWarning")  # For skimage user warning for API changes
     def test_extract_downsampled_features(self, geo_node):
         desc = np.arange(9).reshape(3,3)
         kps = pd.DataFrame(desc, columns=['x', 'y', 'z'])
