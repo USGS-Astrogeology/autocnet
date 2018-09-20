@@ -2,6 +2,17 @@ import os
 import warnings
 
 from pkg_resources import get_distribution, DistributionNotFound
+
+import autocnet
+import autocnet.examples
+import autocnet.camera
+import autocnet.cg
+import autocnet.control
+import autocnet.graph
+import autocnet.matcher
+import autocnet.transformation
+import autocnet.utils
+
 try:
     _dist = get_distribution('autocnet')
     # Normalize case for Windows systems
@@ -14,16 +25,6 @@ except DistributionNotFound:
     __version__ = 'Please install this project with setup.py'
 else:
     __version__ = _dist.version
-
-import autocnet
-import autocnet.examples
-import autocnet.camera
-import autocnet.cg
-import autocnet.control
-import autocnet.graph
-import autocnet.matcher
-import autocnet.transformation
-import autocnet.utils
 
 # Patch the candidate graph into the root namespace
 from autocnet.graph.network import CandidateGraph
