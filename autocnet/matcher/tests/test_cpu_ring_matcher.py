@@ -50,7 +50,7 @@ def test_sift_match(a, b, threshold, expected):
                                        np.array([[1,1], [3,3]]),
                                        [])
                                       ])
-def test_ransac_permut(x, y, eidx):
+def test_ransac_permute(x, y, eidx):
     xp, yp, idx = rm.ransac_permute(x, y, 0.2, 2)
     np.testing.assert_array_equal(idx, eidx)
 
@@ -70,6 +70,14 @@ def test_dynamically_grow():
     y = rm.dynamically_grow_array(x,6)
     assert y.shape == (9,3)
     
+def test_dynamically_grow_dtype():
+    x = np.ones((3,3), dtype=np.int8)
+    y = rm.dynamically_grow_array(x,6)
+    assert np.issubdtype(y.dtype, np.float64)
+
+    y = rm.dynamically_grow_array(x,6,dtype=np.int8)
+    assert np.issubdtype(y.dtype, np.int8)
+
 def test_points_in_ring():
     x = np.array([1,1,1,1,1,2,2,2,2,2,3,3,3,3,3,4,4,4,4,4])
     for i in np.arange(0.5, 4.5):

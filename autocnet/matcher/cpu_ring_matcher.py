@@ -257,7 +257,7 @@ def ring_match(ref_feats, tar_feats, ref_desc, tar_desc, ring_radius=4000,
                 if match is not None:
                     if points_num[i] == p.shape[0]:
                         p = dynamically_grow_array(p, target_points)
-                        p_idx = dynamically_grow_array(p_idx, target_points)
+                        p_idx = dynamically_grow_array(p_idx, target_points, dtype=np.int)
                     p[points_num[i], 4*i:4*i+4] = [current_ref_xy[0], current_ref_xy[1], current_tar_xys[match][0], current_tar_xys[match][1]]
                     # Set the id of the point
                     p_idx[points_num[i], 2*i:2*i+2] = [r, z_idx[match]]
@@ -311,7 +311,7 @@ def points_in_ring(distance_vector, inner_radius, outer_radius):
     """
     return (distance_vector >= inner_radius) * (distance_vector <= outer_radius)
 
-def dynamically_grow_array(array, m):
+def dynamically_grow_array(array, m, dtype=None):
     """
     Given an array, dynamically grow the array vertically with an m,n array of zeros
 
@@ -322,14 +322,17 @@ def dynamically_grow_array(array, m):
     m : int
         The number of new rows to add
 
+    dtype : obj
+            A numpy data type that is used for the new entries. A 
+            dynamically grown array will upcast to the most complex
+            data type.
     Returns
     -------
     array : ndarray
             The expanded array
     """
-    array_append = np.zeros((m, array.shape[1]))
+    array_append = np.zeros((m, array.shape[1]), dtype=dtype)
     array = np.vstack((array, array_append))
-
     return array
 
 
