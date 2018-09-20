@@ -475,7 +475,6 @@ class Edge(dict, MutableMapping):
 
             if method == 'phase':
                 res = sp.iterative_phase(sx, sy, dx, dy, s_img, d_img, size=template_size, **kwargs)
-                print(res)
                 if res[0]:
                     new_x[i] = res[0]
                     new_y[i] = res[1]
