@@ -26,16 +26,6 @@ except DistributionNotFound:
 else:
     __version__ = _dist.version
 
-import autocnet
-import autocnet.examples
-import autocnet.camera
-import autocnet.cg
-import autocnet.control
-import autocnet.graph
-import autocnet.matcher
-import autocnet.transformation
-import autocnet.utils
-
 # Patch the candidate graph into the root namespace
 from autocnet.graph.network import CandidateGraph
 
