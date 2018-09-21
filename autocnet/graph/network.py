@@ -820,8 +820,7 @@ class CandidateGraph(nx.Graph):
             A networkX graph object
 
         """
-        induced_nodes = nx.filters.show_nodes(self.nbunch_iter(nodes))
-        return SubCandidateGraph(self, induced_nodes)
+        return self.subgraph(nodes)
 
     def create_edge_subgraph(self, edges):
         """
@@ -1272,10 +1271,3 @@ class CandidateGraph(nx.Graph):
         """
         pass
 
-
-class SubCandidateGraph(nx.graphviews.SubGraph, CandidateGraph):
-    def __init__(self, *args, **kwargs):
-        super(SubCandidateGraph, self).__init__(*args, **kwargs)
-
-
-nx.graphviews.SubGraph = SubCandidateGraph
