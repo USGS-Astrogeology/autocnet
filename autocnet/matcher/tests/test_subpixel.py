@@ -70,7 +70,7 @@ def test_subpixel_template(apollo_subsets):
     assert ny == 52.5625 
 
 @pytest.mark.parametrize("convergence_threshold, expected", [(1.0, (None, None, None)),
-                                                             (2.0, (50.49, 52.44, (0.039507129157318646, -9.516675327485582e-20)))])
+                                                             (2.0, (50.49, 52.44, (0.039507, -9.5e-20)))])
 def test_iterative_phase(apollo_subsets, convergence_threshold, expected):
     def clip_side_effect(*args, **kwargs):
         if np.array_equal(a, args[0]):
@@ -86,4 +86,6 @@ def test_iterative_phase(apollo_subsets, convergence_threshold, expected):
                                               upsample_factor=100)
         assert nx == expected[0]
         assert ny == expected[1]
-        assert strength == expected[2]    
+        if expected[2] is note None:
+            for i in strength:
+                assert pytest.approx(strength[i],6) == expected[2][i]
