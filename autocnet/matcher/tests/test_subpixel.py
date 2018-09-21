@@ -87,5 +87,5 @@ def test_iterative_phase(apollo_subsets, convergence_threshold, expected):
         assert nx == expected[0]
         assert ny == expected[1]
         if expected[2] is not None:
-            for i in strength:
+            for i in range(len(strength)):
                 assert pytest.approx(strength[i],6) == expected[2][i]
