@@ -1270,4 +1270,3 @@ class CandidateGraph(nx.Graph):
         http://grail.cs.washington.edu/projects/bal/
         """
         pass
-
