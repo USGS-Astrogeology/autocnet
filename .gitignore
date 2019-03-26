@@ -81,6 +81,7 @@ target/
 *.cnet
 *.lis
 *.list
+*.aux.xml
 
 # Pytest
 lastfailed
