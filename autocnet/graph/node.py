@@ -4,22 +4,22 @@ import os
 import warnings
 
 from csmapi import csmapi
+import geoalchemy2
 import numpy as np
 import pandas as pd
 from plio.io.io_gdal import GeoDataset
 from plio.io.isis_serial_number import generate_serial_number
 from skimage.transform import resize
-from shapely.geometry import Polygon
-from shapely import wkt
+import shapely
+from knoten.csm import generate_latlon_footprint, generate_vrt, create_camera
 
-from autocnet.cg import cg
-
-from autocnet.io import keypoints as io_keypoints
-
+from autocnet import Session, engine, config
 from autocnet.matcher import cpu_extractor as fe
 from autocnet.matcher import cpu_outlier_detector as od
-from autocnet.cg.cg import convex_hull_ratio
-
+from autocnet.cg import cg
+from autocnet.io.db.model import Images, Keypoints, Matches, Cameras, Network, Base, Overlay, Edges, Costs
+from autocnet.io.db.connection import Parent
+from autocnet.io import keypoints as io_keypoints
 from autocnet.vis.graph_view import plot_node
 from autocnet.utils import utils
 
@@ -164,7 +164,7 @@ class Node(dict, MutableMapping):
     def footprint(self):
         if not getattr(self, '_footprint', None):
             try:
-                self._footprint = wkt.loads(self.geodata.footprint.GetGeometryRef(0).ExportToWkt())
+                self._footprint = shapely.wkt.loads(self.geodata.footprint.GetGeometryRef(0).ExportToWkt())
             except:
                 return None
         return self._footprint
@@ -493,4 +493,152 @@ class Node(dict, MutableMapping):
 
         for x, y in coords:
             reproj.append(self.geodata.latlon_to_pixel(y, x))
-        return Polygon(reproj) 
+        return shapely.geometryPolygon(reproj) 
+
+class NetworkNode(Node):
+    def __init__(self, *args, parent=None, **kwargs):
+        # If this is the first time that the image is seen, add it to the DB
+        if parent is None:
+            self.parent = Parent(config)
+        else:
+            self.parent = parent
+
+        # Create a session to work in
+        session = Session()
+        # For now, just use the PATH to determine if the node/image is in the DB
+        res = session.query(Images).filter(Images.path == kwargs['image_path']).first()
+        exists = False
+        if res:
+            exists = True
+            kwargs['node_id'] = res.id
+        session.close()
+        super(NetworkNode, self).__init__(*args, **kwargs)
+
+        if exists is False:
+            # Create the camera entry
+            try:
+                self._camera = create_camera(self.geodata)
+                serialized_camera = self._camera.getModelState()
+                cam = Cameras(camera=serialized_camera)
+            except:
+                cam = None
+            kpspath = io_keypoints.create_output_path(self.geodata.file_name)
+
+            # Create the keypoints entry
+            kps = Keypoints(path=kpspath, nkeypoints=0)
+            # Create the image
+            i = Images(name=kwargs['image_name'],
+                       path=kwargs['image_path'],
+                       footprint_latlon=self.footprint,
+                       cameras=cam, keypoints=kps)
+            session = Session()
+            session.add(i)
+            session.commit()
+            session.close()
+        self.job_status = defaultdict(dict)
+
+    def _from_db(self, table_obj, key='image_id'):
+        """
+        Generic database query to pull the row associated with this node
+        from an arbitrary table. We assume that the row id matches the node_id.
+
+        Parameters
+        ----------
+        table_obj : object
+                    The declared table class (from db.model)
+
+        key : str
+              The name of the column to compare this object's node_id with. For
+              most tables this will be the default, 'image_id' because 'image_id'
+              is the foreign key in the DB. For the Images table (the parent table),
+              the key is simply 'id'.
+        """
+        if 'node_id' not in self.keys():
+            return
+        session = Session()
+        res = session.query(table_obj).filter(getattr(table_obj,key) == self['node_id']).first()
+        session.close()
+        return res
+
+    @property
+    def keypoint_file(self):
+        res = self._from_db(Keypoints)
+        if res is None:
+            return
+        return res.path
+
+    @property
+    def keypoints(self):
+        try:
+            return io_keypoints.from_hdf(self.keypoint_file, descriptors=False)
+        except:
+            return pd.DataFrame()
+
+    @keypoints.setter
+    def keypoints(self, kps):
+        session = Session()
+        io_keypoints.to_hdf(self.keypoint_file, keypoints=kps)
+        res = session.query(Keypoints).filter(getattr(Keypoints,'image_id') == self['node_id']).first()
+
+        if res is None:
+            _ = self.keypoint_file
+            res = self._from_db(Keypoints)
+        res.nkeypoints = len(kps)
+        session.commit()
+
+    @property
+    def descriptors(self):
+        try:
+            return io_keypoints.from_hdf(self.keypoint_file, keypoints=False)
+        except:
+            return
+
+    @descriptors.setter
+    def descriptors(self, desc):
+        if isinstance(desc, np.array):
+            io_keypoints.to_hdf(self.keypoint_file, descriptors=desc)
+
+    @property
+    def nkeypoints(self):
+        """
+        Get the number of keypoints from the database
+        """
+        res = self._from_db(Keypoints)
+        nkps = res.nkeypoints
+        return nkps
+
+    @property
+    def camera(self):
+        """
+        Get the camera object from the database.
+        """
+        if not getattr(self, '_camera', None):
+            res = self._from_db(Cameras)
+            if res is not None:
+                plugin = csmapi.Plugin.findPlugin('USGS_ASTRO_LINE_SCANNER_PLUGIN')
+                self._camera = plugin.constructModelFromState(res.camera)
+        return self._camera
+
+    @property
+    def footprint(self):
+
+        res = Session().query(Images).filter(Images.id == self['node_id']).first()
+        if res is None:
+            try:
+                footprint_latlon = generate_latlon_footprint(self.camera)
+                footprint_latlon = footprint_latlon.ExportToWkt()
+                footprint_latlon = geoalchemy2.elementsWKTElement(footprint_latlon, srid=config['spatial']['srid'])
+            except:
+                footprint_latlon = None
+        else:
+            footprint_latlon = geoalchemy2.shape.to_shape(res.footprint_latlon)
+        return footprint_latlon
+
+    def generate_vrt(self, **kwargs):
+        """
+        Using the image footprint, generate a VRT to that is usable inside
+        of a GIS (QGIS or ArcGIS) to visualize a warped version of this image.
+        """
+        outpath = config['directories']['vrt_dir']
+        generate_vrt.warped_vrt(self.camera, self.geodata.raster_size,
+                                self.geodata.file_name, outpath=outpath)

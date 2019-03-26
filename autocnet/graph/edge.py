@@ -1,14 +1,17 @@
 from functools import wraps, singledispatch
 import warnings
-from collections import MutableMapping
+from collections import defaultdict, MutableMapping
 
+from geoalchemy2.elements import WKBElement
 import numpy as np
 import pandas as pd
 import networkx as nx
-
+import pyproj
 from scipy.spatial.distance import cdist
+from shapely.geometry import Point
+import sqlalchemy
 
-import autocnet
+from autocnet import Session, engine
 from autocnet.graph.node import Node
 from autocnet.utils import utils
 from autocnet.matcher import cpu_outlier_detector as od
@@ -20,6 +23,8 @@ from autocnet.transformation import homography as hm
 from autocnet.transformation import spatial
 from autocnet.vis.graph_view import plot_edge, plot_node, plot_edge_decomposition, plot_matches
 from autocnet.cg import cg
+from autocnet.io.db.model import Images, Keypoints, Matches, Cameras, Network, Base, Overlay, Edges, Costs
+from autocnet.io.db.wrappers import DbDataFrame
 
 from plio.io.io_gdal import GeoDataset
 from csmapi import csmapi
@@ -659,7 +664,7 @@ class Edge(dict, MutableMapping):
         """
         if not isinstance(self.matches, pd.DataFrame):
             raise AttributeError('Matches have not been computed for this edge')
-        voronoi = cg.vor(self, clean_keys, **kwargs)
+        voronoi = cg.compute_voronoi(self, clean_keys, **kwargs)
         self.matches = pd.concat([self.matches, voronoi[1]['vor_weights']], axis=1)
 
     def compute_overlap(self, buffer_dist=0, **kwargs):
@@ -709,3 +714,260 @@ class Edge(dict, MutableMapping):
         skps = matches[['source_x', 'source_y']]
         dkps = matches[['destination_x', 'destination_y']]
         return matches
+
+class NetworkEdge(Edge):
+
+    default_msg = {'sidx':None,
+                    'didx':None,
+                    'task':None,
+                    'param_step':0,
+                    'success':False}
+
+    def __init__(self, *args, **kwargs):
+        super(NetworkEdge, self).__init__(*args, **kwargs)
+        self.job_status = defaultdict(dict)
+
+    def _from_db(self, table_obj):
+        """
+        Generic database query to pull the row associated with this node
+        from an arbitrary table. We assume that the row id matches the node_id.
+
+        Parameters
+        ----------
+        table_obj : object
+                    The declared table class (from db.model)
+        """
+        session = Session()
+        res = session.query(table_obj).\
+               filter(table_obj.source == self.source['node_id']).\
+               filter(table_obj.destination == self.destination['node_id'])
+        session.close()
+        return res
+
+    @property
+    def masks(self):
+        res = Session().query(Edges.masks).\
+                                        filter(Edges.source == self.source['node_id']).\
+                                        filter(Edges.destination == self.destination['node_id']).\
+                                        first()
+
+        if res:
+            df = pd.DataFrame.from_records(res[0])
+            df.index = df.index.map(int)
+        else:
+            ids = list(map(int, self.matches.index.values))
+            df = pd.DataFrame(index=ids)
+        df.index.name = 'match_id'
+        return DbDataFrame(df, parent=self, name='masks')
+
+    @masks.setter
+    def masks(self, v):
+
+        def dict_check(input):
+            for k, v in input.items():
+                if isinstance(v, dict):
+                    dict_check(v)
+                elif v is None:
+                    continue
+                elif np.isnan(v):
+                    input[k] = None
+
+
+        df = pd.DataFrame(v)
+        session = Session()
+        res = session.query(Edges).\
+                                filter(Edges.source == self.source['node_id']).\
+                                filter(Edges.destination == self.destination['node_id']).first()
+        if res:
+            as_dict = df.to_dict()
+            dict_check(as_dict)
+            # Update the masks
+            res.masks = as_dict
+            session.add(res)
+            session.commit()
+
+    @property
+    def costs(self):
+        # these are np.float coming out, sqlalchemy needs ints
+        ids = list(map(int, self.matches.index.values))
+        res = Session().query(Costs).filter(Costs.match_id.in_(ids)).all()
+        #qf = q.filter(Costs.match_id.in_(ids))
+
+        if res:
+        # Parse the JSON dicts in the cost field into a full dimension dataframe
+            costs = {r.match_id:r._cost for r in res}
+            df = pd.DataFrame.from_records(costs).T  # From records is important because from_dict drops rows with empty dicts
+        else:
+            df = pd.DataFrame(index=ids)
+
+        df.index.name = 'match_id'
+        return DbDataFrame(df, parent=self, name='costs')
+
+
+    @costs.setter
+    def costs(self, v):
+        to_db_add = []
+        # Get the query obj
+        session = Session()
+        q = session.query(Costs)
+        # Need the new instance here to avoid __setattr__ issues
+        df = pd.DataFrame(v)
+        for idx, row in df.iterrows():
+            # Now invert the expanded dict back into a single JSONB column for storage
+            res = q.filter(Costs.match_id == idx).first()
+            if res:
+                #update the JSON blob
+                costs_new_or_updated = row.to_dict()
+                for k, v in costs_new_or_updated.items():
+                    if v is None:
+                        continue
+                    elif np.isnan(v):
+                        v = None
+                    res._cost[k] = v
+                sqlalchemy.orm.attributes.flag_modified(res, '_cost')
+                session.add(res)
+                session.commit()
+            else:
+                row = row.to_dict()
+                costs = row.pop('_costs', {})
+                for k, v in row.items():
+                    if np.isnan(v):
+                        v = None
+                    costs[k] = v
+                cost = Costs(match_id=idx, _cost=costs)
+                to_db_add.append(cost)
+        if to_db_add:
+            session.bulk_save_objects(to_db_add)
+        session.commit()
+
+    @property
+    def matches(self):
+        session = Session()
+        q = session.query(Matches)
+        qf = q.filter(Matches.source == self.source['node_id'],
+                      Matches.destination == self.destination['node_id'])
+        odf = pd.read_sql(qf.statement, q.session.bind).set_index('id')
+        df = pd.DataFrame(odf.values, index=odf.index.values, columns=odf.columns.values)
+        df.index.name = 'id'
+        # Explicit close to get the session cleaned up
+        session.close()
+        return DbDataFrame(df,
+                           parent=self,
+                           name='matches')
+
+    @matches.setter
+    def matches(self, v):
+        to_db_add = []
+        to_db_update = []
+        df = pd.DataFrame(v)
+        df.index.name = v.index.name
+        # Get the query obj
+        session = Session()
+        q = session.query(Matches)
+        for idx, row in df.iterrows():
+            # Determine if this is an update or the addition of a new row
+            if hasattr(row, 'id'):
+                res = q.filter(Matches.id == row.id).first()
+                match_id = row.id
+            elif v.index.name == 'id':
+                res = q.filter(Matches.id == row.name).first()
+                match_id = row.name
+            else:
+                res = None
+            if res:
+                # update
+                mapping = {}
+                mapping['id'] = match_id
+                for index in row.index:
+                    row_val = row[index]
+                    if isinstance(row_val, (np.int,)):
+                        row_val = int(row_val)
+                    elif isinstance(row_val, (np.float,)):
+                        row_val = float(row_val)
+                    elif isinstance(row_val, WKBElement):
+                        continue
+                    mapping[index] = row_val
+                to_db_update.append(mapping)
+            else:
+                match = Matches(source=int(row.source), source_idx=int(row.source_idx),
+                            destination=int(row.destination), destination_idx=int(row.destination_idx))
+                to_db_add.append(match)
+        if to_db_add:
+            session.bulk_save_objects(to_db_add)
+        if to_db_update:
+            session.bulk_update_mappings(Matches, to_db_update)
+        session.commit()
+
+    @matches.deleter
+    def matches(self):
+        session = Session()
+        session.query(Matches).filter(Matches.source == self.source['node_id'], Matches.destination == self.destination['node_id']).delete()
+        session.commit()
+        session.close()
+        return
+
+    @property
+    def ring(self):
+        res = self._from_db(Edges).first()
+        if res:
+            return res.ring
+        return
+
+    @ring.setter
+    def ring(self, ring):
+        # Setters need a single session and so should not make use of the
+        # syntax sugar _from_db
+        session = Session()
+        res = session.query(Edges).\
+               filter(Edges.source == self.source['node_id']).\
+               filter(Edges.destination == self.destination['node_id']).first()
+        if res:
+            res.ring = ring
+        else:
+            edge = Edges(source=self.source['node_id'],
+                         destination=self.destination['node_id'],
+                         ring=ring)
+            session.add(edge)
+            session.commit()
+        return
+
+    @property
+    def intersection(self):
+        if not hasattr(self, '_intersection'):
+            s_fp = self.source.footprint
+            d_fp = self.destination.footprint
+            self._intersection = s_fp.intersection(d_fp)
+        return self._intersection
+
+    @property
+    def fundamental_matrix(self):
+        res = self._from_db(Edges).first()
+        if res:
+            return res.fundamental
+
+    @fundamental_matrix.setter
+    def fundamental_matrix(self, v):
+        session = Session()
+        res = session.query(Edges).\
+               filter(Edges.source == self.source['node_id']).\
+               filter(Edges.destination == self.destination['node_id']).first()
+        if res:
+            res.fundamental = v
+        else:
+            edge = Edges(source=self.source['node_id'],
+                         destination=self.destination['node_id'],
+                         fundamental = v)
+            session.add(edge)
+            session.commit()
+
+    def get_overlapping_indices(self, kps):
+        ecef = pyproj.Proj(proj='geocent',
+			               a=self.parent.config['spatial']['semimajor_rad'],
+			               b=self.parent.config['spatial']['semiminor_rad'])
+        lla = pyproj.Proj(proj='longlat',
+			              a=self.parent.config['spatial']['semiminor_rad'],
+			              b=self.parent.config['spatial']['semimajor_rad'])
+        lons, lats, alts = pyproj.transform(ecef, lla, kps.xm.values, kps.ym.values, kps.zm.values)
+        points = [Point(lons[i], lats[i]) for i in range(len(lons))]
+        mask = [i for i in range(len(points)) if self.intersection.contains(points[i])]
+        return mask
