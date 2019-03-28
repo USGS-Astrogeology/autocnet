@@ -107,20 +107,17 @@ def plot_node(node, ax=None, clean_keys=[], index_mask=None, downsampling=1, **k
     ax.imshow(array, cmap=cmap)
 
     keypoints = node.get_keypoints(index=index_mask)
-    # Node has no clean method
-    # if clean_keys:
-    #     matches, mask = node.clean(clean_keys)
-    #     keypoints = keypoints[mask]
 
-    marker = '.'
-    if 'marker' in kwargs.keys():
-        marker = kwargs['marker']
-        kwargs.pop('marker', None)
-    color = 'r'
-    if 'color' in kwargs.keys():
-        color = kwargs['color']
-        kwargs.pop('color', None)
-    ax.scatter(keypoints['x'], keypoints['y'], marker=marker, color=color, **kwargs)
+    if not keypoints.empty:
+        marker = '.'
+        if 'marker' in kwargs.keys():
+            marker = kwargs['marker']
+            kwargs.pop('marker', None)
+        color = 'r'
+        if 'color' in kwargs.keys():
+            color = kwargs['color']
+            kwargs.pop('color', None)
+        ax.scatter(keypoints['x'], keypoints['y'], marker=marker, color=color, **kwargs)
 
     return ax
 
@@ -254,7 +251,7 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100, downsampling=1,
         downsample_destin = downsampling
     destination_array = edge.destination.get_array()
     destination_array = downsample(destination_array, downsample_destin)
-    
+
     s_shape = source_array.shape
     d_shape = destination_array.shape
 
@@ -272,35 +269,36 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100, downsampling=1,
 
     matches, mask = edge.clean(clean_keys)
 
-    source_keypoints = edge.source.get_keypoints(index=matches['source_idx'])
-    destination_keypoints = edge.destination.get_keypoints(index=matches['destination_idx'])
+    if not matches.empty:
+        source_keypoints = edge.source.get_keypoints(index=matches['source_idx'])
+        destination_keypoints = edge.destination.get_keypoints(index=matches['destination_idx'])
 
-    # Plot the source
-    source_idx = matches['source_idx'].values
-    s_kps = source_keypoints.loc[source_idx]
-    ax.scatter(s_kps['x'], s_kps['y'], **scatter_kwargs)
+        # Plot the source
+        source_idx = matches['source_idx'].values
+        s_kps = source_keypoints.loc[source_idx]
+        ax.scatter(s_kps['x'], s_kps['y'], **scatter_kwargs)
 
-    # Plot the destination
-    destination_idx = matches['destination_idx'].values
-    d_kps = destination_keypoints.loc[destination_idx]
-    x_offset = s_shape[1] + image_space
-    newx = d_kps['x'] + x_offset
-    ax.scatter(newx, d_kps['y'], **scatter_kwargs)
+        # Plot the destination
+        destination_idx = matches['destination_idx'].values
+        d_kps = destination_keypoints.loc[destination_idx]
+        x_offset = s_shape[1] + image_space
+        newx = d_kps['x'] + x_offset
+        ax.scatter(newx, d_kps['y'], **scatter_kwargs)
 
+        # Draw the connecting lines
+        color = 'y'
+        if 'color' in line_kwargs.keys():
+            color = line_kwargs['color']
+            line_kwargs.pop('color', None)
+
+        s_kps = s_kps[['x', 'y']].values
+        d_kps = d_kps[['x', 'y']].values
+        d_kps[:, 0] += x_offset
+
+        for l in zip(s_kps, d_kps):
+            ax.plot((l[0][0], l[1][0]), (l[0][1], l[1][1]), color=color, **line_kwargs)
+            
     ax.imshow(composite, cmap=image_cmap)
-
-    # Draw the connecting lines
-    color = 'y'
-    if 'color' in line_kwargs.keys():
-        color = line_kwargs['color']
-        line_kwargs.pop('color', None)
-
-    s_kps = s_kps[['x', 'y']].values
-    d_kps = d_kps[['x', 'y']].values
-    d_kps[:, 0] += x_offset
-
-    for l in zip(s_kps, d_kps):
-        ax.plot((l[0][0], l[1][0]), (l[0][1], l[1][1]), color=color, **line_kwargs)
 
     return ax
 
@@ -345,16 +343,16 @@ def cluster_plot(graph, ax=None, cmap='Spectral'):  # pragma: no cover
 def plot_matches(matches, a, b, extent=200):
     nsubplots = len(matches)
     figs = []
-    for i, (idx, row) in enumerate(matches.iterrows()):   
-        fig, axes = plt.subplots(1, 2)     
+    for i, (idx, row) in enumerate(matches.iterrows()):
+        fig, axes = plt.subplots(1, 2)
         sx = row.source_x
         sy = row.source_y
         dx = row.destination_x
         dy = row.destination_y
-                
+
         suba = a.read_array(pixels=[int(sx-extent), int(sy-extent), int(2*extent), int(2*extent)])
         subb = b.read_array(pixels=[int(dx-extent), int(dy-extent), int(2*extent), int(2*extent)])
-        
+
         axes[0].imshow(suba, cmap='Greys')
         axes[1].imshow(subb, cmap='Greys')
         figs.append(fig)

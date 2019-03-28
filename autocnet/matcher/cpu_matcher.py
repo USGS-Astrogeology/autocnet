@@ -1,12 +1,10 @@
 import warnings
 
-import cv2
 import numpy as np
 import pandas as pd
 
 FLANN_INDEX_KDTREE = 1  # Algorithm to set centers,
 DEFAULT_FLANN_PARAMETERS = dict(algorithm=FLANN_INDEX_KDTREE, trees=3)
-
 
 def match(edge, k=2, **kwargs):
     """
