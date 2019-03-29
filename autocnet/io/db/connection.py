@@ -27,11 +27,12 @@ def new_connection(config):
     engine : object
              An SQLAlchemy engine object
     """
-    db_uri = 'postgresql://{}:{}@{}:{}/{}'.format(config['database']['database_username'],
-                                                  config['database']['database_password'],
-                                                  config['database']['database_host'],
-                                                  config['database']['pgbouncer_port'],
-                                                  config['database']['database_name'])    
+    db = config['database']
+    db_uri = 'postgresql://{}:{}@{}:{}/{}'.format(db['username'],
+                                                  db['password'],
+                                                  db['host'],
+                                                  db['pgbouncer_port'],
+                                                  db['name'])    
     engine = sqlalchemy.create_engine(db_uri,
                                       poolclass=sqlalchemy.pool.NullPool)
     Session = sqlalchemy.orm.sessionmaker(bind=engine, autocommit=True)

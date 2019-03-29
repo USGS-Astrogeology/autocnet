@@ -128,14 +128,11 @@ class Matches(Base):
     original_destination_x = Column(Float)
     original_destination_y = Column(Float)
 
-
 class Cameras(Base):
     __tablename__ = 'cameras'
     id = Column(Integer, primary_key=True, autoincrement=True)
     image_id = Column(Integer, ForeignKey("images.id", ondelete="CASCADE"), unique=True)
     camera = Column(Json())
-
-
 
 class Images(Base):
     __tablename__ = 'images'
@@ -178,6 +175,6 @@ class Network(Base):
 class Overlay(Base):
     __tablename__ = 'overlay'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    overlaps = Column(ArrayType())
-    geom = Column(Geometry(geometry_type='POLYGON', management=True))  # sqlite
-    #geom = Column(Geometry('POLYGONZ', srid=949900, dimension=3, spatial_index=True))  # postgresql
+    overlaps = Column(ARRAY(Integer))
+    #geom = Column(Geometry(geometry_type='POLYGON', management=True))  # sqlite
+    geom = Column(Geometry('POLYGONZ', srid=949900, dimension=3, spatial_index=True))  # postgresql
