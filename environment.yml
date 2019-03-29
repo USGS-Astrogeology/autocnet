@@ -21,6 +21,7 @@ dependencies:
     - redis
   - plio >= 1.1.0
   - plurmy
+  - psycopg2
   - pyproj
   - pytest
   - pytest-cov
@@ -28,4 +29,6 @@ dependencies:
   - scipy
   - shapely
   - sqlalchemy
+  - sqlalchemy-utils
+  - usgs-astrogeology/label/dev::usgscsm
   - vlfeat
