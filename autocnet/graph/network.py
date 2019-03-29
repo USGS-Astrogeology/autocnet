@@ -1306,6 +1306,8 @@ class NetworkCandidateGraph(CandidateGraph):
         """
         try:
             Base.metadata.bind = engine
+            # If the table does not exist, this will create it. This is used in case a
+            # user has manually dropped a table so that the project is not wrecked.
             Base.metadata.create_all(tables=[Network.__table__, Overlay.__table__,
                                              Edges.__table__, Costs.__table__, Matches.__table__,
                                              Cameras.__table__])
@@ -1408,7 +1410,7 @@ class NetworkCandidateGraph(CandidateGraph):
     SELECT ST_AsEWKB(geom) AS geom FROM ST_Dump((
         SELECT ST_Polygonize(the_geom) AS the_geom FROM (
             SELECT ST_Union(the_geom) AS the_geom FROM (
-                SELECT ST_ExteriorRing(footprint_latlon) AS the_geom
+                SELECT ST_ExteriorRing((ST_DUMP(footprint_latlon)).geom) AS the_geom
                 FROM images) AS lines
         ) AS noded_lines
     )
@@ -1418,7 +1420,7 @@ class NetworkCandidateGraph(CandidateGraph):
         iquery = session.query(Images)
 
         rows = []
-        for q in self._engine.execute(query).fetchall():
+        for q in engine.execute(query).fetchall():
             overlaps = []
             b = bytes(q['geom'])
             qgeom = shapely.wkb.loads(b)
@@ -1437,7 +1439,8 @@ class NetworkCandidateGraph(CandidateGraph):
         session.bulk_save_objects(rows)
         session.commit()
 
-        res = oquery.filter(sqlalchemy.func.cardinality(Overlay.overlaps) <= 1)
+        # If an overlap has only 1 entry, it is a sliver and we want to remove it.
+        res = oquery.filter(sqlalchemy.func.array_length(Overlay.overlaps, 1) <= 1)
         res.delete(synchronize_session=False)
         session.commit()
         session.close()
@@ -1507,3 +1510,21 @@ FROM
 	i as i1, i as i2
 WHERE ST_INTERSECTS(i1.footprint_latlon, i2.footprint_latlon) = TRUE
 AND i1.id < i2.id""".format(query_string)
+
+        session = Session()
+        res = session.execute(composite_query)
+
+        adjacency = defaultdict(list)
+        adjacency_lookup = {}
+        for r in res:
+            sid, spath, did, dpath = r
+
+            adjacency_lookup[spath] = sid
+            adjacency_lookup[dpath] = did
+            if spath != dpath:
+                adjacency[spath].append(dpath)
+        session.close()
+        # Add nodes that do not overlap any images
+        obj = cls.from_adjacency(adjacency, node_id_map=adjacency_lookup, config=config)
+
+        return obj
