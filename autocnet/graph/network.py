@@ -23,6 +23,7 @@ from plio.io import io_hdf, io_json
 from plio.utils import utils as io_utils
 from plio.io.io_gdal import GeoDataset
 from plio.io.isis_serial_number import generate_serial_number
+from plio.io import io_controlnetwork as cnet
 
 from plurmy import Slurm
 
@@ -32,7 +33,9 @@ from autocnet.graph import markov_cluster
 from autocnet.graph.edge import Edge, NetworkEdge
 from autocnet.graph.node import Node, NetworkNode
 from autocnet.io import network as io_network
-from autocnet.io.db.model import Images, Keypoints, Matches, Cameras, Network, Base, Overlay, Edges, Costs
+from autocnet.io.db.model import (Images, Keypoints, Matches, Cameras, 
+                                  Network, Base, Overlay, Edges, Costs,
+                                  Points, Measures)
 from autocnet.io.db.connection import new_connection, Parent
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
@@ -951,8 +954,6 @@ class CandidateGraph(nx.Graph):
         """
         Computes a voronoi weight for each edge in a given graph.
         Can function as is, but is slightly optimized for complete subgraphs.
-
-        Parameters
         ----------
         kwargs : dict
                       keyword arguments that get passed to compute_voronoi
@@ -1310,7 +1311,8 @@ class NetworkCandidateGraph(CandidateGraph):
             # user has manually dropped a table so that the project is not wrecked.
             Base.metadata.create_all(tables=[Network.__table__, Overlay.__table__,
                                              Edges.__table__, Costs.__table__, Matches.__table__,
-                                             Cameras.__table__])
+                                             Cameras.__table__, Points.__table__,
+                                             Measures.__table__])
         except ValueError:
             warnings.warn('No SQLAlchemy engine available. Tables not pushed.')
 
@@ -1468,6 +1470,19 @@ class NetworkCandidateGraph(CandidateGraph):
                     queue=config['cluster']['queue'],
                     env=config['python']['env_name'])
         session.close()'''
+
+    def to_isis(self, path):
+
+        sql = """
+SELECT points.id, measures.serial, points.pointtype, measures.sample, measures.line, measures.measuretype,
+measures.imageid
+FROM measures INNER JOIN points ON measures.pointid = points.id
+WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE;
+"""
+        df = pd.read_sql(sql, engine)
+        df.rename(columns={'imageid':'image_index','id':'point_id',
+                           'sample':'x', 'line':'y'}, inplace=True)
+        cnet.to_isis(path, df, self.serials())
 
     @classmethod
     def from_database(cls, query_string='SELECT * FROM public.images'):
