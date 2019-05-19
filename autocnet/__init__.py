@@ -29,17 +29,21 @@ except:
     warnings.warn('No autocnet_config environment variable set. Defaulting to an en empty configuration.')
     config = {}
 
-db_uri = '{}://{}:{}@{}:{}/{}'.format(config['database']['type'],
+try:
+    db_uri = '{}://{}:{}@{}:{}/{}'.format(config['database']['type'],
                                             config['database']['username'],
                                             config['database']['password'],
                                             config['database']['host'],
                                             config['database']['pgbouncer_port'],
                                             config['database']['name'])
-hostname = socket.gethostname()
-engine = create_engine(db_uri, poolclass=pool.NullPool,
+    hostname = socket.gethostname()
+    engine = create_engine(db_uri, poolclass=pool.NullPool,
                     connect_args={"application_name":"AutoCNet_{}".format(hostname)},
                     isolation_level="AUTOCOMMIT")                   
-Session = orm.session.sessionmaker(bind=engine)
+    Session = orm.session.sessionmaker(bind=engine)
+except: 
+    Session = None
+    engine = None
 
 import autocnet.examples
 import autocnet.camera
