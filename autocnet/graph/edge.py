@@ -345,11 +345,9 @@ class Edge(dict, MutableMapping):
         s_keypoints, d_keypoints = self.get_match_coordinates(clean_keys=clean_keys)
         self.fundamental_matrix, fmask = fm.compute_fundamental_matrix(s_keypoints, d_keypoints, **kwargs)
         
-
         if isinstance(self.fundamental_matrix, np.ndarray):
             # Convert the truncated RANSAC mask back into a full length mask
             mask[mask] = fmask
-
             # Set the initial state of the fundamental mask in the masks
             self.masks[maskname] = mask
 
@@ -709,7 +707,7 @@ class Edge(dict, MutableMapping):
     def get_matches(self, clean_keys=[]): # pragma: no cover
         if self.matches.empty:
             return pd.DataFrame()
-        self.add_coordinates_to_matches()
+        #self.add_coordinates_to_matches()
         matches, _ = self.clean(clean_keys=clean_keys)
         skps = matches[['source_x', 'source_y']]
         dkps = matches[['destination_x', 'destination_y']]
@@ -751,10 +749,10 @@ class NetworkEdge(Edge):
                                         filter(Edges.destination == self.destination['node_id']).\
                                         first()
 
-        if res:
+        try:
             df = pd.DataFrame.from_records(res[0])
             df.index = df.index.map(int)
-        else:
+        except:
             ids = list(map(int, self.matches.index.values))
             df = pd.DataFrame(index=ids)
         df.index.name = 'match_id'
@@ -889,8 +887,12 @@ class NetworkEdge(Edge):
                     mapping[index] = row_val
                 to_db_update.append(mapping)
             else:
-                match = Matches(source=int(row.source), source_idx=int(row.source_idx),
-                            destination=int(row.destination), destination_idx=int(row.destination_idx))
+                match = Matches()
+                # Dynamically iterate over the columns and if the match has an
+                # attribute with the column name, set it.
+                for c in df.columns:
+                    if hasattr(match, c):
+                        setattr(match, c, row[c])
                 to_db_add.append(match)
         if to_db_add:
             session.bulk_save_objects(to_db_add)
@@ -943,7 +945,7 @@ class NetworkEdge(Edge):
     def fundamental_matrix(self):
         res = self._from_db(Edges).first()
         if res:
-            return res.fundamental
+            return np.asarray(res.fundamental)
 
     @fundamental_matrix.setter
     def fundamental_matrix(self, v):
