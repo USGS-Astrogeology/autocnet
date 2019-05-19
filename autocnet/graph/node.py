@@ -11,7 +11,7 @@ from plio.io.io_gdal import GeoDataset
 from plio.io.isis_serial_number import generate_serial_number
 from skimage.transform import resize
 import shapely
-from knoten.csm import generate_latlon_footprint, generate_vrt, create_camera
+from knoten.csm import generate_latlon_footprint, generate_vrt, create_camera, generate_boundary
 
 from autocnet import Session, engine, config
 from autocnet.matcher import cpu_extractor as fe
@@ -497,6 +497,7 @@ class Node(dict, MutableMapping):
 
 class NetworkNode(Node):
     def __init__(self, *args, parent=None, **kwargs):
+        super(NetworkNode, self).__init__(*args, **kwargs)
         # If this is the first time that the image is seen, add it to the DB
         if parent is None:
             self.parent = Parent(config)
@@ -505,23 +506,10 @@ class NetworkNode(Node):
 
         # Create a session to work in
         session = Session()
+
         # For now, just use the PATH to determine if the node/image is in the DB
         res = session.query(Images).filter(Images.path == kwargs['image_path']).first()
-        exists = False
-        if res:
-            exists = True
-            kwargs['node_id'] = res.id
-        session.close()
-        super(NetworkNode, self).__init__(*args, **kwargs)
-
-        if exists is False:
-            # Create the camera entry
-            try:
-                self._camera = create_camera(self.geodata)
-                serialized_camera = self._camera.getModelState()
-                cam = Cameras(camera=serialized_camera)
-            except:
-                cam = None
+        if res is None:
             kpspath = io_keypoints.create_output_path(self.geodata.file_name)
 
             # Create the keypoints entry
@@ -530,7 +518,7 @@ class NetworkNode(Node):
             i = Images(name=kwargs['image_name'],
                        path=kwargs['image_path'],
                        footprint_latlon=self.footprint,
-                       cameras=cam, keypoints=kps)
+                       keypoints=kps)
             session = Session()
             session.add(i)
             session.commit()
@@ -612,11 +600,37 @@ class NetworkNode(Node):
         """
         Get the camera object from the database.
         """
+        # TODO: This should use knoten once it is stable.
+        import csmapi
         if not getattr(self, '_camera', None):
             res = self._from_db(Cameras)
             if res is not None:
-                plugin = csmapi.Plugin.findPlugin('USGS_ASTRO_LINE_SCANNER_PLUGIN')
+                plugin = csmapi.Plugin.findPlugin('UsgsAstroPluginCSM')
                 self._camera = plugin.constructModelFromState(res.camera)
+            else:
+                # Create the camera entry
+                import pvl
+                import requests
+                import json
+                
+                label = pvl.dumps(self.geodata.metadata).decode()
+                url = 'http://smalls:8081/v1/pds/'
+                response = requests.post(url, json={'label':label})
+                response = response.json()
+                model_name = response['name_model']
+                isdpath = os.path.splitext(self['image_path'])[0] + '.json'
+                with open(isdpath, 'w') as f:
+                    json.dump(response, f)
+                    isd = csmapi.Isd(self['image_path'])
+                plugin = csmapi.Plugin.findPlugin('UsgsAstroPluginCSM')
+                self._camera = plugin.constructModelFromISD(isd, model_name)
+                serialized_camera = self._camera.getModelState()
+                cam = Cameras(camera=serialized_camera, image_id=self['node_id'])
+
+                session = Session()
+                session.add(cam)
+                session.commit()
+                session.close()    
         return self._camera
 
     @property
@@ -624,12 +638,10 @@ class NetworkNode(Node):
 
         res = Session().query(Images).filter(Images.id == self['node_id']).first()
         if res is None:
-            try:
-                footprint_latlon = generate_latlon_footprint(self.camera)
-                footprint_latlon = footprint_latlon.ExportToWkt()
-                footprint_latlon = geoalchemy2.elementsWKTElement(footprint_latlon, srid=config['spatial']['srid'])
-            except:
-                footprint_latlon = None
+            boundary = generate_boundary(self.geodata.raster_size[::-1])  # yx to xy
+            footprint_latlon = generate_latlon_footprint(self.camera, boundary)
+            footprint_latlon = footprint_latlon.ExportToWkt()
+            footprint_latlon = geoalchemy2.elements.WKTElement(footprint_latlon, srid=config['spatial']['srid'])
         else:
             footprint_latlon = geoalchemy2.shape.to_shape(res.footprint_latlon)
         return footprint_latlon
