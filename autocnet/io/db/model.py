@@ -1,4 +1,8 @@
+import datetime
+import enum
 import json
+
+import numpy as np
 
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Column, String, Integer, Float, ForeignKey, Boolean, LargeBinary, UniqueConstraint
@@ -10,6 +14,20 @@ from geoalchemy2.shape import to_shape
 
 
 Base = declarative_base()
+
+class JsonEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.ndarray):
+            return obj.tolist()
+        if isinstance(obj, np.int64):
+            return int(obj)
+        if isinstance(obj, datetime.datetime):
+            return obj.__str__()
+        if isinstance(obj, bytes):
+            return obj.decode("utf-8")
+        if isinstance(obj, set):
+            return list(obj)
+        return json.JSONEncoder.default(self, obj)
 
 attr_dict = {'__tablename__':None,
              '__table_args__': {'useexisting':True},
@@ -31,6 +49,20 @@ def create_table_cls(name, clsname):
 
 Base = declarative_base()
 
+class IntEnum(TypeDecorator):
+    """
+    Mapper for enum type to sqlalchemy and back again
+    """
+    impl = Integer
+    def __init__(self, enumtype, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._enumtype = enumtype
+
+    def process_bind_param(self, value, dialect):
+        return value.value
+
+    def process_result_value(self, value, dialect):
+        return self._enumtype(value)
 
 class ArrayType(TypeDecorator):
     """ 
@@ -41,7 +73,7 @@ class ArrayType(TypeDecorator):
     impl = String
 
     def process_bind_param(self, value, dialect):
-        return json.dumps(value)
+        return json.dumps(value, cls=JsonEncoder)
 
     def process_result_value(self, value, dialect):
         return json.loads(value)
@@ -62,7 +94,7 @@ class Json(TypeDecorator):
         return object
 
     def process_bind_param(self, value, dialect):
-        return json.dumps(value)
+        return json.dumps(value, cls=JsonEncoder)
 
     def process_literal_param(self, value, dialect):
         return value
@@ -72,6 +104,24 @@ class Json(TypeDecorator):
             return json.loads(value)
         except (ValueError, TypeError):
             return None
+
+class PointType(enum.IntEnum):
+    """
+    Enum to enforce point type for ISIS control networks
+    """
+    free = 2
+    constrained = 3
+    fixed = 4
+    
+class MeasureType(enum.IntEnum):
+    """
+    Enum to enforce measure type for ISIS control networks
+    """
+    candidate = 0
+    manual = 1
+    pixelregistered = 2
+    subpixelregistered = 3
+
 
 class Keypoints(Base):
     __tablename__ = 'keypoints'
@@ -112,6 +162,9 @@ class Costs(Base):
 class Matches(Base):
     __tablename__ = 'matches'
     id = Column(Integer, primary_key=True, autoincrement=True)
+    point_id = Column(Integer)
+    source_measure_id = Column(Integer)
+    destin_measure_id = Column(Integer)
     source = Column(Integer, nullable=False)
     source_idx = Column(Integer, nullable=False)
     destination = Column(Integer, nullable=False)
@@ -127,6 +180,7 @@ class Matches(Base):
     shift_y = Column(Float)
     original_destination_x = Column(Float)
     original_destination_y = Column(Float)
+
 
 class Cameras(Base):
     __tablename__ = 'cameras'
@@ -178,3 +232,38 @@ class Overlay(Base):
     overlaps = Column(ARRAY(Integer))
     #geom = Column(Geometry(geometry_type='POLYGON', management=True))  # sqlite
     geom = Column(Geometry('POLYGONZ', srid=949900, dimension=3, spatial_index=True))  # postgresql
+
+class Points(Base):
+    __tablename__ = 'points'
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    pointtype = Column(IntEnum(PointType), nullable=False)  # 2, 3, 4 - Could be an enum in the future, map str to int in a decorator
+    identifier = Column(String, unique=True)
+    geom = Column(Geometry('POINT', srid=949900, dimension=2, spatial_index=True))
+    active = Column(Boolean, default=True)
+    apriorix = Column(Float)
+    aprioriy = Column(Float)
+    aprioriz = Column(Float)
+    adjustedx = Column(Float)
+    adjustedy = Column(Float)
+    adjustedz = Column(Float)
+    measures = relationship('Measures')
+    rms = Column(Float)
+
+class Measures(Base):
+    __tablename__ = 'measures'
+    id = Column(Integer,primary_key=True, autoincrement=True)
+    pointid = Column(Integer, ForeignKey('points.id'), nullable=False)
+    imageid = Column(Integer, ForeignKey('images.id'))
+    serial = Column(String, nullable=False)
+    measuretype = Column(IntEnum(MeasureType), nullable=False)  # [0,3]  # Enum as above
+    sample = Column(Float, nullable=False)
+    line = Column(Float, nullable=False)
+    sampler = Column(Float)  # Sample Residual
+    liner = Column(Float)  # Line Residual
+    active = Column(Boolean, default=True)
+    jigreject = Column(Boolean, default=False)  # jugsaw rejected
+    aprioriline = Column(Float)
+    apriorisample = Column(Float)
+    samplesigma = Column(Float)
+    linesigma = Column(Float)
+    rms = Column(Float)
