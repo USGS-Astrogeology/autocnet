@@ -763,11 +763,12 @@ class CandidateGraph(nx.Graph):
             serials[n] = generate_serial_number(node['image_path'])
         return serials
 
+    @property
     def files(self):
         """
         Return a list of all full file PATHs in the CandidateGraph
         """
-        return [node['image_path'] for node in self.nodes]
+        return [node['image_path'] for _, node in self.nodes(data='data')]
 
     def save(self, filename):
         """
