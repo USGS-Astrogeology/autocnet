@@ -1335,7 +1335,31 @@ class NetworkCandidateGraph(CandidateGraph):
         """
         return self.redis_queue.flushall()
 
-    def apply(self, function, on='edge',out=None, args=(), walltime='01:00:00', **kwargs):
+    def apply(self, function, on='edge', args=(), walltime='01:00:00', **kwargs):
+        """
+        A mirror of the apply function from the standard CandidateGraph object. This implementation 
+        dispatches the job to the cluster as an independent operation instead of applying an arbitrary function
+        locally.
+
+        This methods returns the number of jobs submitted. The job status is then asynchronously
+        updated as the jobs complete.
+
+        Parameters
+        ----------
+
+        function : obj
+                   The function to apply
+
+        on : str
+             {'edge', 'edges', 'e', 0} for an edge
+             {'node', 'nodes', 'n' 1} for a node
+
+        args : tuple
+               Of additional arguments to pass to the apply function
+
+        walltime : str
+                   in the format Hour:Minute:Second, 00:00:00
+        """
 
         options = {
             'edge' : self.edges,
@@ -1389,6 +1413,11 @@ class NetworkCandidateGraph(CandidateGraph):
         return job_counter
 
     def generic_callback(self, msg):
+        """
+        This method manages the responses from the jobs and updates
+        the status on this object. The msg is in a standard, parseable
+        format.
+        """
         id = msg['id']
         if isinstance(id, (int, float, str)):
             # Working with a node
@@ -1405,10 +1434,21 @@ class NetworkCandidateGraph(CandidateGraph):
             return
 
     def generate_vrts(self, **kwargs):
+        """
+        For the nodes in the graph, genreate a GDAL compliant vrt file.
+        This is just a dispatcher to the knoten generate_vrt file.
+        """
         for i, n in self.nodes(data='data'):
             n.generate_vrt(**kwargs)
 
     def compute_overlaps(self):
+        """
+        For the candidate graph, compute the overlapping polygons that
+        comprise the entire candidate graph / footprint map. Each overlap
+        includes an 'overlaps' attribute/column that includes a list of the
+        footprint polygons that have contributed to given overlap.
+
+        """
         query = """
     SELECT ST_AsEWKB(geom) AS geom FROM ST_Dump((
         SELECT ST_Polygonize(the_geom) AS the_geom FROM (
@@ -1448,38 +1488,32 @@ class NetworkCandidateGraph(CandidateGraph):
         session.commit()
         session.close()
 
-    '''def create_network(self, nodes=[]):
-        cmds = 0
-        session = Session()
-        for res in session.query(Overlay):
-            msg = json.dumps({'oid':res.id,'time':time()})
-
-            # If nodes are passed, process only those overlaps containing
-            # the provided node(s)
-            if nodes:
-                for r in res.overlaps:
-                    if r in nodes:
-                        self.redis_queue.rpush(config['redis']['processing_queue'], msg)
-                        cmds += 1
-                        break
-            else:
-                self.redis_queue.rpush(config['redis']['processing_queue'], msg)
-                cmds += 1
-        script = 'acn_create_network'
-        Slurm(script, cmds,
-                    mem=config['cluster']['processing_memory'],
-                    queue=config['cluster']['queue'],
-                    env=config['python']['env_name'])
-        session.close()'''
-
-    def to_isis(self, path, flistpath=None):
-
-        sql = """
+    def to_isis(self, path, flistpath=None,         sql = """
 SELECT points.id, measures.serial, points.pointtype, measures.sample, measures.line, measures.measuretype,
 measures.imageid
 FROM measures INNER JOIN points ON measures.pointid = points.id
 WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE;
-"""
+"""):
+        """
+        Given a set of points/measures in an autocnet database, generate an ISIS
+        compliant control network.
+
+        Parameters
+        ----------
+        path : str
+               The full path to the output network.
+
+        flistpath : str
+                    (Optional) the path to the output filelist. By default
+                    the outout filelist path is genrated programatically
+                    as the provided path with the extension replaced with .lis.
+                    For example, out.net would have an associated out.lis file.
+
+        sql : str
+              The sql query to execute in the database.
+
+        """
+
         df = pd.read_sql(sql, engine)
         df.rename(columns={'imageid':'image_index','id':'point_id',
                            'sample':'x', 'line':'y'}, inplace=True)
