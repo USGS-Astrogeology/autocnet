@@ -1472,7 +1472,7 @@ class NetworkCandidateGraph(CandidateGraph):
                     env=config['python']['env_name'])
         session.close()'''
 
-    def to_isis(self, path):
+    def to_isis(self, path, flistpath=None):
 
         sql = """
 SELECT points.id, measures.serial, points.pointtype, measures.sample, measures.line, measures.measuretype,
@@ -1483,7 +1483,11 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         df = pd.read_sql(sql, engine)
         df.rename(columns={'imageid':'image_index','id':'point_id',
                            'sample':'x', 'line':'y'}, inplace=True)
+        if flistpath is None:
+            flistpath = os.path.splitext(path)[0] + '.lis'
+
         cnet.to_isis(path, df, self.serials())
+        cnet.write_filelist(self.files, path=flistpath)
 
     @classmethod
     def from_database(cls, query_string='SELECT * FROM public.images'):
