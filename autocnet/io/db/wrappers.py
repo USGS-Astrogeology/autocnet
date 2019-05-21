@@ -24,7 +24,7 @@ class DbDataFrame(pd.DataFrame):
     @property
     def _constructor(self):
         return DbDataFrame
-
+    '''
     @property	  	
     def loc(self, *args, **kwargs):      	
         """See pandas.Index.loc; preserves metadata"""
@@ -35,7 +35,7 @@ class DbDataFrame(pd.DataFrame):
             except TypeError as TE:
                 self._loc= _LocIndexer(self, 'loc')
         return self._loc 
-
+    '''
     def __setattr__(self, name, value):
         
         super(DbDataFrame, self).__setattr__(name, value)
