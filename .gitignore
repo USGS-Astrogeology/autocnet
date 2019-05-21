@@ -86,6 +86,7 @@ target/
 # Pytest
 lastfailed
 nodeids
+.pytest_cache
 
 # VSCode
 launch.json
