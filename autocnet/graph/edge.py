@@ -23,7 +23,7 @@ from autocnet.transformation import homography as hm
 from autocnet.transformation import spatial
 from autocnet.vis.graph_view import plot_edge, plot_node, plot_edge_decomposition, plot_matches
 from autocnet.cg import cg
-from autocnet.io.db.model import Images, Keypoints, Matches, Cameras, Network, Base, Overlay, Edges, Costs
+from autocnet.io.db.model import Images, Keypoints, Matches, Cameras, Network, Base, Overlay, Edges, Costs, Measures
 from autocnet.io.db.wrappers import DbDataFrame
 
 from plio.io.io_gdal import GeoDataset
@@ -973,3 +973,73 @@ class NetworkEdge(Edge):
         points = [Point(lons[i], lats[i]) for i in range(len(lons))]
         mask = [i for i in range(len(points)) if self.intersection.contains(points[i])]
         return mask
+
+    @property
+    def measures(self):
+        return Session().query(Measures).filter(sqlalchemy.or_(Measures.imageid == self.source['node_id'], Measures.imageid == self.destination['node_id'])).all()
+
+    def network_to_matches(self, active_point=True, active_measure=True, rejected_jigsaw=False):
+        """
+        For the edge, take any points/measures that are in the database and
+        convert them into matches on the associated edge.
+
+        Parameters
+        ----------
+        active_point : bool
+                       If True (default) only select the points that are
+                       currently set to active.
+
+        active_measure : bool
+                         If True (default) only add the measures that are
+                         currently active
+
+        rejected_jigsaw : bool
+                          If False (default) add any points that are not
+                          set to jigsaw rejected.
+
+        """
+        source = self.source['node_id']
+        destin = self.source['node_id']
+        
+        if source > destin:
+            source, destin = destin, source
+
+        q = Session().query(Points.id,
+                  Points.pointtype,
+                  Measures.id.label('mid'),
+                  Measures.sample,
+                  Measures.line,
+                  Measures.measuretype,
+                  Measures.imageid).\
+            filter(Points.active==active_point,
+                   Measures.active==active_measure,
+                   Measures.jigreject==rejected_jigsaw,
+                   sqlalchemy.or_(Measures.imageid==source, 
+                                  Measures.imageid==destin)).join(Measures)
+        
+        df = pd.read_sql(q.statement, engine)
+
+        matches = []
+        columns = ['point_id', 'source_measure_id', 'destin_measure_id', 'source', 'source_idx', 'destination', 'destination_idx',
+               'lat', 'lon', 'geom', 'source_x', 'source_y', 'destination_x',
+               'destination_y', 'shift_x', 'shift_y', 'original_destination_x',
+               'original_destination_y']
+
+        def net2matches(grp, matches, source, destin):
+            # Grab the image ids and then get the cartesian product of the ids to know which
+            # edges to put the matches onto
+            if len(grp) != 2:
+                return
+
+            imagea = grp[grp['imageid'] == source].iloc[0]
+            imageb = grp[grp['imageid'] == destin].iloc[0]
+            match = [int(imagea.id), int(imagea.mid), int(imageb.mid),
+                     source, 0, destin, 0,
+                     None, None, None,
+                     imagea['sample'], imagea['line'], imageb['sample'], imageb['line'],
+                     None, None, None, None]
+            matches.append(match)
+
+        df.groupby('id').apply(net2matches, matches, source, destin)
+
+        self.matches = pd.DataFrame(matches, columns=columns)

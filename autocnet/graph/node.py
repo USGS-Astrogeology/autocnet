@@ -17,7 +17,7 @@ from autocnet import Session, engine, config
 from autocnet.matcher import cpu_extractor as fe
 from autocnet.matcher import cpu_outlier_detector as od
 from autocnet.cg import cg
-from autocnet.io.db.model import Images, Keypoints, Matches, Cameras, Network, Base, Overlay, Edges, Costs
+from autocnet.io.db.model import Images, Keypoints, Matches, Cameras, Network, Base, Overlay, Edges, Costs, Points, Measures
 from autocnet.io.db.connection import Parent
 from autocnet.io import keypoints as io_keypoints
 from autocnet.vis.graph_view import plot_node
@@ -645,6 +645,16 @@ class NetworkNode(Node):
         else:
             footprint_latlon = geoalchemy2.shape.to_shape(res.footprint_latlon)
         return footprint_latlon
+
+    @property
+    def points(self):
+        pids = Session().query(Measures.pointid).filter(Measures.imageid == self['node_id']).all()
+        res = Session().query(Points).filter(Points.id.in_(pids)).all()
+        return res
+
+    @property
+    def measures(self):
+        return Session().query(Measures).filter(Measures.imageid == self['node_id']).all()
 
     def generate_vrt(self, **kwargs):
         """
