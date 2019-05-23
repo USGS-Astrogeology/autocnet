@@ -53,6 +53,7 @@ import autocnet.graph
 import autocnet.matcher
 import autocnet.transformation
 import autocnet.utils
+import autocnet.spatial
 
 # Patch the candidate graph into the root namespace
 from autocnet.graph.network import CandidateGraph
