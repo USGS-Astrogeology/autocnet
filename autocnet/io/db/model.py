@@ -105,23 +105,6 @@ class Json(TypeDecorator):
         except (ValueError, TypeError):
             return None
 
-class PointType(enum.IntEnum):
-    """
-    Enum to enforce point type for ISIS control networks
-    """
-    free = 2
-    constrained = 3
-    fixed = 4
-    
-class MeasureType(enum.IntEnum):
-    """
-    Enum to enforce measure type for ISIS control networks
-    """
-    candidate = 0
-    manual = 1
-    pixelregistered = 2
-    subpixelregistered = 3
-
 
 class Keypoints(Base):
     __tablename__ = 'keypoints'
@@ -233,6 +216,15 @@ class Overlay(Base):
     #geom = Column(Geometry(geometry_type='POLYGON', management=True))  # sqlite
     geom = Column(Geometry('POLYGONZ', srid=949900, dimension=3, spatial_index=True))  # postgresql
 
+
+class PointType(enum.IntEnum):
+    """
+    Enum to enforce point type for ISIS control networks
+    """
+    free = 2
+    constrained = 3
+    fixed = 4
+
 class Points(Base):
     __tablename__ = 'points'
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -248,6 +240,15 @@ class Points(Base):
     adjustedz = Column(Float)
     measures = relationship('Measures')
     rms = Column(Float)
+
+class MeasureType(enum.IntEnum):
+    """
+    Enum to enforce measure type for ISIS control networks
+    """
+    candidate = 0
+    manual = 1
+    pixelregistered = 2
+    subpixelregistered = 3
 
 class Measures(Base):
     __tablename__ = 'measures'
