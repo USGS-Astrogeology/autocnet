@@ -10,7 +10,9 @@ from sqlalchemy import (Column, String, Integer, Float,\
                         UniqueConstraint, DDL, event)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import relationship, backref
+from sqlalchemy_utils import database_exists, create_database
 from sqlalchemy.types import TypeDecorator
+
 from geoalchemy2 import Geometry
 from geoalchemy2.shape import to_shape
 
@@ -271,6 +273,10 @@ class Measures(Base):
     samplesigma = Column(Float)
     linesigma = Column(Float)
     rms = Column(Float)
+
+
+if not database_exists(engine.url):
+    create_database(engine.url, template='template_postgis')  # This is a hardcode to the local template
 
 Base.metadata.bind = engine
 # If the table does not exist, this will create it. This is used in case a
