@@ -5,8 +5,8 @@ import json
 import numpy as np
 
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import (Column, String, Integer, Float,\
-                        ForeignKey, Boolean, LargeBinary,\ 
+from sqlalchemy import (Column, String, Integer, Float, \
+                        ForeignKey, Boolean, LargeBinary, \
                         UniqueConstraint, DDL, event)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import relationship, backref
