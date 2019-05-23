@@ -3,28 +3,31 @@ channels:
   - usgs-astrogeology
   - menpo
 dependencies:
-  - python=3
-  - numpy
-  - scipy
-  - scikit-image
-  - opencv
-  - vlfeat
-  - cyvlfeat
+  - python >= 3
+  - coveralls
   - csmapi
-  - networkx
-  - pillow
-  - plio
-  - ncurses
+  - cyvlfeat
+  - geoalchemy2
   - geopandas
   - imageio
+  - knoten
+  - ncurses
+  - networkx
+  - numpy
+  - opencv
+  - pillow
+  - pip:
+    - redis
+  - plio >= 1.1.0
+  - plurmy
+  - psycopg2
+  - pyproj
   - pytest
   - pytest-cov
-  - coveralls
-  - anaconda-client
-  - jupyter
-  - opencv
-  - pip:
-    - pillow
-    - pvl
-    - libpysal
-    - protobuf
+  - scikit-image
+  - scipy
+  - shapely
+  - sqlalchemy
+  - sqlalchemy-utils
+  - usgs-astrogeology/label/dev::usgscsm
+  - vlfeat

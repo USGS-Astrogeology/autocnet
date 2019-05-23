@@ -53,7 +53,7 @@ class TestTwoImageMatching():
         # Step: Extract image data and attribute nodes
         cg.extract_features(extractor_method='vlfeat', extractor_parameters={"nfeatures":500})
         for i, node in cg.nodes.data('data'):
-            assert node.nkeypoints in range(5800, 6000)
+            assert node.nkeypoints in range(4000, 6000)
 
         # Step: Compute the coverage ratios
         for i, node in cg.nodes.data('data'):

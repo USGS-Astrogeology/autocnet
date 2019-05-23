@@ -246,6 +246,10 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
         s_size = s_template.shape
         d_size = d_search.shape
         updated_size = int(min(s_size + d_size) / 2)
+        # Since the image is smaller than the requested size, set the size to
+        # the current maximum image size and reduce from there on potential
+        # future iterations.
+        size = updated_size
         s_template, _, _ = clip_roi(s_img, sx, sy,
                              size_x=updated_size, size_y=updated_size)
         d_search, dxr, dyr = clip_roi(d_img, dx, dy,
@@ -261,11 +265,12 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
     # Apply the shift to d_search and compute the new correspondence location
     dx += (shift_x + dxr)
     dy += (shift_y + dyr)
+    
     # Break if the solution has converged
     size -= reduction
-    if size < 1:
-        return None, None, None
-    elif abs(shift_x) < convergence_threshold and abs(shift_y) < convergence_threshold:
+    if abs(shift_x) <= convergence_threshold and abs(shift_y) <= convergence_threshold:
         return dx, dy, metrics
+    elif size <1:
+        return None, None, None
     else:
-        return iterative_phase(sx, sy,  dx, dy, s_img, d_img, size)
+        return iterative_phase(sx, sy,  dx, dy, s_img, d_img, size, **kwargs)

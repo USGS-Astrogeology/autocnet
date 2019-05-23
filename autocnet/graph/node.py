@@ -4,22 +4,22 @@ import os
 import warnings
 
 from csmapi import csmapi
+import geoalchemy2
 import numpy as np
 import pandas as pd
 from plio.io.io_gdal import GeoDataset
 from plio.io.isis_serial_number import generate_serial_number
 from skimage.transform import resize
-from shapely.geometry import Polygon
-from shapely import wkt
+import shapely
+from knoten.csm import generate_latlon_footprint, generate_vrt, create_camera, generate_boundary
 
-from autocnet.cg import cg
-
-from autocnet.io import keypoints as io_keypoints
-
+from autocnet import Session, engine, config
 from autocnet.matcher import cpu_extractor as fe
 from autocnet.matcher import cpu_outlier_detector as od
-from autocnet.cg.cg import convex_hull_ratio
-
+from autocnet.cg import cg
+from autocnet.io.db.model import Images, Keypoints, Matches, Cameras, Network, Base, Overlay, Edges, Costs, Points, Measures
+from autocnet.io.db.connection import Parent
+from autocnet.io import keypoints as io_keypoints
 from autocnet.vis.graph_view import plot_node
 from autocnet.utils import utils
 
@@ -164,7 +164,7 @@ class Node(dict, MutableMapping):
     def footprint(self):
         if not getattr(self, '_footprint', None):
             try:
-                self._footprint = wkt.loads(self.geodata.footprint.GetGeometryRef(0).ExportToWkt())
+                self._footprint = shapely.wkt.loads(self.geodata.footprint.GetGeometryRef(0).ExportToWkt())
             except:
                 return None
         return self._footprint
@@ -493,4 +493,174 @@ class Node(dict, MutableMapping):
 
         for x, y in coords:
             reproj.append(self.geodata.latlon_to_pixel(y, x))
-        return Polygon(reproj) 
+        return shapely.geometryPolygon(reproj) 
+
+class NetworkNode(Node):
+    def __init__(self, *args, parent=None, **kwargs):
+        super(NetworkNode, self).__init__(*args, **kwargs)
+        # If this is the first time that the image is seen, add it to the DB
+        if parent is None:
+            self.parent = Parent(config)
+        else:
+            self.parent = parent
+
+        # Create a session to work in
+        session = Session()
+
+        # For now, just use the PATH to determine if the node/image is in the DB
+        res = session.query(Images).filter(Images.path == kwargs['image_path']).first()
+        if res is None:
+            kpspath = io_keypoints.create_output_path(self.geodata.file_name)
+
+            # Create the keypoints entry
+            kps = Keypoints(path=kpspath, nkeypoints=0)
+            # Create the image
+            i = Images(name=kwargs['image_name'],
+                       path=kwargs['image_path'],
+                       footprint_latlon=self.footprint,
+                       keypoints=kps)
+            session = Session()
+            session.add(i)
+            session.commit()
+            session.close()
+        self.job_status = defaultdict(dict)
+
+    def _from_db(self, table_obj, key='image_id'):
+        """
+        Generic database query to pull the row associated with this node
+        from an arbitrary table. We assume that the row id matches the node_id.
+
+        Parameters
+        ----------
+        table_obj : object
+                    The declared table class (from db.model)
+
+        key : str
+              The name of the column to compare this object's node_id with. For
+              most tables this will be the default, 'image_id' because 'image_id'
+              is the foreign key in the DB. For the Images table (the parent table),
+              the key is simply 'id'.
+        """
+        if 'node_id' not in self.keys():
+            return
+        session = Session()
+        res = session.query(table_obj).filter(getattr(table_obj,key) == self['node_id']).first()
+        session.close()
+        return res
+
+    @property
+    def keypoint_file(self):
+        res = self._from_db(Keypoints)
+        if res is None:
+            return
+        return res.path
+
+    @property
+    def keypoints(self):
+        try:
+            return io_keypoints.from_hdf(self.keypoint_file, descriptors=False)
+        except:
+            return pd.DataFrame()
+
+    @keypoints.setter
+    def keypoints(self, kps):
+        session = Session()
+        io_keypoints.to_hdf(self.keypoint_file, keypoints=kps)
+        res = session.query(Keypoints).filter(getattr(Keypoints,'image_id') == self['node_id']).first()
+
+        if res is None:
+            _ = self.keypoint_file
+            res = self._from_db(Keypoints)
+        res.nkeypoints = len(kps)
+        session.commit()
+
+    @property
+    def descriptors(self):
+        try:
+            return io_keypoints.from_hdf(self.keypoint_file, keypoints=False)
+        except:
+            return
+
+    @descriptors.setter
+    def descriptors(self, desc):
+        if isinstance(desc, np.array):
+            io_keypoints.to_hdf(self.keypoint_file, descriptors=desc)
+
+    @property
+    def nkeypoints(self):
+        """
+        Get the number of keypoints from the database
+        """
+        res = self._from_db(Keypoints)
+        nkps = res.nkeypoints
+        return nkps
+
+    @property
+    def camera(self):
+        """
+        Get the camera object from the database.
+        """
+        # TODO: This should use knoten once it is stable.
+        import csmapi
+        if not getattr(self, '_camera', None):
+            res = self._from_db(Cameras)
+            if res is not None:
+                plugin = csmapi.Plugin.findPlugin('UsgsAstroPluginCSM')
+                self._camera = plugin.constructModelFromState(res.camera)
+            else:
+                # Create the camera entry
+                import pvl
+                import requests
+                import json
+                
+                label = pvl.dumps(self.geodata.metadata).decode()
+                url = 'http://smalls:8081/v1/pds/'
+                response = requests.post(url, json={'label':label})
+                response = response.json()
+                model_name = response['name_model']
+                isdpath = os.path.splitext(self['image_path'])[0] + '.json'
+                with open(isdpath, 'w') as f:
+                    json.dump(response, f)
+                    isd = csmapi.Isd(self['image_path'])
+                plugin = csmapi.Plugin.findPlugin('UsgsAstroPluginCSM')
+                self._camera = plugin.constructModelFromISD(isd, model_name)
+                serialized_camera = self._camera.getModelState()
+                cam = Cameras(camera=serialized_camera, image_id=self['node_id'])
+
+                session = Session()
+                session.add(cam)
+                session.commit()
+                session.close()    
+        return self._camera
+
+    @property
+    def footprint(self):
+
+        res = Session().query(Images).filter(Images.id == self['node_id']).first()
+        if res is None:
+            boundary = generate_boundary(self.geodata.raster_size[::-1])  # yx to xy
+            footprint_latlon = generate_latlon_footprint(self.camera, boundary)
+            footprint_latlon = footprint_latlon.ExportToWkt()
+            footprint_latlon = geoalchemy2.elements.WKTElement(footprint_latlon, srid=config['spatial']['srid'])
+        else:
+            footprint_latlon = geoalchemy2.shape.to_shape(res.footprint_latlon)
+        return footprint_latlon
+
+    @property
+    def points(self):
+        pids = Session().query(Measures.pointid).filter(Measures.imageid == self['node_id']).all()
+        res = Session().query(Points).filter(Points.id.in_(pids)).all()
+        return res
+
+    @property
+    def measures(self):
+        return Session().query(Measures).filter(Measures.imageid == self['node_id']).all()
+
+    def generate_vrt(self, **kwargs):
+        """
+        Using the image footprint, generate a VRT to that is usable inside
+        of a GIS (QGIS or ArcGIS) to visualize a warped version of this image.
+        """
+        outpath = config['directories']['vrt_dir']
+        generate_vrt.warped_vrt(self.camera, self.geodata.raster_size,
+                                self.geodata.file_name, outpath=outpath)

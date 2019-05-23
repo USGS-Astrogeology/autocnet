@@ -32,6 +32,7 @@ def setup_package():
         include_package_data=True,
         package_data={'autocnet' : list(examples)},
         zip_safe=False,
+        install_requires=[],
         classifiers=[
             "Development Status :: 3 - Alpha",
             "Topic :: Utilities",

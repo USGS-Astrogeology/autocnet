@@ -1,14 +1,19 @@
 from collections import defaultdict, OrderedDict
 import itertools
+import json
 import math
 import os
-from time import gmtime, strftime
+from time import gmtime, strftime, time
 import warnings
 
 import networkx as nx
 import geopandas as gpd
 import pandas as pd
 import numpy as np
+import sqlalchemy
+import geoalchemy2
+from redis import StrictRedis
+
 import shapely.affinity
 import shapely.geometry
 import shapely.wkt as swkt
@@ -18,12 +23,20 @@ from plio.io import io_hdf, io_json
 from plio.utils import utils as io_utils
 from plio.io.io_gdal import GeoDataset
 from plio.io.isis_serial_number import generate_serial_number
-from autocnet.cg.cg import geom_mask
-from autocnet.cg.cg import compute_voronoi
+from plio.io import io_controlnetwork as cnet
+
+from plurmy import Slurm
+
+from autocnet import Session, engine, config
+from autocnet.cg import cg
 from autocnet.graph import markov_cluster
-from autocnet.graph.edge import Edge
-from autocnet.graph.node import Node
+from autocnet.graph.edge import Edge, NetworkEdge
+from autocnet.graph.node import Node, NetworkNode
 from autocnet.io import network as io_network
+from autocnet.io.db.model import (Images, Keypoints, Matches, Cameras,
+                                  Network, Base, Overlay, Edges, Costs,
+                                  Points, Measures)
+from autocnet.io.db.connection import new_connection, Parent
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
 
@@ -750,6 +763,7 @@ class CandidateGraph(nx.Graph):
             serials[n] = generate_serial_number(node['image_path'])
         return serials
 
+    @property
     def files(self):
         """
         Return a list of all full file PATHs in the CandidateGraph
@@ -941,8 +955,6 @@ class CandidateGraph(nx.Graph):
         """
         Computes a voronoi weight for each edge in a given graph.
         Can function as is, but is slightly optimized for complete subgraphs.
-
-        Parameters
         ----------
         kwargs : dict
                       keyword arguments that get passed to compute_voronoi
@@ -965,7 +977,7 @@ class CandidateGraph(nx.Graph):
                 ['x', 'y']]
             reproj_geom = source_node.reproject_geom(
                 overlap.geometry.values[0].__geo_interface__['coordinates'][0])
-            initial_mask = geom_mask(kps, reproj_geom)
+            initial_mask = cg.geom_mask(kps, reproj_geom)
 
             if (len(kps[initial_mask]) <= 0):
                 continue
@@ -974,7 +986,7 @@ class CandidateGraph(nx.Graph):
                 lambda x: shapely.geometry.Point(x['x'], x['y']), axis=1)
             kps_mask = kps['geometry'][initial_mask].apply(
                 lambda x: reproj_geom.contains(x))
-            voronoi_df = compute_voronoi(
+            voronoi_df = cg.compute_voronoi(
                 kps[initial_mask][kps_mask], reproj_geom, **kwargs)
 
             edge['weights']['voronoi'] = voronoi_df
@@ -1270,3 +1282,303 @@ class CandidateGraph(nx.Graph):
         http://grail.cs.washington.edu/projects/bal/
         """
         pass
+
+class NetworkCandidateGraph(CandidateGraph):
+    node_factory = NetworkNode
+    edge_factory = NetworkEdge
+
+    def __init__(self, *args, **kwargs):
+        super(NetworkCandidateGraph, self).__init__(*args, **kwargs)
+        if config.get('redis', None):
+            self._setup_queues()
+        self._setup_db_connection()
+        # Job metadata
+        self.job_status = defaultdict(dict)
+
+        for i, d in self.nodes(data='data'):
+            d.parent = self
+        for s, d, e in self.edges(data='data'):
+            e.parent = self
+
+        self.processing_queue = config['redis']['processing_queue']
+
+    def _setup_db_connection(self):
+        """
+        Set up a database connection and session(s)
+        """
+        try:
+            Base.metadata.bind = engine
+            # If the table does not exist, this will create it. This is used in case a
+            # user has manually dropped a table so that the project is not wrecked.
+            Base.metadata.create_all(tables=[Network.__table__, Overlay.__table__,
+                                             Edges.__table__, Costs.__table__, Matches.__table__,
+                                             Cameras.__table__, Points.__table__,
+                                             Measures.__table__])
+        except ValueError:
+            warnings.warn('No SQLAlchemy engine available. Tables not pushed.')
+
+    def _setup_queues(self):
+        """
+        Setup a 2 queue redis connection for pushing and pulling work/results
+        """
+        conf = config['redis']
+
+        self.redis_queue = StrictRedis(host=conf['host'],
+                                       port=conf['port'],
+                                       db=0)
+
+    def empty_queues(self):
+        """
+        Delete all messages from the redis queue. This a convenience method.
+        The `redis_queue` object is a redis-py StrictRedis object with API
+        documented at: https://redis-py.readthedocs.io/en/latest/#redis.StrictRedis
+        """
+        return self.redis_queue.flushall()
+
+    def apply(self, function, on='edge', args=(), walltime='01:00:00', **kwargs):
+        """
+        A mirror of the apply function from the standard CandidateGraph object. This implementation
+        dispatches the job to the cluster as an independent operation instead of applying an arbitrary function
+        locally.
+
+        This methods returns the number of jobs submitted. The job status is then asynchronously
+        updated as the jobs complete.
+
+        Parameters
+        ----------
+
+        function : obj
+                   The function to apply
+
+        on : str
+             {'edge', 'edges', 'e', 0} for an edge
+             {'node', 'nodes', 'n' 1} for a node
+
+        args : tuple
+               Of additional arguments to pass to the apply function
+
+        walltime : str
+                   in the format Hour:Minute:Second, 00:00:00
+        """
+
+        options = {
+            'edge' : self.edges,
+            'edges' : self.edges,
+            'e' : self.edges,
+            0 : self.edges,
+            'node' : self.nodes,
+            'nodes' : self.nodes,
+            'n' : self.nodes,
+            1 : self.nodes
+        }
+
+        # Determine which obj will be called
+        onobj = options[on]
+
+        res = []
+        key = 1
+        if isinstance(on, EdgeView):
+            key = 2
+
+        for job_counter, elem in enumerate(onobj.data('data')):
+            # Determine if we are working with an edge or a node
+            if len(elem) > 2:
+                id = (elem[0], elem[1])
+                image_path = (elem[2].source['image_path'],
+                              elem[2].destination['image_path'])
+            else:
+                id = (elem[0])
+                image_path = elem[1]['image_path']
+
+            msg = {'id':id,
+                    'func':function,
+                    'args':args,
+                    'kwargs':kwargs,
+                    'walltime':walltime,
+                    'image_path':image_path,
+                    'param_step':1}
+
+            self.redis_queue.rpush(self.processing_queue, json.dumps(msg))
+
+        # SLURM is 1 based, while enumerate is 0 based
+        job_counter += 1
+
+        # Submit the jobs
+        submitter = Slurm('acn_submit',
+                     mem_per_cpu=config['cluster']['processing_memory'],
+                     time=walltime,
+                     partition=config['cluster']['queue'],
+                     output=config['cluster']['cluster_log_dir']+'/slurm-%A_%a.out')
+        submitter.submit(array='1-{}'.format(job_counter))
+        return job_counter
+
+    def generic_callback(self, msg):
+        """
+        This method manages the responses from the jobs and updates
+        the status on this object. The msg is in a standard, parseable
+        format.
+        """
+        id = msg['id']
+        if isinstance(id, (int, float, str)):
+            # Working with a node
+            obj = self.nodes[id]['data']
+        else:
+            obj = self.edges[id]['data']
+            # Working with an edge
+
+        func = msg['func']
+        obj.job_status[func]['success'] = msg['success']
+
+        # If the job was successful, no need to resubmit
+        if msg['success'] == True:
+            return
+
+    def generate_vrts(self, **kwargs):
+        """
+        For the nodes in the graph, genreate a GDAL compliant vrt file.
+        This is just a dispatcher to the knoten generate_vrt file.
+        """
+        for i, n in self.nodes(data='data'):
+            n.generate_vrt(**kwargs)
+
+    def compute_overlaps(self):
+        """
+        For the candidate graph, compute the overlapping polygons that
+        comprise the entire candidate graph / footprint map. Each overlap
+        includes an 'overlaps' attribute/column that includes a list of the
+        footprint polygons that have contributed to given overlap.
+
+        """
+        query = """
+    SELECT ST_AsEWKB(geom) AS geom FROM ST_Dump((
+        SELECT ST_Polygonize(the_geom) AS the_geom FROM (
+            SELECT ST_Union(the_geom) AS the_geom FROM (
+                SELECT ST_ExteriorRing((ST_DUMP(footprint_latlon)).geom) AS the_geom
+                FROM images) AS lines
+        ) AS noded_lines
+    )
+)"""
+        session = Session()
+        oquery = session.query(Overlay)
+        iquery = session.query(Images)
+
+        rows = []
+        for q in engine.execute(query).fetchall():
+            overlaps = []
+            b = bytes(q['geom'])
+            qgeom = shapely.wkb.loads(b)
+            res = iquery.filter(Images.footprint_latlon.ST_Intersects(geoalchemy2.shape.from_shape(qgeom, srid=949900)))
+            for i in res:
+                fgeom = geoalchemy2.shape.to_shape(i.footprint_latlon)
+                area = qgeom.intersection(fgeom).area
+                if area < 1e-6:
+                    continue
+                overlaps.append(i.id)
+            o = Overlay(geom='SRID=949900;{}'.format(qgeom.wkt), overlaps=overlaps)
+            res = oquery.filter(Overlay.overlaps == o.overlaps).first()
+            if res is None:
+                rows.append(o)
+
+        session.bulk_save_objects(rows)
+        session.commit()
+
+        # If an overlap has only 1 entry, it is a sliver and we want to remove it.
+        res = oquery.filter(sqlalchemy.func.array_length(Overlay.overlaps, 1) <= 1)
+        res.delete(synchronize_session=False)
+        session.commit()
+        session.close()
+
+    def to_isis(self, path, flistpath=None,         sql = """
+SELECT points.id, measures.serial, points.pointtype, measures.sample, measures.line, measures.measuretype,
+measures.imageid
+FROM measures INNER JOIN points ON measures.pointid = points.id
+WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE;
+"""):
+        """
+        Given a set of points/measures in an autocnet database, generate an ISIS
+        compliant control network.
+
+        Parameters
+        ----------
+        path : str
+               The full path to the output network.
+
+        flistpath : str
+                    (Optional) the path to the output filelist. By default
+                    the outout filelist path is genrated programatically
+                    as the provided path with the extension replaced with .lis.
+                    For example, out.net would have an associated out.lis file.
+
+        sql : str
+              The sql query to execute in the database.
+
+        """
+
+        df = pd.read_sql(sql, engine)
+        df.rename(columns={'imageid':'image_index','id':'point_id',
+                           'sample':'x', 'line':'y'}, inplace=True)
+        if flistpath is None:
+            flistpath = os.path.splitext(path)[0] + '.lis'
+
+        cnet.to_isis(path, df, self.serials())
+        cnet.write_filelist(self.files, path=flistpath)
+
+    @classmethod
+    def from_database(cls, query_string='SELECT * FROM public.images'):
+        """
+        This is a constructor that takes the results from an arbitrary query string,
+        uses those as a subquery into a standard polygon overlap query and
+        returns a NetworkCandidateGraph object.  By default, an images
+        in the Image table will be used in the outer query.
+
+        Parameters
+        ----------
+        query_string : str
+                       A valid SQL select statement that targets the Images table
+
+        Usage
+        -----
+        Here, we provide usage examples for a few, potentially common use cases.
+
+        ## Spatial Query
+        This example selects those images that intersect a given bounding polygon.  The polygon is
+        specified as a Well Known Text LINESTRING with the first and last points being the same.
+        The query says, select the footprint_latlon (the bounding polygons in the database) that
+        intersect the user provided polygon (the LINESTRING) in the given spatial reference system
+        (SRID), 949900.
+
+        "SELECT * FROM Images WHERE ST_INTERSECTS(footprint_latlon, ST_Polygon(ST_GeomFromText('LINESTRING(159 10, 159 11, 160 11, 160 10, 159 10)'),949900)) = TRUE"
+from_database
+        ## Select from a specific orbit
+        This example selects those images that are from a particular orbit. In this case,
+        the regex string pulls all P##_* orbits and creates a graph from them. This method
+        does not guarantee that the graph is fully connected.
+
+        "SELECT * FROM Images WHERE (split_part(path, '/', 6) ~ 'P[0-9]+_.+') = True"
+
+        """
+        composite_query = """WITH
+	i as ({})
+SELECT i1.id as i1_id,i1.path as i1_path, i2.id as i2_id, i2.path as i2_path
+FROM
+	i as i1, i as i2
+WHERE ST_INTERSECTS(i1.footprint_latlon, i2.footprint_latlon) = TRUE
+AND i1.id < i2.id""".format(query_string)
+
+        session = Session()
+        res = session.execute(composite_query)
+
+        adjacency = defaultdict(list)
+        adjacency_lookup = {}
+        for r in res:
+            sid, spath, did, dpath = r
+
+            adjacency_lookup[spath] = sid
+            adjacency_lookup[dpath] = did
+            if spath != dpath:
+                adjacency[spath].append(dpath)
+        session.close()
+        # Add nodes that do not overlap any images
+        obj = cls.from_adjacency(adjacency, node_id_map=adjacency_lookup, config=config)
+
+        return obj

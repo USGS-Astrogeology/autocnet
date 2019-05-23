@@ -81,10 +81,12 @@ target/
 *.cnet
 *.lis
 *.list
+*.aux.xml
 
 # Pytest
 lastfailed
 nodeids
+.pytest_cache
 
 # VSCode
 launch.json

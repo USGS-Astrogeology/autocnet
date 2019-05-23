@@ -1,17 +1,12 @@
 import os
 import warnings
+import yaml
+import socket
+
+from sqlalchemy import create_engine, pool, orm
+from sqlalchemy.event import listen
 
 from pkg_resources import get_distribution, DistributionNotFound
-
-import autocnet
-import autocnet.examples
-import autocnet.camera
-import autocnet.cg
-import autocnet.control
-import autocnet.graph
-import autocnet.matcher
-import autocnet.transformation
-import autocnet.utils
 
 try:
     _dist = get_distribution('autocnet')
@@ -25,6 +20,40 @@ except DistributionNotFound:
     __version__ = 'Please install this project with setup.py'
 else:
     __version__ = _dist.version
+
+#Load the config file and setup a global DB session factory
+try:
+    with open(os.environ['autocnet_config'], 'r') as f:
+        config = yaml.safe_load(f)
+except:
+    warnings.warn('No autocnet_config environment variable set. Defaulting to an en empty configuration.')
+    config = {}
+
+try:
+    db_uri = '{}://{}:{}@{}:{}/{}'.format(config['database']['type'],
+                                            config['database']['username'],
+                                            config['database']['password'],
+                                            config['database']['host'],
+                                            config['database']['pgbouncer_port'],
+                                            config['database']['name'])
+    hostname = socket.gethostname()
+    engine = create_engine(db_uri, poolclass=pool.NullPool,
+                    connect_args={"application_name":"AutoCNet_{}".format(hostname)},
+                    isolation_level="AUTOCOMMIT")                   
+    Session = orm.session.sessionmaker(bind=engine)
+except: 
+    Session = None
+    engine = None
+
+import autocnet.examples
+import autocnet.camera
+import autocnet.cg
+import autocnet.control
+import autocnet.graph
+import autocnet.matcher
+import autocnet.transformation
+import autocnet.utils
+import autocnet.spatial
 
 # Patch the candidate graph into the root namespace
 from autocnet.graph.network import CandidateGraph
