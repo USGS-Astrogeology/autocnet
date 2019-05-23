@@ -313,3 +313,77 @@ def distribute_points(geom, nspts, ewpts):
         if geom.contains(pt):
             valid.append(p)
     return valid
+
+def distribute_points_in_geom(geom):
+    """
+    Given a geometry, attempt a basic classification of the shape.
+    RIght now, this simply attempts to determine if the bounding box
+    is generally N/S or generally E/W trending. Once the determination
+    is made, the algorithm places points in the geometry and returns
+    a list of valid (intersecting) points.
+
+    Parameters
+    ----------
+    geom : shapely.geom object
+           The geometry object
+
+    Returns
+    -------
+    valid : list
+            of valid points in the form (x,y) or (lon,lat)
+
+    """
+    coords = list(zip(*geom.envelope.exterior.xy))
+    short = np.inf
+    long = -np.inf
+    shortid = 0
+    longid = 0
+    for i, p in enumerate(coords[:-1]):
+        d = np.sqrt((coords[i+1][0] - p[0])**2+(coords[i+1][1]-p[1])**2)
+        if d < short:
+            short = d
+            shortid = i
+        if d > long:
+            long = d
+            longid = i
+    ratio = short/long
+    ns = False
+    ew = False
+    valid = []
+
+    # The polygons should be encoded with a lower left origin in counter-clockwise direction.
+    # Therefore, if the 'bottom' is the short edge it should be id 0 and modulo 2 == 0.
+    if shortid % 2 == 0:
+        ns = True
+    elif longid % 2 == 0:
+        ew = True
+
+    # Decision Tree
+    if ratio < 0.16 and geom.area < 0.01:
+        # Class: Slivers - ignore.
+        continue
+    elif geom.area <= 0.004 and ratio >= 0.25:
+        # Single point at the centroid
+        valid = cg.single_centroid(geom)
+    elif ns==True:
+        # Class, north/south poly, multi-point
+        nspts = int(round(long, 1) * 10)
+        if nspts >= 5:
+            nspts = int(nspts/(nspts/3))
+        ewpts = max(int(round(short, 1) * 5), 1)
+        if nspts == 1 and ewpts == 1:
+            valid = single_centroid(geom)
+        else:
+            valid = distribute_points(geom, nspts, ewpts, ns=True)
+    elif ew == True:
+        # Since this is an LS, we should place these diagonally from the 'lower left' to the 'upper right'
+        nspts = max(int(round(short, 1) * 5), 1)
+        if nspts >= 5:
+            nspts = int(nspts/(npts/3))
+        ewpts = int(round(long, 1) * 10)
+        if nspts == 1 and ewpts == 1:
+            valid = single_centroid(geom)
+        else:
+            valid =distribute_points(geom, nspts, ewpts, ns=True)
+
+    return valid
