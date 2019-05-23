@@ -32,7 +32,7 @@ SELECT ST_AsEWKB(geom) AS geom FROM ST_Dump((
     if not Session:
         warnings.warn('This function requires a database connection configured via an autocnet config file.')
         return 
-        
+
     session = Session()
     oquery = session.query(Overlay)
     iquery = session.query(Images)
@@ -131,7 +131,7 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
                                            line=sic.line,
                                            imageid=source['node_id'],
                                            serial=source.isis_serial,
-                                           MeasureType(3)))
+                                           measuretype=MeasureType(3)))
 
 
             for i, d in enumerate(overlaps[1:]):
@@ -146,7 +146,7 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
                                                    line=dy,
                                                    imageid=destination['node_id'],
                                                    serial=destination.isis_serial,
-                                                   MeasureType(3)))
+                                                   measuretype=MeasureType(3)))
             if len(point.measures) >= 2:
                 points.append(point)
     session.add_all(points)

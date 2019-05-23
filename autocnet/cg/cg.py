@@ -361,7 +361,7 @@ def distribute_points_in_geom(geom):
     # Decision Tree
     if ratio < 0.16 and geom.area < 0.01:
         # Class: Slivers - ignore.
-        continue
+        return
     elif geom.area <= 0.004 and ratio >= 0.25:
         # Single point at the centroid
         valid = cg.single_centroid(geom)
