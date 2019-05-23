@@ -5,13 +5,16 @@ import json
 import numpy as np
 
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, Boolean, LargeBinary, UniqueConstraint
+from sqlalchemy import (Column, String, Integer, Float,\
+                        ForeignKey, Boolean, LargeBinary,\ 
+                        UniqueConstraint, DDL, event)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.types import TypeDecorator
 from geoalchemy2 import Geometry
 from geoalchemy2.shape import to_shape
 
+from autocnet import engine
 
 Base = declarative_base()
 
@@ -262,9 +265,24 @@ class Measures(Base):
     sampler = Column(Float)  # Sample Residual
     liner = Column(Float)  # Line Residual
     active = Column(Boolean, default=True)
-    jigreject = Column(Boolean, default=False)  # jugsaw rejected
+    jigreject = Column(Boolean, default=False)  # jigsaw rejected
     aprioriline = Column(Float)
     apriorisample = Column(Float)
     samplesigma = Column(Float)
     linesigma = Column(Float)
     rms = Column(Float)
+
+Base.metadata.bind = engine
+# If the table does not exist, this will create it. This is used in case a
+# user has manually dropped a table so that the project is not wrecked.
+Base.metadata.create_all(tables=[Network.__table__, Overlay.__table__,
+                                 Edges.__table__, Costs.__table__, Matches.__table__,
+                                 Cameras.__table__, Points.__table__,
+                                 Measures.__table__])
+
+
+from autocnet.io.db.triggers import valid_point_trigger
+
+# Trigger that watches for points that should be active/inactive
+# based on the point count.
+event.list(Measures.__table__, 'after_update', valid_point_trigger.execute_if(dialect='postgresql'))
