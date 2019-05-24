@@ -1,0 +1,7 @@
+"pgbouncer" "pgbouncer"
+"jay" "abcde"
+"jlaura" "jlaura"
+"lweller" "lweller"
+"krodriguez" "krodriguez"
+"acpaquette" "acpaquette"
+"jmapel" "jmapel"

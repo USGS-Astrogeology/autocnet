@@ -1,0 +1,85 @@
+version: "3.3"
+
+services:
+  db:
+    image: mdillon/postgis:9.6-alpine
+    environment:
+      POSTGRES_PASSWORD: abcde
+      POSTGRES_USER: jay
+      POSTGRES_DB: kaguyasp
+    volumes:
+      - "${AUTOCNET_SERVER_DB}:/var/lib/postgresql/data"
+    command: -c shared_buffers=8GB -c max_connections=250
+    ports:
+     - "8085:5432"
+    networks:
+     - default
+  
+  admin:
+    image: dpage/pgadmin4:latest
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=blah@blah.com
+      - PGADMIN_DEFAULT_PASSWORD=thepassword
+      - SCRIPT_NAME=/autocnet/pgadmin4
+    labels:
+      - "traefik.enable=true"
+      - "traefik.frontend.priority=600"
+      - "traefik.frontend.rule=Method:GET"
+      - "traefik.frontend.rule=PathPrefix:/autocnet/pgadmin4"
+      - "traefik.backend=admin"
+      - "traefik.docker.network=traefik-public"
+    networks:
+      - default
+      - traefik-public
+    volumes:
+      - pgadm:/var/lib/pgadmin
+
+  pgbouncer:
+    image: brainsam/pgbouncer
+    ports:
+      - "8083:6543"
+    configs:
+      - source: pgbouncer.ini
+        target: /etc/pgbouncer/pgbouncer.ini
+      - source: users.txt
+        target: /etc/pgbouncer/users.txt
+  redis:
+    image: redis:4.0.8-alpine
+    command: redis-server /usr/local/etc/redis/redis.conf
+    configs:
+      - source: redis.conf
+        target: /usr/local/etc/redis/redis.conf
+    ports:
+      - "8084:6379"
+
+  pfeffernusse:
+    image: usgsastro/pfeffernusse:ale
+    volumes:
+      - "${SPICE_DATA_DIR}:/data/spice"
+    labels:
+      - "traefik.enable=true"                                                   
+      - "traefik.frontend.priority=600"                                         
+      - "traefik.frontend.rule=Method:GET"                                      
+      - "traefik.frontend.rule=PathPrefix:/autocnet/pfeffer"                   
+      - "traefik.backend=pfeffernusse"                                                 
+      - "traefik.docker.network=traefik-public"  
+      - "traefik.port=8080"
+    networks:
+      - default
+      - traefik-public
+    ports:
+      - "8081:8080"
+configs:
+  pgbouncer.ini:
+    file: ./pgbouncer.ini
+  users.txt:
+    file: ./users.txt
+  redis.conf:
+    file: ./redis/redis.conf
+    
+volumes:
+  pgadm:
+
+networks:
+  traefik-public:
+    external : true
