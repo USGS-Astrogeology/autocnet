@@ -11,8 +11,6 @@ from scipy.spatial import Voronoi
 import shapely.geometry
 from shapely.geometry import Polygon, Point
 from shapely.affinity import scale
-# from shapely.ops import unary_union
-# import cv2
 
 from autocnet.utils import utils
 
