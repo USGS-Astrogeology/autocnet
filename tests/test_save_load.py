@@ -16,6 +16,6 @@ def test_save_features(tmpdir, candidategraph):
     path = tmpdir.join('features')
     candidategraph.save_features(path.strpath)
 
-    d = np.load(path.strpath + '_0.npz')
+    d = np.load(path.strpath + '_1.npz')
     np.testing.assert_array_equal(d['descriptors'],
-                                         candidategraph.node[0]['data'].descriptors)
+                                         candidategraph.node[1]['data'].descriptors)

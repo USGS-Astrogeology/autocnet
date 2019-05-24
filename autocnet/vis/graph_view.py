@@ -4,10 +4,10 @@ import networkx as nx
 from matplotlib import pyplot as plt
 import matplotlib
 
-from scipy.misc import imresize
+from skimage.transform import resize
 
 def downsample(array, amount):
-    return imresize(array,
+    return resize(array,
                       (int(array.shape[0] / amount),
                       int(array.shape[1] / amount)),
                       interp='lanczos')

@@ -138,11 +138,11 @@ def test_add_node(reduced_geo):
     # Test without "image_name" arg (networkx parent method)
     c = 'AS15-M-0299_crop.cub'
     basepath = get_path('Apollo15')
-    reduced_geo.add_node(2, data=node.Node(image_name=c,
+    reduced_geo.add_node(3, data=node.Node(image_name=c,
                                     image_path=os.path.join(basepath, c),
-                                    node_id=2))
+                                    node_id=3))
     assert len(reduced_geo.nodes) == 3
-    assert reduced_geo.node[2]["data"]["image_name"] == c
+    assert reduced_geo.node[3]["data"]["image_name"] == c
 
 def test_add_node_by_name(reduced_geo):
     # Test with "image_name" (cg method)
@@ -150,8 +150,8 @@ def test_add_node_by_name(reduced_geo):
     basepath = get_path('Apollo15')
     reduced_geo.add_node(image_name=c, basepath=basepath)
     assert len(reduced_geo.nodes) == 3
-    assert reduced_geo.node[2]["data"]["image_name"] == c
-    assert reduced_geo.node[0].keys() == reduced_geo.node[1].keys() == reduced_geo.node[2].keys()
+    assert reduced_geo.node[3]["data"]["image_name"] == c
+    assert reduced_geo.node[1].keys() == reduced_geo.node[2].keys() == reduced_geo.node[3].keys()
 
 def test_add_node_nonexistent(geo_graph):
     # Test when "image_name" not found
@@ -170,13 +170,13 @@ def test_add_edge():
     g.add_node(image_name=c, basepath=basepath, adjacency=c_adj)
 
     assert len(g.edges) == 3
-    assert g.edges[0, 1]["data"].source == g.node[0]["data"]
-    assert g.edges[0, 1]["data"].destination == g.node[1]["data"]
-    assert g.edges[0, 2]["data"].source == g.node[0]["data"]
-    assert g.edges[0, 2]["data"].destination == g.node[2]["data"]
     assert g.edges[1, 2]["data"].source == g.node[1]["data"]
     assert g.edges[1, 2]["data"].destination == g.node[2]["data"]
-    assert g.edges[0, 1].keys() == g.edges[0, 2].keys() == g.edges[1, 2].keys()
+    assert g.edges[1, 3]["data"].source == g.node[1]["data"]
+    assert g.edges[1, 3]["data"].destination == g.node[3]["data"]
+    assert g.edges[2, 3]["data"].source == g.node[2]["data"]
+    assert g.edges[2, 3]["data"].destination == g.node[3]["data"]
+    assert g.edges[1, 2].keys() == g.edges[1, 3].keys() == g.edges[2, 3].keys()
 
 def test_add_edge_missing_img(reduced_geo):
     c = 'AS15-M-0299_crop.cub'
@@ -251,15 +251,15 @@ def test_filter(graph):
 
 def test_subset_graph(graph):
     g = graph
-    edge_sub = g.create_edge_subgraph([(0, 2)])
+    edge_sub = g.create_edge_subgraph([(1, 3)])
     assert len(edge_sub.nodes()) == 2
 
-    node_sub = g.create_node_subgraph([0, 1])
+    node_sub = g.create_node_subgraph([1, 2])
     assert len(node_sub) == 2
 
 
 def test_subgraph_from_matches(graph):
-    test_sub_graph = graph.create_node_subgraph([0, 1])
+    test_sub_graph = graph.create_node_subgraph([1, 2])
     #test_sub_graph.extract_features(extractor_parameters={'nfeatures': 25})
     #test_sub_graph.match(k=2)
     for u, v, k in test_sub_graph.edges(data='data'):
@@ -323,8 +323,8 @@ def test_apply_func_to_edges(graph):
         graph.apply_func_to_edges("symmetry_check")
 
         # Test passing the func by signature
-        graph.apply_func_to_edges(graph[0][1]['data'].symmetry_check)
-        assert not graph[0][2]['data'].masks.symmetry.all()
+        graph.apply_func_to_edges(graph[1][2]['data'].symmetry_check)
+        assert not graph[1][3]['data'].masks.symmetry.all()
 
 def test_generate_control_network(candidategraph):
     candidategraph.generate_control_network()
