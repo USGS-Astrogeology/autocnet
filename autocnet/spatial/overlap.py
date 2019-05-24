@@ -1,6 +1,6 @@
 import warnings
 from autocnet import config
-from autocnet.cg import cg
+from autocnet.cg import cg as compgeom
 from autocnet.io.db.model import Images, Measures, MeasureType, Overlay, Points, PointType
 from autocnet.matcher.subpixel import iterative_phase
 from autocnet import Session, engine
@@ -12,7 +12,7 @@ import geoalchemy2
 import shapely
 import sqlalchemy
 
-def compute_overlaps(sql='SELECT * FROM images'):
+def compute_overlaps(sql='(SELECT * FROM images) AS images'):
     """
     For the candidate graph, compute the overlapping polygons that
     comprise the entire candidate graph / footprint map. Each overlap
@@ -70,9 +70,9 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
                              iterative_phase_kwargs={'size':71}):
     """
     Given a geometry, place points into the geometry by back-projecing using 
-    a sensor model.
+    a sensor model.compgeom
 
-    TODO: This should utilize knoten once that package is stable.
+    TODO: This shoucompgeomn once that package is stable.
 
     Parameters
     ----------
@@ -90,8 +90,6 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
              The distance (in meters) above or below the aeroid (meters above or
              below the BCBF spheroid).
     """
-
-
     if not Session:
         warnings.warn('This function requires a database connection configured via an autocnet config file.')
         return 
@@ -99,15 +97,19 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
     points = []
     session = Session()
     srid = config['spatial']['srid']
+    semi_major = config['spatial']['semimajor_rad'] 
+    semi_minor = config['spatial']['semiminor_rad']
+    ecef = pyproj.Proj(proj='geocent', a=semi_major, b=semi_minor)
+    lla = pyproj.Proj(proj='latlon', a=semi_major, b=semi_minor)   
+     
     # TODO: This should be a passable query where we can subset.
     for o in session.query(Overlay.id, Overlay.geom, Overlay.overlaps).\
              filter(sqlalchemy.func.ST_Area(Overlay.geom) >= size_threshold):
 
-        valid = cg.distribute_points_in_geom(to_shape(o.geom))
+        valid = compgeom.distribute_points_in_geom(geoalchemy2.shape.to_shape(o.geom))
         if not valid:
             continue
         overlaps = o.overlaps
-
     
         if reference is None:
             source = overlaps[0]
@@ -134,8 +136,8 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
                                            measuretype=MeasureType(3)))
 
 
-            for i, d in enumerate(overlaps[1:]):
-                destination = ncg.node[d]['data']
+            for i, d in enumerate(overlaps):
+                destination = cg.node[d]['data']
                 destination_camera = destination.camera
                 dic = destination_camera.groundToImage(gnd)
                 dx, dy, metrics = iterative_phase(sic.samp, sic.line, dic.samp, dic.line,
