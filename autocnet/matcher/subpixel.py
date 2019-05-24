@@ -6,6 +6,8 @@ from skimage.feature import register_translation
 from autocnet.matcher import naive_template
 from autocnet.matcher import ciratefi
 
+import geopandas as gpd
+import pandas as pd
 
 # TODO: look into KeyPoint.size and perhaps use to determine an appropriately-sized search/template.
 def _prep_subpixel(nmatches, nstrengths=2):
@@ -25,7 +27,7 @@ def _prep_subpixel(nmatches, nstrengths=2):
     -------
     shifts_x : ndarray
                (nmatches, 1) to store the x_shift parameter
-    
+
     shifts_y : ndarray
                (nmatches, 1) to store the y_shift parameter
 
@@ -34,7 +36,7 @@ def _prep_subpixel(nmatches, nstrengths=2):
 
     new_x : ndarray
             (nmatches, 1) to store the updated x coordinates
-    
+
     new_y : ndarray
             (nmatches, 1) to store the updated y coordinates
     """
@@ -74,7 +76,7 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200):
     clipped_img : ndarray
                   The clipped image
     """
-    
+
     try:
         raster_size = img.raster_size
     except:
@@ -196,7 +198,7 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
     Iteratively apply a subpixel phase matcher to source (s_img) amd destination (d_img)
     images. The size parameter is used to set the initial search space. The algorithm
     is recursively applied to reduce the total search space by reduction until the convergence criteria
-    are met. Convergence is defined as the point at which the computed shifts (x_shift,y_shift) are 
+    are met. Convergence is defined as the point at which the computed shifts (x_shift,y_shift) are
     less than the convergence_threshold. In instances where the size is reducted to 1 pixel the
     algorithm terminates and returns None.
 
@@ -265,7 +267,7 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
     # Apply the shift to d_search and compute the new correspondence location
     dx += (shift_x + dxr)
     dy += (shift_y + dyr)
-    
+
     # Break if the solution has converged
     size -= reduction
     if abs(shift_x) <= convergence_threshold and abs(shift_y) <= convergence_threshold:
@@ -274,3 +276,96 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
         return None, None, None
     else:
         return iterative_phase(sx, sy,  dx, dy, s_img, d_img, size, **kwargs)
+
+
+def mosaic_match(image, mosaic, cnet):
+    """
+    Matches an image node with a image mosaic given a control network.
+
+    Parameters
+    ----------
+    image : str
+            Path to projected cube. The projection must match the mosaic image's
+            projection and should intersect with input mosaic
+
+    mosaic : Geodataset
+             Mosaic geodataset
+
+    cnet : DataFrame
+           Control network dataframe, output of plio's from_isis
+
+    Returns
+    -------
+    : DataFrame
+      DataFrame containing source points containing matched features.
+
+    : list
+      List in the format [minline,maxline, minsample,maxsample], the line/sample
+      extents in the mosaic matching the image
+
+    """
+    cube = GeoDataset(image)
+
+    # Get lat lons from body fixed coordinates
+    a = mosaic.metadata["IsisCube"]["Mapping"]["EquatorialRadius"]
+    b = mosaic.metadata["IsisCube"]["Mapping"]["PolarRadius"]
+    ecef = pyproj.Proj(proj='geocent', a=a, b=b)
+    lla = pyproj.Proj(proj='latlon', a=a, b=b)
+    lons, lats, alts = pyproj.transform(ecef, lla, np.asarray(cnet["adjustedX"]), np.asarray(cnet["adjustedY"]), np.asarray(cnet["adjustedZ"]))
+    gdf = gpd.GeoDataFrame(cnet, geometry=geopandas.points_from_xy(lons, lats))
+    points = gdf.geometry
+
+
+    # get footprint
+    image_arr = cube.read_array()
+
+    footprint = wkt.loads(cube.footprint.ExportToWkt())
+
+    # find ground points from themis cnet
+    spatial_index = gdf.sindex
+    possible_matches_index = list(spatial_index.intersection(footprint.bounds))
+    possible_matches = gdf.iloc[possible_matches_index]
+    precise_matches = possible_matches[possible_matches.intersects(footprint)]
+    points = precise_matches.geometry
+
+    pts = unique_rows(np.asarray([cube.latlon_to_pixel(point.y, point.x) for point in points]))
+
+    image_pts = []
+    for p in pts:
+        if not np.isclose(image_arr[p[1], p[0]], ISISNULL):
+            image_pts.append(p)
+    image_pts = np.asarray(image_pts)
+
+    minlon, minlat, maxlon, maxlat = footprint.bounds
+
+    samples, lines = np.asarray([mosaic.latlon_to_pixel(p[0],p[1])for p in [[minlat, minlon], [maxlat, maxlon]]]).T
+    minline = min(lines)
+    minsample = min(samples)
+    maxline = max(lines)
+    maxsample = max(samples)
+
+    # hard code for now, we should get type from label
+    mosaic_arr = mosaic.read_array().astype(np.uint8)
+    sub_mosaic = mosaic_arr[minline:maxline, minsample:maxsample]
+
+    image_arr[np.isclose(image_arr, ISISNULL)] = np.nan
+    match_results = []
+    for k, p in enumerate(image_pts):
+        sx, sy = p
+
+        try:
+            ret = iterative_phase(sx, sy, sx, sy, image_arr, sub_mosaic, size=10, reduction=1, convergence_threshold=1)
+        except Exception as ex:
+            continue
+
+        if ret is not None:
+            x,y,metrics = ret
+        else:
+            continue
+
+        dist = np.linalg.norm([x-dx, y-dy])
+        match_results.append([points.index[k], x-dx, y-dy, dist, p[0] ,p[1]])
+
+    match_results = pd.DataFrame(match_results, columns=["cnet_index", "x_offset", "y_offset", "dist", "x", "y"])
+
+    return match_results, [minline,maxline, minsample,maxsample]
