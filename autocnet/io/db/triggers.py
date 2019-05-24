@@ -1,4 +1,6 @@
-valid_point_trigger = DDL("""
+from sqlalchemy.schema import DDL
+
+valid_point_function = DDL("""
 CREATE OR REPLACE FUNCTION validate_points()
   RETURNS trigger AS
 $BODY$
@@ -22,4 +24,12 @@ $BODY$
 
 LANGUAGE plpgsql VOLATILE -- Says the function is implemented in the plpgsql language; VOLATILE says the function has side effects.
 COST 100; -- Estimated execution cost of the function.
+""")
+
+valid_point_trigger = DDL("""
+CREATE TRIGGER active_measure_changes
+  AFTER UPDATE
+  ON measures
+  FOR EACH ROW
+EXECUTE PROCEDURE validate_points();
 """)

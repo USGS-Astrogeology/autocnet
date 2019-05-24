@@ -7,7 +7,7 @@ import numpy as np
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import (Column, String, Integer, Float, \
                         ForeignKey, Boolean, LargeBinary, \
-                        UniqueConstraint, DDL, event)
+                        UniqueConstraint, event)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy_utils import database_exists, create_database
@@ -159,7 +159,7 @@ class Matches(Base):
     destination_idx = Column(Integer, nullable=False)
     lat = Column(Float)
     lon = Column(Float)
-    geom = Column(Geometry('POINTZ', dimension=3, srid=949900, spatial_index=True))
+    geom = Column(Geometry('POINT', dimension=2, srid=949900, spatial_index=True))
     source_x = Column(Float)
     source_y = Column(Float)
     destination_x = Column(Float)
@@ -183,13 +183,14 @@ class Images(Base):
     name = Column(String, unique=True)
     path = Column(String, unique=True)
     active = Column(Boolean)
-    footprint_latlon = Column(Geometry('MULTIPOLYGONZ', srid=949900, dimension=3, spatial_index=True))
-    footprint_bodyfixed = Column(Geometry('MULTIPOLYGONZ', dimension=3))
+    footprint_latlon = Column(Geometry('MultiPolygon', srid=949900, dimension=2, spatial_index=True))
+    footprint_bodyfixed = Column(Geometry('MULTIPOLYGON', dimension=2))
     #footprint_bodyfixed = Column(Geometry('POLYGON',dimension=3))
 
     # Relationships
     keypoints = relationship(Keypoints, passive_deletes='all', backref="images", uselist=False)
     cameras = relationship(Cameras, passive_deletes='all', backref='images', uselist=False)
+    measures = relationship("Measures")
 
     def __repr__(self):
         try:
@@ -202,7 +203,7 @@ class Images(Base):
                 'footprint_latlon':footprint,
                 'footprint_bodyfixed':self.footprint_bodyfixed})
 
-class Network(Base):
+"""class Network(Base):
     __tablename__ = 'network'
     id = Column(Integer, primary_key=True, autoincrement=True)
     #TODO: Document that images on delete will CASCADE into all other tables
@@ -212,14 +213,14 @@ class Network(Base):
     keypoint_id = Column(Integer)  # id to link to a keypoint in the correct file
     x = Column(Float)
     y = Column(Float)
-    geom = Column(Geometry('POINTZ', dimension=3, srid=949900, spatial_index=True))
+    geom = Column(Geometry('POINTZ', dimension=3, srid=949900, spatial_index=True))"""
     
 class Overlay(Base):
     __tablename__ = 'overlay'
     id = Column(Integer, primary_key=True, autoincrement=True)
     overlaps = Column(ARRAY(Integer))
     #geom = Column(Geometry(geometry_type='POLYGON', management=True))  # sqlite
-    geom = Column(Geometry('POLYGONZ', srid=949900, dimension=3, spatial_index=True))  # postgresql
+    geom = Column(Geometry('POLYGON', srid=949900, dimension=2, spatial_index=True))  # postgresql
 
 
 class PointType(enum.IntEnum):
@@ -278,17 +279,22 @@ class Measures(Base):
 if not database_exists(engine.url):
     create_database(engine.url, template='template_postgis')  # This is a hardcode to the local template
 
-Base.metadata.bind = engine
-# If the table does not exist, this will create it. This is used in case a
-# user has manually dropped a table so that the project is not wrecked.
-Base.metadata.create_all(tables=[Network.__table__, Overlay.__table__,
-                                 Edges.__table__, Costs.__table__, Matches.__table__,
-                                 Cameras.__table__, Points.__table__,
-                                 Measures.__table__])
 
 
-from autocnet.io.db.triggers import valid_point_trigger
+
+from autocnet.io.db.triggers import valid_point_function, valid_point_trigger
+
 
 # Trigger that watches for points that should be active/inactive
 # based on the point count.
-event.list(Measures.__table__, 'after_update', valid_point_trigger.execute_if(dialect='postgresql'))
+event.listen(Base.metadata, 'before_create', valid_point_function)
+event.listen(Measures.__table__, 'after_create', valid_point_trigger)
+
+Base.metadata.bind = engine
+# If the table does not exist, this will create it. This is used in case a
+# user has manually dropped a table so that the project is not wrecked.
+Base.metadata.create_all(tables=[Overlay.__table__,
+                                 Edges.__table__, Costs.__table__, Matches.__table__,
+                                 Cameras.__table__, Points.__table__,
+                                 Measures.__table__, Images.__table__,
+                                 Keypoints.__table__])
