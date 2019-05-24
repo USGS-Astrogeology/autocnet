@@ -98,7 +98,6 @@ class TestNode(object):
     def test_extract_downsampled_features(self, geo_node):
         desc = np.arange(9).reshape(3,3)
         kps = pd.DataFrame(desc, columns=['x', 'y', 'z'])
-        print(geo_node.geodata)
         with patch('autocnet.graph.node.Node._extract_features', return_value=(kps, desc)) as ef:
             geo_node.extract_features_with_downsampling(downsample_amount=3)
             assert ef.call_count == 1

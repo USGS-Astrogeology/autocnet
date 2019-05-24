@@ -1448,18 +1448,19 @@ class NetworkCandidateGraph(CandidateGraph):
         iquery = session.query(Images)
 
         rows = []
+        srid = config['spatial']['srid']
         for q in engine.execute(query).fetchall():
             overlaps = []
             b = bytes(q['geom'])
             qgeom = shapely.wkb.loads(b)
-            res = iquery.filter(Images.footprint_latlon.ST_Intersects(geoalchemy2.shape.from_shape(qgeom, srid=949900)))
+            res = iquery.filter(Images.footprint_latlon.ST_Intersects(geoalchemy2.shape.from_shape(qgeom, srid=srid)))
             for i in res:
                 fgeom = geoalchemy2.shape.to_shape(i.footprint_latlon)
                 area = qgeom.intersection(fgeom).area
                 if area < 1e-6:
                     continue
                 overlaps.append(i.id)
-            o = Overlay(geom='SRID=949900;{}'.format(qgeom.wkt), overlaps=overlaps)
+            o = Overlay(geom=f'SRID={srid};{qgeom.qkt}', overlaps=overlaps)
             res = oquery.filter(Overlay.overlaps == o.overlaps).first()
             if res is None:
                 rows.append(o)
