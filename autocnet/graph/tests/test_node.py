@@ -141,7 +141,7 @@ class TestNode(object):
         tmpdir.join('kps')
         node.save_features(os.path.join(basename, 'kps'))
         node.keypoints = None
-        node.load_features(os.path.join(basename, 'kps_None.npz'))
+        node.load_features(os.path.join(basename, 'kps_1.npz'))
         assert node.keypoints.equals(reference)
 
     def test_coverage(self, node):

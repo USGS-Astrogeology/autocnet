@@ -1298,8 +1298,10 @@ class NetworkCandidateGraph(CandidateGraph):
             d.parent = self
         for s, d, e in self.edges(data='data'):
             e.parent = self
-
-        self.processing_queue = config['redis']['processing_queue']
+        
+        redis = config.get('redis')
+        if redis:
+            self.processing_queue = redis['processing_queue']
 
 
     def _setup_queues(self):

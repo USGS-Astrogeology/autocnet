@@ -162,7 +162,7 @@ def from_npy(in_path):
     descriptors : ndarray
                   of feature descriptors
     """
-    nzf = np.load(in_path)
+    nzf = np.load(in_path, allow_pickle=True)
     descriptors = nzf['descriptors']
     keypoints = pd.DataFrame(nzf['keypoints'], index=nzf['keypoints_idx'], columns=nzf['keypoints_columns'])
 
