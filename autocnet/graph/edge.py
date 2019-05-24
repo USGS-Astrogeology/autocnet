@@ -1,6 +1,6 @@
 from functools import wraps, singledispatch
 import warnings
-from collections import defaultdict, MutableMapping
+from collections import defaultdict, MutableMapping, Counter
 
 from geoalchemy2.elements import WKBElement
 import numpy as np
@@ -23,7 +23,9 @@ from autocnet.transformation import homography as hm
 from autocnet.transformation import spatial
 from autocnet.vis.graph_view import plot_edge, plot_node, plot_edge_decomposition, plot_matches
 from autocnet.cg import cg
-from autocnet.io.db.model import Images, Keypoints, Matches, Cameras, Network, Base, Overlay, Edges, Costs, Measures
+from autocnet.io.db.model import Images, Keypoints, Matches,\
+                                 Cameras, Base, Overlay, Edges,\
+                                 Costs, Measures, Points, Measures
 from autocnet.io.db.wrappers import DbDataFrame
 
 from plio.io.io_gdal import GeoDataset
@@ -999,7 +1001,7 @@ class NetworkEdge(Edge):
 
         """
         source = self.source['node_id']
-        destin = self.source['node_id']
+        destin = self.destination['node_id']
         
         if source > destin:
             source, destin = destin, source
@@ -1018,7 +1020,6 @@ class NetworkEdge(Edge):
                                   Measures.imageid==destin)).join(Measures)
         
         df = pd.read_sql(q.statement, engine)
-
         matches = []
         columns = ['point_id', 'source_measure_id', 'destin_measure_id', 'source', 'source_idx', 'destination', 'destination_idx',
                'lat', 'lon', 'geom', 'source_x', 'source_y', 'destination_x',
@@ -1039,7 +1040,41 @@ class NetworkEdge(Edge):
                      imagea['sample'], imagea['line'], imageb['sample'], imageb['line'],
                      None, None, None, None]
             matches.append(match)
-
+            
         df.groupby('id').apply(net2matches, matches, source, destin)
-
         self.matches = pd.DataFrame(matches, columns=columns)
+
+    def mask_to_counter(self, mask):
+        """
+        Take a mask on an edge and convert the mask into a counter where
+        the key is the match id and value is 1 (the match is flagged false).
+
+        TODO: Allow the mask to be an iterable (list). The caller of this should
+        then worry about normalization as n-mask strings can come in and we 
+        cannot anticipate how the user might want to normalize the return.
+
+        Parameters
+        ----------
+        mask : str
+               The name of the mask
+
+        Returns
+        -------
+          : collections.Counter
+            With keys equal to the indices of the False matches
+            and values equal to one
+
+        """
+        mask = self.masks[mask]
+        matches_to_disable = mask[mask == False].index
+        session = Session()
+    
+        bad = {}
+        for o in session.query(Matches).filter(Matches.id.in_(matches_to_disable)).all():
+            # This can't just set both to False, we loose a ton of good points - a bad point in 1 image is not
+            # necessarily bad in all of the other images. Doing it this way assumes that it is...
+            bad[o.source_measure_id] = 1
+            bad[o.destin_measure_id] = 1
+
+        return Counter(bad)
+

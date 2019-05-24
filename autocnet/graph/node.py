@@ -17,7 +17,7 @@ from autocnet import Session, engine, config
 from autocnet.matcher import cpu_extractor as fe
 from autocnet.matcher import cpu_outlier_detector as od
 from autocnet.cg import cg
-from autocnet.io.db.model import Images, Keypoints, Matches, Cameras, Network, Base, Overlay, Edges, Costs, Points, Measures
+from autocnet.io.db.model import Images, Keypoints, Matches, Cameras,  Base, Overlay, Edges, Costs, Points, Measures
 from autocnet.io.db.connection import Parent
 from autocnet.io import keypoints as io_keypoints
 from autocnet.vis.graph_view import plot_node
@@ -210,7 +210,6 @@ class Node(dict, MutableMapping):
 
         max_x = self.geodata.raster_size[0]
         max_y = self.geodata.raster_size[1]
-        print(max_x, max_y)
         total_area = max_x * max_y
 
         return hull_area / total_area
@@ -504,6 +503,8 @@ class NetworkNode(Node):
         else:
             self.parent = parent
 
+        srid = config['spatial']['srid']
+
         # Create a session to work in
         session = Session()
 
@@ -518,7 +519,8 @@ class NetworkNode(Node):
             i = Images(name=kwargs['image_name'],
                        path=kwargs['image_path'],
                        footprint_latlon=self.footprint,
-                       keypoints=kps)
+                       keypoints=kps,
+                       cameras=self.create_camera())
             session = Session()
             session.add(i)
             session.commit()
@@ -595,6 +597,28 @@ class NetworkNode(Node):
         nkps = res.nkeypoints
         return nkps
 
+    def create_camera(self):
+        # Create the camera entry
+        import pvl
+        import requests
+        import json
+        
+        label = pvl.dumps(self.geodata.metadata).decode()
+        url = config['pfeffernusse']['url']
+        response = requests.post(url, json={'label':label})
+        response = response.json()
+        model_name = response['name_model']
+        isdpath = os.path.splitext(self['image_path'])[0] + '.json'
+        with open(isdpath, 'w') as f:
+            json.dump(response, f)
+            isd = csmapi.Isd(self['image_path'])
+        plugin = csmapi.Plugin.findPlugin('UsgsAstroPluginCSM')
+        self._camera = plugin.constructModelFromISD(isd, model_name)
+        serialized_camera = self._camera.getModelState()
+        
+        cam = Cameras(camera=serialized_camera, image_id=self['node_id'])
+        return cam
+
     @property
     def camera(self):
         """
@@ -604,44 +628,23 @@ class NetworkNode(Node):
         import csmapi
         if not getattr(self, '_camera', None):
             res = self._from_db(Cameras)
+            plugin = csmapi.Plugin.findPlugin('UsgsAstroPluginCSM')
             if res is not None:
-                plugin = csmapi.Plugin.findPlugin('UsgsAstroPluginCSM')
                 self._camera = plugin.constructModelFromState(res.camera)
             else:
-                # Create the camera entry
-                import pvl
-                import requests
-                import json
-                
-                label = pvl.dumps(self.geodata.metadata).decode()
-                url = 'http://smalls:8081/v1/pds/'
-                response = requests.post(url, json={'label':label})
-                response = response.json()
-                model_name = response['name_model']
-                isdpath = os.path.splitext(self['image_path'])[0] + '.json'
-                with open(isdpath, 'w') as f:
-                    json.dump(response, f)
-                    isd = csmapi.Isd(self['image_path'])
-                plugin = csmapi.Plugin.findPlugin('UsgsAstroPluginCSM')
-                self._camera = plugin.constructModelFromISD(isd, model_name)
-                serialized_camera = self._camera.getModelState()
-                cam = Cameras(camera=serialized_camera, image_id=self['node_id'])
-
-                session = Session()
-                session.add(cam)
-                session.commit()
-                session.close()    
+                self.create_camera()
         return self._camera
 
     @property
     def footprint(self):
-
         res = Session().query(Images).filter(Images.id == self['node_id']).first()
         if res is None:
             boundary = generate_boundary(self.geodata.raster_size[::-1])  # yx to xy
             footprint_latlon = generate_latlon_footprint(self.camera, boundary)
+            footprint_latlon.FlattenTo2D()
             footprint_latlon = footprint_latlon.ExportToWkt()
-            footprint_latlon = geoalchemy2.elements.WKTElement(footprint_latlon, srid=config['spatial']['srid'])
+            footprint_latlon = geoalchemy2.elements.WKTElement(footprint_latlon,
+                                                               srid=config['spatial']['srid'])
         else:
             footprint_latlon = geoalchemy2.shape.to_shape(res.footprint_latlon)
         return footprint_latlon

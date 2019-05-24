@@ -34,7 +34,7 @@ from autocnet.graph.edge import Edge, NetworkEdge
 from autocnet.graph.node import Node, NetworkNode
 from autocnet.io import network as io_network
 from autocnet.io.db.model import (Images, Keypoints, Matches, Cameras, 
-                                  Network, Base, Overlay, Edges, Costs,
+                                  Base, Overlay, Edges, Costs,
                                   Points, Measures)
 from autocnet.io.db.connection import new_connection, Parent
 from autocnet.vis.graph_view import plot_graph, cluster_plot
@@ -90,7 +90,7 @@ class CandidateGraph(nx.Graph):
         self.graph['creationdate'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         self.graph['modifieddate'] = strftime("%Y-%m-%d %H:%M:%S", gmtime())
         self.graph['node_name_map'] = {}
-        self.graph['node_counter'] = 0
+        self.graph['node_counter'] = 1
 
         self._point_id = 0
         self._measure_id = 0
@@ -1291,7 +1291,6 @@ class NetworkCandidateGraph(CandidateGraph):
         super(NetworkCandidateGraph, self).__init__(*args, **kwargs)
         if config.get('redis', None):
             self._setup_queues()
-        self._setup_db_connection()
         # Job metadata
         self.job_status = defaultdict(dict)
 
@@ -1302,20 +1301,6 @@ class NetworkCandidateGraph(CandidateGraph):
 
         self.processing_queue = config['redis']['processing_queue']
 
-    def _setup_db_connection(self):
-        """
-        Set up a database connection and session(s)
-        """
-        try:
-            Base.metadata.bind = engine
-            # If the table does not exist, this will create it. This is used in case a
-            # user has manually dropped a table so that the project is not wrecked.
-            Base.metadata.create_all(tables=[Network.__table__, Overlay.__table__,
-                                             Edges.__table__, Costs.__table__, Matches.__table__,
-                                             Cameras.__table__, Points.__table__,
-                                             Measures.__table__])
-        except ValueError:
-            warnings.warn('No SQLAlchemy engine available. Tables not pushed.')
 
     def _setup_queues(self):
         """
@@ -1582,3 +1567,4 @@ AND i1.id < i2.id""".format(query_string)
         obj = cls.from_adjacency(adjacency, node_id_map=adjacency_lookup, config=config)
 
         return obj
+
