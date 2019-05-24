@@ -268,16 +268,16 @@ def distribute_points(geom, nspts, ewpts):
     geom_coords = np.column_stack(geom.exterior.xy)
 
     coords = np.array(list(zip(*geom.envelope.exterior.xy))[:-1])
-    if ns:
-        ll = coords[0]
-        lr = coords[1]
-        ur = coords[2]
-        ul = coords[3]
+
+    ll = coords[0]
+    lr = coords[1]
+    ur = coords[2]
+    ul = coords[3]
         
     # Find the points nearest the ul and ur
     ul_actual = geom_coords[nearest(ul, geom_coords)]
     ur_actual = geom_coords[nearest(ur, geom_coords)]
-    dist = sqrt((ul_actual[1] - ur_actual[1])**2 + (ul_actual[0] - ur_actual[0])**2)
+    dist = np.sqrt((ul_actual[1] - ur_actual[1])**2 + (ul_actual[0] - ur_actual[0])**2)
     m = (ul_actual[1]-ur_actual[1])/(ul_actual[0]-ur_actual[0])
     b = (ul_actual[1] - ul_actual[0] * m)
     newtop = []
@@ -289,7 +289,7 @@ def distribute_points(geom, nspts, ewpts):
 
     ll_actual = geom_coords[nearest(ll, geom_coords)]
     lr_actual = geom_coords[nearest(lr, geom_coords)]
-    dist = sqrt((ll_actual[1] - lr_actual[1])**2 + (ll_actual[0] - lr_actual[0])**2)
+    dist = np.sqrt((ll_actual[1] - lr_actual[1])**2 + (ll_actual[0] - lr_actual[0])**2)
     m = (ll_actual[1]- lr_actual[1])/(ll_actual[0]-lr_actual[0])
     b = (ll_actual[1] - ll_actual[0] * m)
     newbot = []
@@ -364,7 +364,7 @@ def distribute_points_in_geom(geom):
         return
     elif geom.area <= 0.004 and ratio >= 0.25:
         # Single point at the centroid
-        valid = cg.single_centroid(geom)
+        valid = single_centroid(geom)
     elif ns==True:
         # Class, north/south poly, multi-point
         nspts = int(round(long, 1) * 10)
@@ -374,7 +374,7 @@ def distribute_points_in_geom(geom):
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
-            valid = distribute_points(geom, nspts, ewpts, ns=True)
+            valid = distribute_points(geom, nspts, ewpts)
     elif ew == True:
         # Since this is an LS, we should place these diagonally from the 'lower left' to the 'upper right'
         nspts = max(int(round(short, 1) * 5), 1)
@@ -384,6 +384,6 @@ def distribute_points_in_geom(geom):
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
-            valid =distribute_points(geom, nspts, ewpts, ns=True)
+            valid = distribute_points(geom, nspts, ewpts)
 
     return valid
