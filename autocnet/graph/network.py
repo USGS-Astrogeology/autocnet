@@ -768,7 +768,7 @@ class CandidateGraph(nx.Graph):
         """
         Return a list of all full file PATHs in the CandidateGraph
         """
-        return [node["data"]['image_path'] for i,node in self.nodes(data=True)]
+        return [node['image_path'] for _, node in self.nodes(data='data')]
 
     def save(self, filename):
         """

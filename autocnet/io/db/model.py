@@ -5,8 +5,8 @@ import json
 import numpy as np
 
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import (Column, String, Integer, Float,\
-                        ForeignKey, Boolean, LargeBinary,\ 
+from sqlalchemy import (Column, String, Integer, Float,
+                        ForeignKey, Boolean, LargeBinary,
                         UniqueConstraint, DDL, event)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import relationship, backref
@@ -70,7 +70,7 @@ class IntEnum(TypeDecorator):
         return self._enumtype(value)
 
 class ArrayType(TypeDecorator):
-    """ 
+    """
     Sqlite does not support arrays. Therefore, use a custom type decorator.
 
     See http://docs.sqlalchemy.org/en/latest/core/types.html#sqlalchemy.types.TypeDecorator
@@ -93,7 +93,7 @@ class Json(TypeDecorator):
     See http://docs.sqlalchemy.org/en/latest/core/types.html#sqlalchemy.types.TypeDecorator
     """
     impl = String
-    
+
     @property
     def python_type(self):
         return object
@@ -213,7 +213,7 @@ class Network(Base):
     x = Column(Float)
     y = Column(Float)
     geom = Column(Geometry('POINTZ', dimension=3, srid=949900, spatial_index=True))
-    
+
 class Overlay(Base):
     __tablename__ = 'overlay'
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -274,21 +274,21 @@ class Measures(Base):
     linesigma = Column(Float)
     rms = Column(Float)
 
+if engine: 
+    if not database_exists(engine.url):
+        create_database(engine.url, template='template_postgis')  # This is a hardcode to the local template
 
-if not database_exists(engine.url):
-    create_database(engine.url, template='template_postgis')  # This is a hardcode to the local template
-
-Base.metadata.bind = engine
-# If the table does not exist, this will create it. This is used in case a
-# user has manually dropped a table so that the project is not wrecked.
-Base.metadata.create_all(tables=[Network.__table__, Overlay.__table__,
-                                 Edges.__table__, Costs.__table__, Matches.__table__,
-                                 Cameras.__table__, Points.__table__,
-                                 Measures.__table__])
+    Base.metadata.bind = engine
+    # If the table does not exist, this will create it. This is used in case a
+    # user has manually dropped a table so that the project is not wrecked.
+    Base.metadata.create_all(tables=[Network.__table__, Overlay.__table__,
+                                     Edges.__table__, Costs.__table__, Matches.__table__,
+                                     Cameras.__table__, Points.__table__,
+                                     Measures.__table__])
 
 
-from autocnet.io.db.triggers import valid_point_trigger
+    from autocnet.io.db.triggers import valid_point_trigger
 
-# Trigger that watches for points that should be active/inactive
-# based on the point count.
-event.list(Measures.__table__, 'after_update', valid_point_trigger.execute_if(dialect='postgresql'))
+    # Trigger that watches for points that should be active/inactive
+    # based on the point count.
+    event.list(Measures.__table__, 'after_update', valid_point_trigger.execute_if(dialect='postgresql'))
