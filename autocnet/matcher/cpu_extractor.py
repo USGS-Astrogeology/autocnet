@@ -4,7 +4,7 @@ import autocnet
 import cv2
 import numpy as np
 import pandas as pd
-from scipy.misc import bytescale
+from autocnet.utils.utils import bytescale
 
 try:
     import cyvlfeat as vl
