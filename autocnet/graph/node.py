@@ -515,12 +515,17 @@ class NetworkNode(Node):
 
             # Create the keypoints entry
             kps = Keypoints(path=kpspath, nkeypoints=0)
+            cam = create_camera()
+            try:
+                fp = self.footprint
+            except:
+                fp = None
             # Create the image
             i = Images(name=kwargs['image_name'],
                        path=kwargs['image_path'],
-                       footprint_latlon=self.footprint,
+                       footprint_latlon=fp,
                        keypoints=kps,
-                       cameras=self.create_camera())
+                       cameras=cam)
             session = Session()
             session.add(i)
             session.commit()
@@ -607,7 +612,9 @@ class NetworkNode(Node):
         url = config['pfeffernusse']['url']
         response = requests.post(url, json={'label':label})
         response = response.json()
-        model_name = response['name_model']
+        model_name = response,get('name_model', None)
+        if model_name is None:
+            return
         isdpath = os.path.splitext(self['image_path'])[0] + '.json'
         with open(isdpath, 'w') as f:
             json.dump(response, f)
