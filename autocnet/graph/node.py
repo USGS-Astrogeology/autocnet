@@ -525,7 +525,8 @@ class NetworkNode(Node):
                        path=kwargs['image_path'],
                        footprint_latlon=fp,
                        keypoints=kps,
-                       cameras=cam)
+                       cameras=cam, 
+                       serial=self.isis_serial)
             session = Session()
             session.add(i)
             session.commit()
