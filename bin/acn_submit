@@ -1,0 +1,67 @@
+#!/usr/bin/env python
+
+import copy
+import os
+import json
+
+from redis import StrictRedis
+import yaml
+
+from autocnet_server.db import connection
+from autocnet_server.db.redis_queue import pop_computetime_push, finalize
+from autocnet_server.graph.graph import NetworkNode, NetworkEdge
+
+#Load the config file
+with open(os.environ['autocnet_config'], 'r') as f:
+    config = yaml.load(f)
+
+def main(msg, config):
+    
+    # This should be the minimal amount of data necessary to create
+    # a NetworkNode or NetworkEdge object. The id in the message is 
+    # used to determine if this is a node (the id is then an int, float or str),
+    # or if this is an edge that requires 2 keys
+    id = msg['id']
+    image_path = msg['image_path']
+    if isinstance(id, (int, float, str)):
+        obj = NetworkNode(node_id=id, image_path=image_path)
+    else:
+        obj = NetworkEdge()
+        obj.source = NetworkNode(node_id=id[0], image_path=image_path[0])
+        obj.destination = NetworkNode(node_id=id[1], image_path=image_path[1])
+
+    # Grab the function and apply. This assumes that the func is going to
+    # have a True/False return value. Basically, all processing needs to
+    # occur inside of the func, nothing belongs in here.
+    #
+    # All args/kwargs are passed through the RedisQueue, and then right on to the func.
+    func = getattr(obj, msg['func'])
+    res = func(*msg['args'], **msg['kwargs'])
+
+    # Update the message with the True/False
+    msg['success'] = res
+
+    # Update the message with the correct callback function
+
+    return msg
+
+if __name__ == '__main__':
+    conf = config['redis']
+    queue = StrictRedis(host=conf['host'], port=conf['port'], db=0)
+
+    msg = pop_computetime_push(queue,
+                               conf['processing_queue'],
+                               conf['working_queue'])
+
+    # In order to pop an entry off the queue, we need the exact contents
+    #remove_key = copy.deepcopy(msg)
+    
+    # Pseudo-mock graph parent; used for the DB session only
+
+    # Apply the algorithm
+    response = main(msg, config)
+
+    # Alert the caller on failure to relaunch with next parameter set
+    #finalize(response, remove_key, queue, 
+    #         config['redis']['completed_queue'],
+    #         config['redis']['working_queue'])
