@@ -612,7 +612,7 @@ class NetworkNode(Node):
         url = config['pfeffernusse']['url']
         response = requests.post(url, json={'label':label})
         response = response.json()
-        model_name = response,get('name_model', None)
+        model_name = response.get('name_model', None)
         if model_name is None:
             return
         isdpath = os.path.splitext(self['image_path'])[0] + '.json'
