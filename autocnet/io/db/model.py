@@ -180,8 +180,9 @@ class Images(Base):
     __tablename__ = 'images'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, unique=True)
-    path = Column(String, unique=True)
+    name = Column(String)
+    path = Column(String)
+    serial = Column(String, unique=True)
     active = Column(Boolean)
     footprint_latlon = Column(Geometry('MultiPolygon', srid=949900, dimension=2, spatial_index=True))
     footprint_bodyfixed = Column(Geometry('MULTIPOLYGON', dimension=2))
@@ -218,7 +219,7 @@ class Images(Base):
 class Overlay(Base):
     __tablename__ = 'overlay'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    overlaps = Column(ARRAY(Integer))
+    intersections = Column(ARRAY(Integer))
     #geom = Column(Geometry(geometry_type='POLYGON', management=True))  # sqlite
     geom = Column(Geometry('POLYGON', srid=949900, dimension=2, spatial_index=True))  # postgresql
 

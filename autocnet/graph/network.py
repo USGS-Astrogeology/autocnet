@@ -1428,54 +1428,6 @@ class NetworkCandidateGraph(CandidateGraph):
         for i, n in self.nodes(data='data'):
             n.generate_vrt(**kwargs)
 
-    def compute_overlaps(self):
-        """
-        For the candidate graph, compute the overlapping polygons that
-        comprise the entire candidate graph / footprint map. Each overlap
-        includes an 'overlaps' attribute/column that includes a list of the
-        footprint polygons that have contributed to given overlap.
-
-        """
-        query = """
-    SELECT ST_AsEWKB(geom) AS geom FROM ST_Dump((
-        SELECT ST_Polygonize(the_geom) AS the_geom FROM (
-            SELECT ST_Union(the_geom) AS the_geom FROM (
-                SELECT ST_ExteriorRing((ST_DUMP(footprint_latlon)).geom) AS the_geom
-                FROM images) AS lines
-        ) AS noded_lines
-    )
-)"""
-        session = Session()
-        oquery = session.query(Overlay)
-        iquery = session.query(Images)
-
-        rows = []
-        srid = config['spatial']['srid']
-        for q in engine.execute(query).fetchall():
-            overlaps = []
-            b = bytes(q['geom'])
-            qgeom = shapely.wkb.loads(b)
-            res = iquery.filter(Images.footprint_latlon.ST_Intersects(geoalchemy2.shape.from_shape(qgeom, srid=srid)))
-            for i in res:
-                fgeom = geoalchemy2.shape.to_shape(i.footprint_latlon)
-                area = qgeom.intersection(fgeom).area
-                if area < 1e-6:
-                    continue
-                overlaps.append(i.id)
-            o = Overlay(geom=f'SRID={srid};{qgeom.qkt}', overlaps=overlaps)
-            res = oquery.filter(Overlay.overlaps == o.overlaps).first()
-            if res is None:
-                rows.append(o)
-
-        session.bulk_save_objects(rows)
-        session.commit()
-
-        # If an overlap has only 1 entry, it is a sliver and we want to remove it.
-        res = oquery.filter(sqlalchemy.func.array_length(Overlay.overlaps, 1) <= 1)
-        res.delete(synchronize_session=False)
-        session.commit()
-        session.close()
-
     def to_isis(self, path, flistpath=None,         sql = """
 SELECT points.id, measures.serial, points.pointtype, measures.sample, measures.line, measures.measuretype,
 measures.imageid
