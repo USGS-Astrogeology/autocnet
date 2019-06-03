@@ -515,7 +515,7 @@ class NetworkNode(Node):
 
             # Create the keypoints entry
             kps = Keypoints(path=kpspath, nkeypoints=0)
-            cam = create_camera()
+            cam = self.create_camera()
             try:
                 fp = self.footprint
             except:
