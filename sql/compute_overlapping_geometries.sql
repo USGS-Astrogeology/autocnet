@@ -15,7 +15,7 @@ FROM (
 		SELECT overlay.id, array_agg(images.id) as iid
 		FROM overlay, images
 		WHERE images.footprint_latlon is NOT NULL AND
-		WHERE ST_INTERSECTS(overlay.geom, images.footprint_latlon) AND
+		ST_INTERSECTS(overlay.geom, images.footprint_latlon) AND
 		ST_AREA(ST_INTERSECTION(overlay.geom, images.footprint_latlon)) > 0.000001
 		GROUP BY overlay.id
 	) AS imgs
