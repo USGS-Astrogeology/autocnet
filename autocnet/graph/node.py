@@ -517,7 +517,8 @@ class NetworkNode(Node):
             kps = Keypoints(path=kpspath, nkeypoints=0)
             cam = self.create_camera()
             try:
-                fp = self.footprint
+                fp = self.footprint.wkt
+                fp = f'srid={srid};{fp}'
             except:
                 fp = None
             # Create the image
