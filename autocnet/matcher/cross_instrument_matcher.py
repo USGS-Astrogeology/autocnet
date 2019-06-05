@@ -61,7 +61,7 @@ def themis_ground_to_ctx_matcher(cnet):
     engine = create_engine(db_uri, poolclass=pool.NullPool,
                            isolation_level="AUTOCOMMIT")
 
-    themis_images = geopandas.GeoDataFrame.from_postgis("select * from themis_ir", engine, geom_col="footprint_latlon")
+    themis_images = gpd.GeoDataFrame.from_postgis("select * from themis_ir", engine, geom_col="footprint_latlon")
 
     # useful for masking out paths, sometimes data is split between shared directories and
     # scratch causing errors when working anywhere besides the custer
@@ -86,11 +86,9 @@ def themis_ground_to_ctx_matcher(cnet):
 
     ctx_images = gpd.GeoDataFrame.from_postgis("select * from images", engine, geom_col="footprint_latlon")
 
-    themis_cnet = from_isis("Themis_DayIR_Elysium_ConstrainedPoints_Final_FY18.net")
-
+    themis_cnet = from_isis(cnet)
     # we need image path information for each measure
     themis_cnet = themis_cnet.merge(themis_images, how='left', left_on="serialnumber", right_on="serial")
-
 
     # this doesn't need to be serial
     lats = []
@@ -104,6 +102,7 @@ def themis_ground_to_ctx_matcher(cnet):
                                   line=r["line"], sample=r["sample"],
                                   type="image"))
         except ProcessError as e:
+            # should probably do something here...
             print("STDOUT:", e.stdout)
             print("STDERR:", e.stderr)
 
@@ -114,7 +113,7 @@ def themis_ground_to_ctx_matcher(cnet):
         resolutions.append(res["GroundPoint"]["LineResolution"].value)
 
     themis_cnet["resolution"] = resolutions
-    themis_cnet = geopandas.GeoDataFrame(themis_cnet, geometry=geopandas.points_from_xy(lons, lats))
+    themis_cnet = gpd.GeoDataFrame(themis_cnet, geometry=gpd.points_from_xy(lons, lats))
 
     spatial_index = ctx_images.sindex
 
@@ -150,7 +149,6 @@ def themis_ground_to_ctx_matcher(cnet):
                                       longitude=p.x,latitude=p.y,
                                       type="ground", allowoutside=False))
             except ProcessError as e:
-                print("STDERR:", e.stderr)
                 continue
 
             ctx_line, ctx_sample = res["GroundPoint"]["Line"], res["GroundPoint"]["Sample"]
