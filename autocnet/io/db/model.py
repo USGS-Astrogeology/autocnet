@@ -20,7 +20,9 @@ from autocnet import engine, Session, config
 
 Base = declarative_base()
 
-srid = config['spatial']['srid']
+# Default to mars if no config is set
+spatial = config.get('spatial', {'srid': 949900})
+srid = spatial['srid']
 
 class JsonEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -72,7 +74,7 @@ class IntEnum(TypeDecorator):
         return self._enumtype(value)
 
 class ArrayType(TypeDecorator):
-    """ 
+    """
     Sqlite does not support arrays. Therefore, use a custom type decorator.
 
     See http://docs.sqlalchemy.org/en/latest/core/types.html#sqlalchemy.types.TypeDecorator
@@ -95,7 +97,7 @@ class Json(TypeDecorator):
     See http://docs.sqlalchemy.org/en/latest/core/types.html#sqlalchemy.types.TypeDecorator
     """
     impl = String
-    
+
     @property
     def python_type(self):
         return object
