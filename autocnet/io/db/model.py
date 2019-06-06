@@ -12,10 +12,13 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy_utils import database_exists, create_database
 from sqlalchemy.types import TypeDecorator
+from sqlalchemy.ext.hybrid import hybrid_property
 
 from geoalchemy2 import Geometry
 from geoalchemy2.shape import from_shape, to_shape
 
+import osgeo
+import shapely
 from autocnet import engine, Session, config
 
 Base = declarative_base()
@@ -56,7 +59,9 @@ class IntEnum(TypeDecorator):
         self._enumtype = enumtype
 
     def process_bind_param(self, value, dialect):
-        return value.value
+        if hasattr(value, 'value'):
+            value = value.value
+        return value
 
     def process_result_value(self, value, dialect):
         return self._enumtype(value)
@@ -161,13 +166,17 @@ class Matches(BaseMixin, Base):
     original_destination_x = Column(Float)
     original_destination_y = Column(Float)
 
-    @property
+    @hybrid_property
     def geom(self):
-        return to_shape(self._geom)
+        try:
+            return to_shape(self._geom)
+        except:
+            return self._geom
 
     @geom.setter
     def geom(self, geom):
-        self._geom = from_shape(geom, srid=srid)
+        if geom:  # Supports instances where geom is explicitly set to None.
+            self._geom = from_shape(geom, srid=srid)
 
 class Cameras(BaseMixin, Base):
     __tablename__ = 'cameras'
@@ -203,12 +212,18 @@ class Images(BaseMixin, Base):
                 'footprint_latlon':footprint,
                 'footprint_bodyfixed':self.footprint_bodyfixed})
 
-    @property
+    @hybrid_property
     def footprint_latlon(self):
-        return to_shape(self._footprint_latlon)
-    
+        try:
+            return to_shape(self._footprint_latlon)
+        except:
+            return self._footprint_latlon
+
     @footprint_latlon.setter
     def footprint_latlon(self, geom):
+        if isinstance(geom, osgeo.ogr.Geometry):
+            # If an OGR geom, convert to shapely
+            geom = shapely.wkt.loads(geom.ExportToWkt())
         self._footprint_latlon = from_shape(geom, srid=srid)
 
 class Overlay(BaseMixin, Base):
@@ -218,10 +233,12 @@ class Overlay(BaseMixin, Base):
     #geom = Column(Geometry(geometry_type='POLYGON', management=True))  # sqlite
     _geom = Column("geom", Geometry('POLYGON', srid=srid, dimension=2, spatial_index=True))  # postgresql
 
-    @property
+    @hybrid_property
     def geom(self):
-        return to_shape(self._geom)
-
+        try:
+            return to_shape(self._geom)
+        except:
+            return self._geom
     @geom.setter
     def geom(self, geom):
         self._geom = from_shape(geom, srid=srid)
@@ -250,7 +267,7 @@ class Points(BaseMixin, Base):
     measures = relationship('Measures')
     rms = Column(Float)
 
-    @property
+    @hybrid_property
     def geom(self):
         return to_shape(self._geom)
     
@@ -258,7 +275,7 @@ class Points(BaseMixin, Base):
     def geom(self, geom):
         self._geom = from_shape(geom, srid=srid)
 
-    @property
+    @hybrid_property
     def pointtype(self):
         return self._pointtype
 
