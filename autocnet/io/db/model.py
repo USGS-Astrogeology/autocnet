@@ -14,7 +14,7 @@ from sqlalchemy_utils import database_exists, create_database
 from sqlalchemy.types import TypeDecorator
 
 from geoalchemy2 import Geometry
-from geoalchemy2.shape import to_shape
+from geoalchemy2.shape import from_shape, to_shape
 
 from autocnet import engine, Session, config
 
@@ -151,7 +151,7 @@ class Matches(BaseMixin, Base):
     destination_idx = Column(Integer, nullable=False)
     lat = Column(Float)
     lon = Column(Float)
-    geom = Column(Geometry('POINT', dimension=2, srid=srid, spatial_index=True))
+    _geom = Column("geom", Geometry('POINT', dimension=2, srid=srid, spatial_index=True))
     source_x = Column(Float)
     source_y = Column(Float)
     destination_x = Column(Float)
@@ -161,6 +161,13 @@ class Matches(BaseMixin, Base):
     original_destination_x = Column(Float)
     original_destination_y = Column(Float)
 
+    @property
+    def geom(self):
+        return to_shape(self._geom)
+
+    @geom.setter
+    def geom(self, geom):
+        self._geom = from_shape(geom, srid=srid)
 
 class Cameras(BaseMixin, Base):
     __tablename__ = 'cameras'
@@ -176,7 +183,7 @@ class Images(BaseMixin, Base):
     path = Column(String)
     serial = Column(String, unique=True)
     active = Column(Boolean)
-    footprint_latlon = Column(Geometry('MultiPolygon', srid=srid, dimension=2, spatial_index=True))
+    _footprint_latlon = Column("footprint_latlon", Geometry('MultiPolygon', srid=srid, dimension=2, spatial_index=True))
     footprint_bodyfixed = Column(Geometry('MULTIPOLYGON', dimension=2))
     #footprint_bodyfixed = Column(Geometry('POLYGON',dimension=3))
 
@@ -196,13 +203,28 @@ class Images(BaseMixin, Base):
                 'footprint_latlon':footprint,
                 'footprint_bodyfixed':self.footprint_bodyfixed})
 
+    @property
+    def footprint_latlon(self):
+        return to_shape(self._footprint_latlon)
+    
+    @footprint_latlon.setter
+    def footprint_latlon(self, geom):
+        self._footprint_latlon = from_shape(geom, srid=srid)
+
 class Overlay(BaseMixin, Base):
     __tablename__ = 'overlay'
     id = Column(Integer, primary_key=True, autoincrement=True)
     intersections = Column(ARRAY(Integer))
     #geom = Column(Geometry(geometry_type='POLYGON', management=True))  # sqlite
-    geom = Column(Geometry('POLYGON', srid=srid, dimension=2, spatial_index=True))  # postgresql
+    _geom = Column("geom", Geometry('POLYGON', srid=srid, dimension=2, spatial_index=True))  # postgresql
 
+    @property
+    def geom(self):
+        return to_shape(self._geom)
+
+    @geom.setter
+    def geom(self, geom):
+        self._geom = from_shape(geom, srid=srid)
 
 class PointType(enum.IntEnum):
     """
@@ -215,9 +237,9 @@ class PointType(enum.IntEnum):
 class Points(BaseMixin, Base):
     __tablename__ = 'points'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    pointtype = Column(IntEnum(PointType), nullable=False)  # 2, 3, 4 - Could be an enum in the future, map str to int in a decorator
+    _pointtype = Column("pointtype", IntEnum(PointType), nullable=False)  # 2, 3, 4 - Could be an enum in the future, map str to int in a decorator
     identifier = Column(String, unique=True)
-    geom = Column(Geometry('POINT', srid=srid, dimension=2, spatial_index=True))
+    _geom = Column("geom", Geometry('POINT', srid=srid, dimension=2, spatial_index=True))
     active = Column(Boolean, default=True)
     apriorix = Column(Float)
     aprioriy = Column(Float)
@@ -228,6 +250,24 @@ class Points(BaseMixin, Base):
     measures = relationship('Measures')
     rms = Column(Float)
 
+    @property
+    def geom(self):
+        return to_shape(self._geom)
+    
+    @geom.setter
+    def geom(self, geom):
+        self._geom = from_shape(geom, srid=srid)
+
+    @property
+    def pointtype(self):
+        return self._pointtype
+
+    @pointtype.setter
+    def pointtype(self, v):
+        if isinstance(v, int):
+            v = PointType(v)
+        self._pointtype = v
+        
 class MeasureType(enum.IntEnum):
     """
     Enum to enforce measure type for ISIS control networks

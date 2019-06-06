@@ -10,8 +10,6 @@ import networkx as nx
 import geopandas as gpd
 import pandas as pd
 import numpy as np
-import sqlalchemy
-import geoalchemy2
 from redis import StrictRedis
 
 import shapely.affinity

@@ -1,5 +1,6 @@
 import pytest
 import sqlalchemy
+from shapely.geometry import Polygon, Point
 
 from autocnet.io.db import model
 from autocnet import Session, engine
@@ -50,6 +51,13 @@ def test_create_camera(session):
     res = session.query(model.Cameras).first()
     assert c.id == res.id
 
+def test_create_camera_unique_constraint(session):
+    model.Images.create(session, **{'id':1})
+    data = {'image_id':1}
+    model.Cameras.create(session, **data)
+    with pytest.raises(sqlalchemy.exc.IntegrityError):
+        model.Cameras.create(session, **data)
+
 def test_images_exists(tables):
     assert model.Images.__tablename__ in tables
 
@@ -78,8 +86,32 @@ def test_create_images_constrined(session, data):
 def test_overlay_exists(tables):
     assert model.Overlay.__tablename__ in tables
 
+@pytest.mark.parametrize('data', [
+    {'id':1},
+    {'id':1, 'intersections':[1,2,3]},
+    {'id':1, 'intersections':[1,2,3],
+     'geom':Polygon([(0,0), (1,0), (1,1), (0,1), (0,0)])}
+
+])
+def test_create_overlay(session, data):
+    d = model.Overlay.create(session, **data)
+    resp = session.query(model.Overlay).filter(model.Overlay.id == d.id).first()
+    assert d == resp
+
 def test_points_exists(tables):
     assert model.Points.__tablename__ in tables
+
+@pytest.mark.parametrize("data", [
+    {'id':1, 'pointtype':2},
+    {'pointtype':2, 'identifier':'123abc'},
+    {'pointtype':3, 'geom':Point(0,0)},
+    {'pointtype':2, 'geom':Point(1,1), 'active':True},
+    {'pointtype':2, 'rms':0.001}
+])
+def test_create_point(session, data):
+    p = model.Points.create(session, **data)
+    resp = session.query(model.Points).filter(model.Points.id == p.id).first()
+    assert p == resp
 
 def test_measures_exists(tables):
     assert model.Measures.__tablename__ in tables
