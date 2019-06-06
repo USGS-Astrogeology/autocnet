@@ -49,7 +49,7 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
     lla = pyproj.Proj(proj='latlon', a=semi_major, b=semi_minor)   
      
     # TODO: This should be a passable query where we can subset.
-    for o in session.query(Overlay.id, Overlay.geom, Overlay.intersections).\
+    for o in session.query(Overlay).\
              filter(sqlalchemy.func.ST_Area(Overlay.geom) >= size_threshold):
 
         valid = compgeom.distribute_points_in_geom(o.geom)
@@ -93,7 +93,7 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
                                                    line=dy,
                                                    imageid=destination['node_id'],
                                                    serial=destination.isis_serial,
-                                                   measuretype=MeasureType(3)))
+                                                   measuretype=3))
             if len(point.measures) >= 2:
                 points.append(point)
     session.add_all(points)
