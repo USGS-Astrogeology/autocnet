@@ -267,12 +267,16 @@ class Points(BaseMixin, Base):
 
     @hybrid_property
     def geom(self):
-        return to_shape(self._geom)
-    
+        try:
+            return to_shape(self._geom)
+        except:
+            return self._geom
+
     @geom.setter
     def geom(self, geom):
-        self._geom = from_shape(geom, srid=srid)
-
+        if geom:
+            self._geom = from_shape(geom, srid=srid)
+            
     @hybrid_property
     def pointtype(self):
         return self._pointtype
