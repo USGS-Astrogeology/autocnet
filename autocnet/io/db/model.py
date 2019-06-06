@@ -276,7 +276,7 @@ class Points(BaseMixin, Base):
     def geom(self, geom):
         if geom:
             self._geom = from_shape(geom, srid=srid)
-            
+
     @hybrid_property
     def pointtype(self):
         return self._pointtype
@@ -302,7 +302,7 @@ class Measures(BaseMixin, Base):
     pointid = Column(Integer, ForeignKey('points.id'), nullable=False)
     imageid = Column(Integer, ForeignKey('images.id'))
     serial = Column(String, nullable=False)
-    measuretype = Column(IntEnum(MeasureType), nullable=False)  # [0,3]  # Enum as above
+    _measuretype = Column("measuretype", IntEnum(MeasureType), nullable=False)  # [0,3]  # Enum as above
     sample = Column(Float, nullable=False)
     line = Column(Float, nullable=False)
     sampler = Column(Float)  # Sample Residual
@@ -314,6 +314,16 @@ class Measures(BaseMixin, Base):
     samplesigma = Column(Float)
     linesigma = Column(Float)
     rms = Column(Float)
+
+    @hybrid_property
+    def measuretype(self):
+        return self._measuretype
+
+    @measuretype.setter
+    def measuretype(self, v):
+        if isinstance(v, int):
+            v = MeasureType(v)
+        self._measuretype = v
 
 if Session:
     from autocnet.io.db.triggers import valid_point_function, valid_point_trigger
