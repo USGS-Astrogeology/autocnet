@@ -71,7 +71,7 @@ class Node(dict, MutableMapping):
         if not hasattr(self, '_camera'):
             self._camera = None
         return self._camera
-    
+
     @camera.setter
     def camera(self, camera):
         self._camera = camera
@@ -328,16 +328,16 @@ class Node(dict, MutableMapping):
         concat_kps.drop_duplicates(inplace=True)
         # Removed duplicated and re-index the merged keypoints
 
-        # Update the descriptors to be the same size as the keypoints, maintaining alignment        
+        # Update the descriptors to be the same size as the keypoints, maintaining alignment
         if self.descriptors is not None:
             concat = np.concatenate((self.descriptors, new_descriptors))
         else:
             concat = new_descriptors
         new_descriptors = concat[concat_kps.index.values]
-        
+
         self.descriptors = new_descriptors
         self.keypoints = concat_kps.reset_index(drop=True)
-        
+
         lkps = len(self.keypoints)
 
         assert lkps == len(self.descriptors)
@@ -387,7 +387,7 @@ class Node(dict, MutableMapping):
         if len(self.keypoints) > 0:
             return True
 
-    def project_keypoints(self):   
+    def project_keypoints(self):
         if self.camera is None:
             # Without a camera, it is not possible to project
             warnings.warn('Unable to project points, no camera available.')
@@ -492,7 +492,7 @@ class Node(dict, MutableMapping):
 
         for x, y in coords:
             reproj.append(self.geodata.latlon_to_pixel(y, x))
-        return shapely.geometryPolygon(reproj) 
+        return shapely.geometryPolygon(reproj)
 
 class NetworkNode(Node):
     def __init__(self, *args, parent=None, **kwargs):
@@ -525,7 +525,7 @@ class NetworkNode(Node):
                        path=kwargs['image_path'],
                        footprint_latlon=fp,
                        keypoints=kps,
-                       cameras=cam, 
+                       cameras=cam,
                        serial=self.isis_serial)
             session = Session()
             session.add(i)
@@ -608,7 +608,7 @@ class NetworkNode(Node):
         import pvl
         import requests
         import json
-        
+
         label = pvl.dumps(self.geodata.metadata).decode()
         url = config['pfeffernusse']['url']
         response = requests.post(url, json={'label':label})
@@ -617,13 +617,16 @@ class NetworkNode(Node):
         if model_name is None:
             return
         isdpath = os.path.splitext(self['image_path'])[0] + '.json'
-        with open(isdpath, 'w') as f:
-            json.dump(response, f)
-            isd = csmapi.Isd(self['image_path'])
+        try:
+            with open(isdpath, 'w') as f:
+                json.dump(response, f)
+        except Exception as e:
+            warnings.warn('Failed to write JSON ISD for image {}.\n{}'.format(self['image_path'], e))
+        isd = csmapi.Isd(self['image_path'])
         plugin = csmapi.Plugin.findPlugin('UsgsAstroPluginCSM')
         self._camera = plugin.constructModelFromISD(isd, model_name)
         serialized_camera = self._camera.getModelState()
-        
+
         cam = Cameras(camera=serialized_camera, image_id=self['node_id'])
         return cam
 

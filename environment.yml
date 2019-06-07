@@ -10,6 +10,8 @@ dependencies:
   - geoalchemy2
   - geopandas
   - imageio
+  - ipykernel
+  - jupyter
   - knoten
   - ncurses
   - networkx

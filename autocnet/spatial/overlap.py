@@ -16,7 +16,7 @@ import sqlalchemy
 def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0,
                              iterative_phase_kwargs={'size':71}):
     """
-    Given a geometry, place points into the geometry by back-projecing using 
+    Given a geometry, place points into the geometry by back-projecing using
     a sensor model.compgeom
 
     TODO: This shoucompgeomn once that package is stable.
@@ -39,16 +39,16 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
     """
     if not Session:
         warnings.warn('This function requires a database connection configured via an autocnet config file.')
-        return 
-    
+        return
+
     points = []
     session = Session()
     srid = config['spatial']['srid']
-    semi_major = config['spatial']['semimajor_rad'] 
+    semi_major = config['spatial']['semimajor_rad']
     semi_minor = config['spatial']['semiminor_rad']
     ecef = pyproj.Proj(proj='geocent', a=semi_major, b=semi_minor)
-    lla = pyproj.Proj(proj='latlon', a=semi_major, b=semi_minor)   
-     
+    lla = pyproj.Proj(proj='latlon', a=semi_major, b=semi_minor)
+
     # TODO: This should be a passable query where we can subset.
     for o in session.query(Overlay.id, Overlay.geom, Overlay.intersections).\
              filter(sqlalchemy.func.ST_Area(Overlay.geom) >= size_threshold):
@@ -56,8 +56,12 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
         valid = compgeom.distribute_points_in_geom(geoalchemy2.shape.to_shape(o.geom))
         if not valid:
             continue
+
         overlaps = o.intersections
-    
+
+        if intersections == None:
+            continue
+
         if reference is None:
             source = overlaps[0]
         else:
@@ -76,7 +80,7 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
 
             # Grab the source image. This is just the node with the lowest ID, nothing smart.
             sic = source_camera.groundToImage(gnd)
-            point.measures.append(Measures(sample=sic.samp, 
+            point.measures.append(Measures(sample=sic.samp,
                                            line=sic.line,
                                            imageid=source['node_id'],
                                            serial=source.isis_serial,

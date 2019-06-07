@@ -292,6 +292,9 @@ def compute_fundamental_matrix(kp1, kp2, method='mle', reproj_threshold=2.0,
     else:
         raise ValueError("Unknown estimation method. Choices are: 'lme', 'ransac', 'lmeds', '8point', or 'normal'.")
 
+    if len(kp1) == 0 or len(kp2) == 0:
+        warnings.warn("F Computation Failed.")
+        return None, None
 
     # OpenCV wants arrays
     try: # OpenCV < 3.4.1
