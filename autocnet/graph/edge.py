@@ -94,7 +94,7 @@ class Edge(dict, MutableMapping):
         if not hasattr(self, '_matches'):
             self._matches = pd.DataFrame()
         return self._matches
-    
+
     @matches.setter
     def matches(self, value):
         if isinstance(value, pd.DataFrame):
@@ -104,7 +104,7 @@ class Edge(dict, MutableMapping):
                 self.costs = pd.DataFrame(index=value.index)
         else:
             raise(TypeError)
-    
+
     @property
     def costs(self):
         if not hasattr(self, '_costs'):
@@ -196,7 +196,7 @@ class Edge(dict, MutableMapping):
                                                  'source_idx',
                                                  'destination',
                                                  'destination_idx']).astype(np.float32)
-        
+
         matches = matches.drop_duplicates()
 
         self.matches = matches
@@ -215,7 +215,7 @@ class Edge(dict, MutableMapping):
         dkps.reindex(self.matches['destination_idx'])
         self.matches['destination_x'] = dkps.values[:,0]
         self.matches['destination_y'] = dkps.values[:,1]
-        
+
     def project_matches(self, semimajor, semiminor, on='source', srid=None):
         """
         Project matches.
@@ -231,9 +231,9 @@ class Edge(dict, MutableMapping):
         if camera is None:
             warnings.warn('Unable to project matches without a sensor model.')
             return
-        
+
         matches = self.matches
-        
+
         gnd = np.empty((len(coords), 3))
         # Project the points to the surface and reproject into latlon space
         for i in range(gnd.shape[0]):
@@ -249,7 +249,7 @@ class Edge(dict, MutableMapping):
                                                                      coord[1],
                                                                      coord[2]))
             matches['geom'] = geoms
-        
+
         matches['lat'] = lat
         matches['lon'] = lon
         self.matches = matches
@@ -322,7 +322,7 @@ class Edge(dict, MutableMapping):
         node = node.lower()
         node = getattr(self, node)
         return self.get_keypoints(node, index=index, homogeneous=homogeneous, overlap=overlap)
-   
+
     def compute_fundamental_matrix(self, clean_keys=[], maskname='fundamental', **kwargs):
         """
         Estimate the fundamental matrix (F) using the correspondences tagged to this
@@ -346,7 +346,7 @@ class Edge(dict, MutableMapping):
         _, mask = self.clean(clean_keys)
         s_keypoints, d_keypoints = self.get_match_coordinates(clean_keys=clean_keys)
         self.fundamental_matrix, fmask = fm.compute_fundamental_matrix(s_keypoints, d_keypoints, **kwargs)
-        
+
         if isinstance(self.fundamental_matrix, np.ndarray):
             # Convert the truncated RANSAC mask back into a full length mask
             mask[mask] = fmask
@@ -433,7 +433,7 @@ class Edge(dict, MutableMapping):
                      for subpixel accuracy
 
         template_size : int
-                        The size of the template in pixels, must be odd. If using phase, 
+                        The size of the template in pixels, must be odd. If using phase,
                         only the template size is used.
 
         search_size : int
@@ -469,7 +469,7 @@ class Edge(dict, MutableMapping):
                 s_keypoint = self.source.get_keypoint_coordinates([s_idx])
                 sx = s_keypoint.x
                 sy = s_keypoint.y
-    
+
             if 'destination_x' in row.index:
                 dx = row.destination_x
                 dy = row.destination_y
@@ -486,7 +486,7 @@ class Edge(dict, MutableMapping):
                     strengths[i] = res[2]
             elif method == 'template':
                 new_x[i], new_y[i], strengths[i] = sp.subpixel_template(sx, sy, dx, dy, s_img, d_img,
-                                                                     search_size=search_size, 
+                                                                     search_size=search_size,
                                                                      template_size=template_size, **kwargs)
 
             # Capture the shifts
@@ -503,7 +503,7 @@ class Edge(dict, MutableMapping):
             self.costs.loc[mask, 'rmse'] = strengths[:,1]
         elif method == 'template':
             self.costs.loc[mask, 'correlation'] = strengths[:,0]
- 
+
 
     def suppress(self, suppression_func=spf.correlation, clean_keys=[], maskname='suppression', **kwargs):
         """
@@ -701,6 +701,11 @@ class Edge(dict, MutableMapping):
 
     def get_match_coordinates(self, clean_keys=[]):
         matches = self.get_matches(clean_keys=clean_keys)
+
+        # no matches, return empty dataframe
+        if matches.empty:
+            return pd.DataFrame(), pd.DataFrame()
+
         skps = matches[['source_x', 'source_y']].astype(np.float)
         dkps = matches[['destination_x', 'destination_y']].astype(np.float)
 
@@ -1002,7 +1007,7 @@ class NetworkEdge(Edge):
         """
         source = self.source['node_id']
         destin = self.destination['node_id']
-        
+
         if source > destin:
             source, destin = destin, source
 
@@ -1016,9 +1021,9 @@ class NetworkEdge(Edge):
             filter(Points.active==active_point,
                    Measures.active==active_measure,
                    Measures.jigreject==rejected_jigsaw,
-                   sqlalchemy.or_(Measures.imageid==source, 
+                   sqlalchemy.or_(Measures.imageid==source,
                                   Measures.imageid==destin)).join(Measures)
-        
+
         df = pd.read_sql(q.statement, engine)
         matches = []
         columns = ['point_id', 'source_measure_id', 'destin_measure_id', 'source', 'source_idx', 'destination', 'destination_idx',
@@ -1040,7 +1045,7 @@ class NetworkEdge(Edge):
                      imagea['sample'], imagea['line'], imageb['sample'], imageb['line'],
                      None, None, None, None]
             matches.append(match)
-            
+
         df.groupby('id').apply(net2matches, matches, source, destin)
         self.matches = pd.DataFrame(matches, columns=columns)
 
@@ -1050,7 +1055,7 @@ class NetworkEdge(Edge):
         the key is the match id and value is 1 (the match is flagged false).
 
         TODO: Allow the mask to be an iterable (list). The caller of this should
-        then worry about normalization as n-mask strings can come in and we 
+        then worry about normalization as n-mask strings can come in and we
         cannot anticipate how the user might want to normalize the return.
 
         Parameters
@@ -1068,7 +1073,7 @@ class NetworkEdge(Edge):
         mask = self.masks[mask]
         matches_to_disable = mask[mask == False].index
         session = Session()
-    
+
         bad = {}
         for o in session.query(Matches).filter(Matches.id.in_(matches_to_disable)).all():
             # This can't just set both to False, we loose a ton of good points - a bad point in 1 image is not

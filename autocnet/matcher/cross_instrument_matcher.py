@@ -38,6 +38,8 @@ from pysis.isis import campt
 from shapely import wkt
 from shapely.geometry.multipolygon import MultiPolygon
 
+from autocnet import engine
+
 ctypes.CDLL(find_library('usgscsm'))
 
 
@@ -58,10 +60,10 @@ def themis_ground_to_ctx_matcher(cnet):
                                           'smalls',
                                           '8083',
                                           'mars')
-    engine = create_engine(db_uri, poolclass=pool.NullPool,
+    themis_engine = create_engine(db_uri, poolclass=pool.NullPool,
                            isolation_level="AUTOCOMMIT")
 
-    themis_images = gpd.GeoDataFrame.from_postgis("select * from themis_ir", engine, geom_col="footprint_latlon")
+    themis_images = gpd.GeoDataFrame.from_postgis("select * from themis_ir", themis_engine, geom_col="footprint_latlon")
 
     # useful for masking out paths, sometimes data is split between shared directories and
     # scratch causing errors when working anywhere besides the custer
@@ -70,19 +72,6 @@ def themis_ground_to_ctx_matcher(cnet):
 
     # We need to join the CNET dataframe on serial numbers
     themis_images["serial"] = [plio.io.isis_serial_number.generate_serial_number(d) if d else None for d in themis_images["path"]]
-
-
-    # Get source images from database
-    dbconfig = config["database"]
-    db_uri = '{}://{}:{}@{}:{}/{}'.format(dbconfig["type"],
-                                          dbconfig["username"],
-                                          dbconfig["password"],
-                                          dbconfig["host"],
-                                          dbconfig["port"],
-                                          dbconfig["name"])
-
-    engine = create_engine(db_uri, poolclass=pool.NullPool,
-                           isolation_level="AUTOCOMMIT")
 
     ctx_images = gpd.GeoDataFrame.from_postgis("select * from images", engine, geom_col="footprint_latlon")
 
@@ -116,7 +105,6 @@ def themis_ground_to_ctx_matcher(cnet):
     themis_cnet = gpd.GeoDataFrame(themis_cnet, geometry=gpd.points_from_xy(lons, lats))
 
     spatial_index = ctx_images.sindex
-
 
     # We are going to iterate on points
     groups = themis_cnet.groupby("id_x").groups

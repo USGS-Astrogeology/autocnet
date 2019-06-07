@@ -59,7 +59,7 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
 
         overlaps = o.intersections
 
-        if intersections == None:
+        if overlaps == None:
             continue
 
         if reference is None:
