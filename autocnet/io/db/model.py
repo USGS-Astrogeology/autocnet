@@ -12,10 +12,13 @@ from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy_utils import database_exists, create_database
 from sqlalchemy.types import TypeDecorator
+from sqlalchemy.ext.hybrid import hybrid_property
 
 from geoalchemy2 import Geometry
-from geoalchemy2.shape import to_shape
+from geoalchemy2.shape import from_shape, to_shape
 
+import osgeo
+import shapely
 from autocnet import engine, Session, config
 
 Base = declarative_base()
@@ -44,6 +47,8 @@ class JsonEncoder(json.JSONEncoder):
             return obj.decode("utf-8")
         if isinstance(obj, set):
             return list(obj)
+        if isinstance(obj,  shapely.geometry.base.BaseGeometry):
+            return obj.wkt
         return json.JSONEncoder.default(self, obj)
 
 class IntEnum(TypeDecorator):
@@ -56,7 +61,9 @@ class IntEnum(TypeDecorator):
         self._enumtype = enumtype
 
     def process_bind_param(self, value, dialect):
-        return value.value
+        if hasattr(value, 'value'):
+            value = value.value
+        return value
 
     def process_result_value(self, value, dialect):
         return self._enumtype(value)
@@ -151,7 +158,7 @@ class Matches(BaseMixin, Base):
     destination_idx = Column(Integer, nullable=False)
     lat = Column(Float)
     lon = Column(Float)
-    geom = Column(Geometry('POINT', dimension=2, srid=srid, spatial_index=True))
+    _geom = Column("geom", Geometry('POINT', dimension=2, srid=srid, spatial_index=True))
     source_x = Column(Float)
     source_y = Column(Float)
     destination_x = Column(Float)
@@ -161,6 +168,17 @@ class Matches(BaseMixin, Base):
     original_destination_x = Column(Float)
     original_destination_y = Column(Float)
 
+    @hybrid_property
+    def geom(self):
+        try:
+            return to_shape(self._geom)
+        except:
+            return self._geom
+
+    @geom.setter
+    def geom(self, geom):
+        if geom:  # Supports instances where geom is explicitly set to None.
+            self._geom = from_shape(geom, srid=srid)
 
 class Cameras(BaseMixin, Base):
     __tablename__ = 'cameras'
@@ -176,7 +194,7 @@ class Images(BaseMixin, Base):
     path = Column(String)
     serial = Column(String, unique=True)
     active = Column(Boolean)
-    footprint_latlon = Column(Geometry('MultiPolygon', srid=srid, dimension=2, spatial_index=True))
+    _footprint_latlon = Column("footprint_latlon", Geometry('MultiPolygon', srid=srid, dimension=2, spatial_index=True))
     footprint_bodyfixed = Column(Geometry('MULTIPOLYGON', dimension=2))
     #footprint_bodyfixed = Column(Geometry('POLYGON',dimension=3))
 
@@ -196,13 +214,36 @@ class Images(BaseMixin, Base):
                 'footprint_latlon':footprint,
                 'footprint_bodyfixed':self.footprint_bodyfixed})
 
+    @hybrid_property
+    def footprint_latlon(self):
+        try:
+            return to_shape(self._footprint_latlon)
+        except:
+            return self._footprint_latlon
+
+    @footprint_latlon.setter
+    def footprint_latlon(self, geom):
+        if isinstance(geom, osgeo.ogr.Geometry):
+            # If an OGR geom, convert to shapely
+            geom = shapely.wkt.loads(geom.ExportToWkt())
+        self._footprint_latlon = from_shape(geom, srid=srid)
+
 class Overlay(BaseMixin, Base):
     __tablename__ = 'overlay'
     id = Column(Integer, primary_key=True, autoincrement=True)
     intersections = Column(ARRAY(Integer))
     #geom = Column(Geometry(geometry_type='POLYGON', management=True))  # sqlite
-    geom = Column(Geometry('POLYGON', srid=srid, dimension=2, spatial_index=True))  # postgresql
+    _geom = Column("geom", Geometry('POLYGON', srid=srid, dimension=2, spatial_index=True))  # postgresql
 
+    @hybrid_property
+    def geom(self):
+        try:
+            return to_shape(self._geom)
+        except:
+            return self._geom
+    @geom.setter
+    def geom(self, geom):
+        self._geom = from_shape(geom, srid=srid)
 
 class PointType(enum.IntEnum):
     """
@@ -215,9 +256,9 @@ class PointType(enum.IntEnum):
 class Points(BaseMixin, Base):
     __tablename__ = 'points'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    pointtype = Column(IntEnum(PointType), nullable=False)  # 2, 3, 4 - Could be an enum in the future, map str to int in a decorator
+    _pointtype = Column("pointtype", IntEnum(PointType), nullable=False)  # 2, 3, 4 - Could be an enum in the future, map str to int in a decorator
     identifier = Column(String, unique=True)
-    geom = Column(Geometry('POINT', srid=srid, dimension=2, spatial_index=True))
+    _geom = Column("geom", Geometry('POINT', srid=srid, dimension=2, spatial_index=True))
     active = Column(Boolean, default=True)
     apriorix = Column(Float)
     aprioriy = Column(Float)
@@ -228,6 +269,28 @@ class Points(BaseMixin, Base):
     measures = relationship('Measures')
     rms = Column(Float)
 
+    @hybrid_property
+    def geom(self):
+        try:
+            return to_shape(self._geom)
+        except:
+            return self._geom
+
+    @geom.setter
+    def geom(self, geom):
+        if geom:
+            self._geom = from_shape(geom, srid=srid)
+
+    @hybrid_property
+    def pointtype(self):
+        return self._pointtype
+
+    @pointtype.setter
+    def pointtype(self, v):
+        if isinstance(v, int):
+            v = PointType(v)
+        self._pointtype = v
+        
 class MeasureType(enum.IntEnum):
     """
     Enum to enforce measure type for ISIS control networks
@@ -243,7 +306,7 @@ class Measures(BaseMixin, Base):
     pointid = Column(Integer, ForeignKey('points.id'), nullable=False)
     imageid = Column(Integer, ForeignKey('images.id'))
     serial = Column(String, nullable=False)
-    measuretype = Column(IntEnum(MeasureType), nullable=False)  # [0,3]  # Enum as above
+    _measuretype = Column("measuretype", IntEnum(MeasureType), nullable=False)  # [0,3]  # Enum as above
     sample = Column(Float, nullable=False)
     line = Column(Float, nullable=False)
     sampler = Column(Float)  # Sample Residual
@@ -255,6 +318,16 @@ class Measures(BaseMixin, Base):
     samplesigma = Column(Float)
     linesigma = Column(Float)
     rms = Column(Float)
+
+    @hybrid_property
+    def measuretype(self):
+        return self._measuretype
+
+    @measuretype.setter
+    def measuretype(self, v):
+        if isinstance(v, int):
+            v = MeasureType(v)
+        self._measuretype = v
 
 if Session:
     from autocnet.io.db.triggers import valid_point_function, valid_point_trigger

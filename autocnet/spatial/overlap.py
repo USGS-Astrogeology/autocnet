@@ -1,14 +1,13 @@
 import warnings
 from autocnet import config
 from autocnet.cg import cg as compgeom
-from autocnet.io.db.model import Images, Measures, MeasureType, Overlay, Points, PointType
+from autocnet.io.db.model import Images, Measures, Overlay, Points
 from autocnet.matcher.subpixel import iterative_phase
 from autocnet import Session, engine
 
 import csmapi
 import numpy as np
 import pyproj
-import geoalchemy2
 import shapely
 import sqlalchemy
 
@@ -50,10 +49,10 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
     lla = pyproj.Proj(proj='latlon', a=semi_major, b=semi_minor)
 
     # TODO: This should be a passable query where we can subset.
-    for o in session.query(Overlay.id, Overlay.geom, Overlay.intersections).\
+    for o in session.query(Overlay).\
              filter(sqlalchemy.func.ST_Area(Overlay.geom) >= size_threshold):
 
-        valid = compgeom.distribute_points_in_geom(geoalchemy2.shape.to_shape(o.geom))
+        valid = compgeom.distribute_points_in_geom(o.geom)
         if not valid:
             continue
 
@@ -70,9 +69,8 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
         source = cg.node[source]['data']
         source_camera = source.camera
         for v in valid:
-            geom = f'srid={srid};Point({v[0]} {v[1]})'
-            point = Points(geom=geom,
-                           pointtype=PointType(2)) # Would be 3 or 4 for ground
+            point = Points(geom=shapely.geometry.Point(*v),
+                           pointtype=2) # Would be 3 or 4 for ground
 
             # Get the BCEF coordinate from the lon, lat
             x, y, z = pyproj.transform(lla, ecef, v[0], v[1], height)  # -3000 working well in elysium, need aeroid
@@ -84,7 +82,7 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
                                            line=sic.line,
                                            imageid=source['node_id'],
                                            serial=source.isis_serial,
-                                           measuretype=MeasureType(3)))
+                                           measuretype=3))
 
 
             for i, d in enumerate(overlaps):
@@ -99,7 +97,7 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
                                                    line=dy,
                                                    imageid=destination['node_id'],
                                                    serial=destination.isis_serial,
-                                                   measuretype=MeasureType(3)))
+                                                   measuretype=3))
             if len(point.measures) >= 2:
                 points.append(point)
     session.add_all(points)

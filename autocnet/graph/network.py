@@ -10,8 +10,6 @@ import networkx as nx
 import geopandas as gpd
 import pandas as pd
 import numpy as np
-import sqlalchemy
-import geoalchemy2
 from redis import StrictRedis
 
 import shapely.affinity
@@ -1367,7 +1365,8 @@ class NetworkCandidateGraph(CandidateGraph):
         for job_counter, elem in enumerate(onobj.data('data')):
             # Determine if we are working with an edge or a node
             if len(elem) > 2:
-                id = (elem[0], elem[1])
+                id = (elem[2].source['node_id'],
+                      elem[2].destination['node_id'])
                 image_path = (elem[2].source['image_path'],
                               elem[2].destination['image_path'])
             else:

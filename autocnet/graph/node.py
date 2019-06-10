@@ -4,7 +4,6 @@ import os
 import warnings
 
 from csmapi import csmapi
-import geoalchemy2
 import numpy as np
 import pandas as pd
 from plio.io.io_gdal import GeoDataset
@@ -653,11 +652,8 @@ class NetworkNode(Node):
             boundary = generate_boundary(self.geodata.raster_size[::-1])  # yx to xy
             footprint_latlon = generate_latlon_footprint(self.camera, boundary)
             footprint_latlon.FlattenTo2D()
-            footprint_latlon = footprint_latlon.ExportToWkt()
-            footprint_latlon = geoalchemy2.elements.WKTElement(footprint_latlon,
-                                                               srid=config['spatial']['srid'])
         else:
-            footprint_latlon = geoalchemy2.shape.to_shape(res.footprint_latlon)
+            footprint_latlon = res.footprint_latlon
         return footprint_latlon
 
     @property

@@ -2,7 +2,6 @@ from functools import wraps, singledispatch
 import warnings
 from collections import defaultdict, MutableMapping, Counter
 
-from geoalchemy2.elements import WKBElement
 import numpy as np
 import pandas as pd
 import networkx as nx
@@ -889,8 +888,10 @@ class NetworkEdge(Edge):
                         row_val = int(row_val)
                     elif isinstance(row_val, (np.float,)):
                         row_val = float(row_val)
-                    elif isinstance(row_val, WKBElement):
-                        continue
+                    # This should be uncommented if the matches
+                    # df is refactored to be a geodataframe
+                    #elif isinstance(row_val, WKBElement):
+                    #    continue
                     mapping[index] = row_val
                 to_db_update.append(mapping)
             else:
@@ -1082,4 +1083,3 @@ class NetworkEdge(Edge):
             bad[o.destin_measure_id] = 1
 
         return Counter(bad)
-
