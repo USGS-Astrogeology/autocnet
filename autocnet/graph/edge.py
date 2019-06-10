@@ -883,6 +883,8 @@ class NetworkEdge(Edge):
                         row_val = int(row_val)
                     elif isinstance(row_val, (np.float,)):
                         row_val = float(row_val)
+                    # This should be uncommented if the matches
+                    # df is refactored to be a geodataframe
                     #elif isinstance(row_val, WKBElement):
                     #    continue
                     mapping[index] = row_val

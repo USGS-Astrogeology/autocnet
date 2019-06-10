@@ -47,6 +47,8 @@ class JsonEncoder(json.JSONEncoder):
             return obj.decode("utf-8")
         if isinstance(obj, set):
             return list(obj)
+        if isinstance(obj,  shapely.geometry.base.BaseGeometry):
+            return obj.wkt
         return json.JSONEncoder.default(self, obj)
 
 class IntEnum(TypeDecorator):
