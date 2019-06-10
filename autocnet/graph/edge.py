@@ -1008,9 +1008,6 @@ class NetworkEdge(Edge):
         source = self.source['node_id']
         destin = self.destination['node_id']
 
-        if source > destin:
-            source, destin = destin, source
-
         q = Session().query(Points.id,
                   Points.pointtype,
                   Measures.id.label('mid'),
@@ -1082,4 +1079,3 @@ class NetworkEdge(Edge):
             bad[o.destin_measure_id] = 1
 
         return Counter(bad)
-
