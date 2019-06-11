@@ -1331,6 +1331,11 @@ class NetworkCandidateGraph(CandidateGraph):
 
         Use this method with caution as you can easily do things like
         truncate a table.
+
+        Parameters
+        ----------
+        sql : str
+              The SQL string to be passed to the DB engine and executed.
         """
         conn = engine.connect()
         conn.execute(sql)
@@ -1477,6 +1482,23 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
 
     @classmethod
     def from_filelist(cls, filelist):
+        """
+        Parse a filelist to add nodes to the database. Using the
+        information in the database, then instantiate a complete,
+        NCG.
+
+        Parameters
+        ----------
+        filelist : list, str
+                   If a list, this is a list of paths. If a str, this is
+                   a path to a file containing a list of image paths
+                   that is newline ("\\n") delimited.
+
+        Returns
+        -------
+        ncg : object
+              A network candidate graph object
+        """
         if isinstance(filelist, list):
             pass
         elif os.path.exists(filelist):
