@@ -1458,6 +1458,40 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         cnet.to_isis(path, df, self.serials())
         cnet.write_filelist(self.files, path=flistpath)
 
+    def update_from_jigsaw(self, path):
+        """
+        Updates the measures table in the database with data from
+        a jigsaw bundle adjust
+
+        Parameters
+        ----------
+        path : str
+               Full path to a bundle adjusted isis control network
+        """
+        # Ingest isis control net as a df and do some massaging
+        data = from_isis(path)
+        data['jigsawFullRejected'] = data['pointJigsawRejected'] | data['jigsawRejected']
+        data_to_update = data[['id', 'serialnumber', 'jigsawFullRejected', 'sampleResidual', 'lineResidual', 'samplesigma', 'linesigma', 'adjustedCovar', 'apriorisample', 'aprioriline']]
+        data_to_update = data_to_update.rename(columns = {'serialnumber': 'serial', 'jigsawFullRejected': 'jigreject', 'sampleResidual': 'sampler', 'lineResidual': 'liner', 'adjustedCovar': 'covar'})
+        data_to_update['covar'] = data_to_update['covar'].apply(lambda row : list(row))
+        data_to_update['id'] = data_to_update['id'].apply(lambda row : int(row))
+
+        # Generate a temp table, update the real table, then drop the temp table
+        data_to_update.to_sql('temp_measures', engine, if_exists='replace', index_label='serialnumber', index = False)
+
+        sql = """
+        UPDATE measures AS f
+        SET jigreject = t.jigreject, sampler = t.sampler, liner = t.liner, samplesigma = t.samplesigma, linesigma = t.linesigma, apriorisample = t.apriorisample, aprioriline = t.aprioriline
+        FROM temp_measures AS t
+        WHERE f.serial = t.serial AND f.pointid = t.id;
+
+        DROP TABLE temp_measures;
+        """
+
+        session = Session()
+        res = session.execute(sql)
+        session.close()
+
     @classmethod
     def from_database(cls, query_string='SELECT * FROM public.images'):
         """
