@@ -1477,14 +1477,18 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
 
     @classmethod
     def from_filelist(cls, filelist):
-        if os.path.exists(filelist):
+        if isinstance(filelist, list):
+            pass
+        elif os.path.exists(filelist):
             filelist = io_utils.file_to_list(filelist)
+        else:
+            warning.warn('Unable to parse the passed filelist')
 
         for f in filelist:
             # Create the nodes in the graph. Really, this is creating the
             # images in the DB
             image_name = os.path.basename(f)
-            NetworkNode({'image_path':f, 'image_name':image_name})
+            NetworkNode(image_path=f, image_name=image_name)
         
         return cls.from_database()
         
