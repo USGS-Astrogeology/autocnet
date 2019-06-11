@@ -103,3 +103,22 @@ def place_points_in_overlaps(cg, size_threshold=0.0007, reference=None, height=0
     session.add_all(points)
     session.commit()
 
+compute_overlaps_sql = """
+WITH intersectiongeom AS
+(SELECT geom AS geom FROM ST_Dump((
+   SELECT ST_Polygonize(the_geom) AS the_geom FROM (
+     SELECT ST_Union(the_geom) AS the_geom FROM (
+	   SELECT ST_ExteriorRing((ST_DUMP(footprint_latlon)).geom) AS the_geom
+	     FROM images WHERE images.footprint_latlon IS NOT NULL) AS lines
+	) AS noded_lines))),
+iid AS (
+ SELECT images.id, intersectiongeom.geom AS geom
+		FROM images, intersectiongeom
+		WHERE images.footprint_latlon is NOT NULL AND
+		ST_INTERSECTS(intersectiongeom.geom, images.footprint_latlon) AND
+		ST_AREA(ST_INTERSECTION(intersectiongeom.geom, images.footprint_latlon)) > 0.000001
+)
+INSERT INTO overlay(intersections, geom) SELECT row.intersections, row.geom FROM 
+(SELECT iid.geom, array_agg(iid.id) AS intersections
+  FROM iid GROUP BY iid.geom) AS row WHERE array_length(intersections, 1) > 1;
+"""
