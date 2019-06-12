@@ -6,7 +6,9 @@ cluster:
     queue: 'shortall'
     # Location to put <jobid.log> files for cluster jobs
     cluster_log_dir: '/scratch/jlaura/elysium/logs'
+    # What cluster submission tool should be user
     cluster_submission: 'slurm'  # or `pbs`
+    # What scratch or temporary area should be used for temporary file creation
     tmp_scratch_dir: '/scratch/jlaura'
 
     # The amount of RAM (in MB) to request for jobs
@@ -15,11 +17,17 @@ cluster:
 
 ### Database Configuration ###
 database:
+    # Name of the database. For example, postgresql or sqlite
     type: 'postgresql'
+    # Username used to log in to the database
     username: 'sample'
+    # Password used to log in to the database
     password: 'sample'
+    # Host machine name (or localhost) where the database is running
     host: 'smalls'
+    # Port that the database is exposed on
     port: 8085
+    # Port where a proxy that manages database connections is running
     pgbouncer_port: 8083
     # The name of the database to connect to.  Tables will be created inside this DB.
     name: 'jelysiumtest' # This needs to be all lowercase for PostGreSQL!
@@ -28,53 +36,38 @@ database:
 
 ### Pfeffernusse / CSM Configuration ###
 pfeffernusse:
+    # URL to the service that serves CSM compliant ISDs
     url: 'http://smalls:8081/v1/pds'
 
-# Redis Configuration
+### Redis Configuration ###
 redis:
+    # Name of the redis queue
     basename: 'elysium'
+    # Hostname (or localhost) where the redis server is running
     host: 'smalls'
+    # Port that redis is accepting connections on
     port: '8084'
+    # The name of the queue that successful job messages are pushed
     completed_queue: 'jely:done'
+    # The name of the queue used for jobs that need to be started
     processing_queue: 'jely:proc'
+    # The name of the queue that currently processing jobs are pushed 
     working_queue: 'jely:working'
 
 ### Spatial Reference Setup ###
 spatial:
+    # The spatial reference identifier in the database. This value needs
+    # to be added to the database that is storing the spatial information.
     srid: 949900
+    # The radii of the body. If the body is a sphere, these values should match
     semimajor_rad: 3396190  # in meters
     semiminor_rad: 3376200  # in meters
+    # A compliant proj4 string. Checkout http://spatialreference.org for examples 
+    # for planetary bodies.
     proj4_str: '+proj:longlat +a:3396190 +b:3376200 +no_defs'
 
 ### Working Directories ###
 directories:
+    # The directory where VRTs should be created
     vrt_dir: '/sratch/jlaura/elysium/vrt'
-
-algorithms:
-    ring_match:
-        - target_points: 25
-          tolerance: 0.01
-        - target_points: 20
-          tolerance: 0.01
-        - target_points: 25
-          tolerance: 0.02
-    compute_fundamental_matrix:
-        - tolerance: 0.3
-          reproj_threshold: 10
-          initial_x_size: 500
-          initial_y_size: 500
-          corr_x_size: 40
-          corr_y_size: 40
-        - tolerance: 0.3
-          reproj_threshold: 15
-          initial_x_size: 500
-          initial_y_size: 500
-          corr_x_size: 40
-          corr_y_size: 40
-        - tolerance: 0.25
-          reproj_threshold: 20
-          initial_x_size: 500
-          initial_y_size: 500
-          corr_x_size: 40
-          corr_y_size: 40
 
