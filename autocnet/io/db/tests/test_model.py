@@ -2,12 +2,15 @@ from datetime import datetime
 import json
 
 import numpy as np
+import pandas as pd
 import pytest
 import sqlalchemy
 from shapely.geometry import Polygon, Point
+from unittest.mock import MagicMock, patch
 
 from autocnet.io.db import model
 from autocnet import Session, engine
+from autocnet.graph.network import NetworkCandidateGraph
 
 @pytest.fixture
 def tables():
@@ -22,12 +25,12 @@ def session(tables, request):
         for t in reversed(tables):
             session.execute(f'TRUNCATE TABLE {t} CASCADE')
             # Reset the autoincrementing
-            if t in ['Images', 'Cameras', 'Matches']:
+            if t in ['Images', 'Cameras', 'Matches', 'Measures']:
                 session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
         session.commit()
 
     request.addfinalizer(cleanup)
-    
+
     return session
 
 def test_keypoints_exists(tables):
@@ -44,6 +47,9 @@ def test_matches_exists(tables):
 
 def test_cameras_exists(tables):
     assert model.Cameras.__tablename__ in tables
+
+def test_measures_exists(tables):
+    assert model.Measures.__tablename__ in tables
 
 def test_create_camera_without_image(session):
     with pytest.raises(sqlalchemy.exc.IntegrityError):
@@ -134,6 +140,31 @@ def test_json_encoder(data, serialized):
     res = json.loads(res)
     if isinstance(res['foo'], list):
         res['foo'] = sorted(res['foo'])
-    print(res)
-
     assert res == serialized
+
+@pytest.mark.parametrize("measure_data, point_data, image_data", [({'id': 1, 'pointid': 1, 'imageid': 1, 'serial': 'ISISSERIAL', 'measuretype': 3, 'sample': 0, 'line': 0},
+                                                                   {'id':1, 'pointtype':2},
+                                                                   {'id':1, 'serial': 'ISISSERIAL'})])
+@patch('plio.io.io_controlnetwork.from_isis', return_value = pd.DataFrame.from_dict({'id': [1],
+                                                                                     'serialnumber': ['ISISSERIAL'],
+                                                                                     'pointJigsawRejected': [False],
+                                                                                     'jigsawRejected': [False],
+                                                                                     'sampleResidual': [0.1],
+                                                                                     'lineResidual': [0.1],
+                                                                                     'samplesigma': [0],
+                                                                                     'linesigma': [0],
+                                                                                     'adjustedCovar': [[]],
+                                                                                     'apriorisample': [0],
+                                                                                     'aprioriline': [0]}))
+def test_jigsaw_append(mockFunc, session, measure_data, point_data, image_data):
+    model.Images.create(session, **image_data)
+    model.Points.create(session, **point_data)
+    model.Measures.create(session, **measure_data)
+    resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
+    assert resp.liner == None
+    assert resp.sampler == None
+
+    NetworkCandidateGraph.update_from_jigsaw(session, '/Some/Path/To/An/ISISNetwork.cnet')
+    resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
+    assert resp.liner == 0.1
+    assert resp.sampler == 0.1

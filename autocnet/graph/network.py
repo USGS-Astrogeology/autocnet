@@ -37,6 +37,7 @@ from autocnet.io.db.model import (Images, Keypoints, Matches, Cameras,
 from autocnet.io.db.connection import new_connection, Parent
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
+from autocnet.spatial.overlap import compute_overlaps_sql
 
 #np.warnings.filterwarnings('ignore')
 
@@ -1297,10 +1298,13 @@ class NetworkCandidateGraph(CandidateGraph):
         for s, d, e in self.edges(data='data'):
             e.parent = self
 
+        # Execute the computation to compute overlapping geometries
+        self._execute_sql(compute_overlaps_sql)
+
+        # Setup the redis queues
         redis = config.get('redis')
         if redis:
             self.processing_queue = redis['processing_queue']
-
 
     def _setup_queues(self):
         """
@@ -1319,6 +1323,23 @@ class NetworkCandidateGraph(CandidateGraph):
         documented at: https://redis-py.readthedocs.io/en/latest/#redis.StrictRedis
         """
         return self.redis_queue.flushall()
+
+    def _execute_sql(self, sql):
+        """
+        Execute a raw SQL string in the database currently specified
+        by the AutoCNet config file.
+
+        Use this method with caution as you can easily do things like
+        truncate a table.
+
+        Parameters
+        ----------
+        sql : str
+              The SQL string to be passed to the DB engine and executed.
+        """
+        conn = engine.connect()
+        conn.execute(sql)
+        conn.close()
 
     def apply(self, function, on='edge', args=(), walltime='01:00:00', **kwargs):
         """
@@ -1421,10 +1442,10 @@ class NetworkCandidateGraph(CandidateGraph):
         For the nodes in the graph, genreate a GDAL compliant vrt file.
         This is just a dispatcher to the knoten generate_vrt file.
         """
-        for i, n in self.nodes(data='data'):
+        for _, n in self.nodes(data='data'):
             n.generate_vrt(**kwargs)
 
-    def to_isis(self, path, flistpath=None,         sql = """
+    def to_isis(self, path, flistpath=None,sql = """
 SELECT points.id, measures.serial, points.pointtype, measures.sample, measures.line, measures.measuretype,
 measures.imageid
 FROM measures INNER JOIN points ON measures.pointid = points.id
@@ -1459,6 +1480,74 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         cnet.to_isis(path, df, self.serials())
         cnet.write_filelist(self.files, path=flistpath)
 
+    @staticmethod
+    def update_from_jigsaw(session, path):
+        """
+        Updates the measures table in the database with data from
+        a jigsaw bundle adjust
+
+        Parameters
+        ----------
+        path : str
+               Full path to a bundle adjusted isis control network
+        """
+        # Ingest isis control net as a df and do some massaging
+        data = cnet.from_isis(path)
+        data['jigsawFullRejected'] = data['pointJigsawRejected'] | data['jigsawRejected']
+        data_to_update = data[['id', 'serialnumber', 'jigsawFullRejected', 'sampleResidual', 'lineResidual', 'samplesigma', 'linesigma', 'adjustedCovar', 'apriorisample', 'aprioriline']]
+        data_to_update = data_to_update.rename(columns = {'serialnumber': 'serial', 'jigsawFullRejected': 'jigreject', 'sampleResidual': 'sampler', 'lineResidual': 'liner', 'adjustedCovar': 'covar'})
+        data_to_update['covar'] = data_to_update['covar'].apply(lambda row : list(row))
+        data_to_update['id'] = data_to_update['id'].apply(lambda row : int(row))
+
+        # Generate a temp table, update the real table, then drop the temp table
+        data_to_update.to_sql('temp_measures', engine, if_exists='replace', index_label='serialnumber', index = False)
+
+        sql = """
+        UPDATE measures AS f
+        SET jigreject = t.jigreject, sampler = t.sampler, liner = t.liner, samplesigma = t.samplesigma, linesigma = t.linesigma, apriorisample = t.apriorisample, aprioriline = t.aprioriline
+        FROM temp_measures AS t
+        WHERE f.serial = t.serial AND f.pointid = t.id;
+
+        DROP TABLE temp_measures;
+        """
+
+        session.execute(sql)
+        session.commit()
+
+    @classmethod
+    def from_filelist(cls, filelist):
+        """
+        Parse a filelist to add nodes to the database. Using the
+        information in the database, then instantiate a complete,
+        NCG.
+
+        Parameters
+        ----------
+        filelist : list, str
+                   If a list, this is a list of paths. If a str, this is
+                   a path to a file containing a list of image paths
+                   that is newline ("\\n") delimited.
+
+        Returns
+        -------
+        ncg : object
+              A network candidate graph object
+        """
+        if isinstance(filelist, list):
+            pass
+        elif os.path.exists(filelist):
+            filelist = io_utils.file_to_list(filelist)
+        else:
+            warning.warn('Unable to parse the passed filelist')
+
+        for f in filelist:
+            # Create the nodes in the graph. Really, this is creating the
+            # images in the DB
+            image_name = os.path.basename(f)
+            NetworkNode(image_path=f, image_name=image_name)
+        
+        return cls.from_database()
+        
     @classmethod
     def from_database(cls, query_string='SELECT * FROM public.images'):
         """
@@ -1515,6 +1604,6 @@ AND i1.id < i2.id""".format(query_string)
                 adjacency[spath].append(dpath)
         session.close()
         # Add nodes that do not overlap any images
-        obj = cls.from_adjacency(adjacency, node_id_map=adjacency_lookup, config=config)
+        obj = cls(adjacency, node_id_map=adjacency_lookup, config=config)
 
         return obj
