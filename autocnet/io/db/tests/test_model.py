@@ -149,8 +149,8 @@ def test_json_encoder(data, serialized):
                                                                                      'serialnumber': ['ISISSERIAL'],
                                                                                      'pointJigsawRejected': [False],
                                                                                      'jigsawRejected': [False],
-                                                                                     'sampleResidual': [0],
-                                                                                     'lineResidual': [0],
+                                                                                     'sampleResidual': [0.1],
+                                                                                     'lineResidual': [0.1],
                                                                                      'samplesigma': [0],
                                                                                      'linesigma': [0],
                                                                                      'adjustedCovar': [[]],
@@ -162,7 +162,9 @@ def test_jigsaw_append(mockFunc, session, measure_data, point_data, image_data):
     model.Measures.create(session, **measure_data)
     resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
     assert resp.liner == None
+    assert resp.sampler == None
 
-    NetworkCandidateGraph.update_from_jigsaw('/Some/Path/To/An/ISISNetwork.cnet')
+    NetworkCandidateGraph.update_from_jigsaw(session, '/Some/Path/To/An/ISISNetwork.cnet')
     resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
-    assert resp.liner != None
+    assert resp.liner == 0.1
+    assert resp.sampler == 0.1

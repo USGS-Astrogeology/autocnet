@@ -1458,7 +1458,8 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         cnet.to_isis(path, df, self.serials())
         cnet.write_filelist(self.files, path=flistpath)
 
-    def update_from_jigsaw(path):
+    @staticmethod
+    def update_from_jigsaw(session, path):
         """
         Updates the measures table in the database with data from
         a jigsaw bundle adjust
@@ -1488,9 +1489,8 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         DROP TABLE temp_measures;
         """
 
-        session = Session()
         session.execute(sql)
-        session.close()
+        session.commit()
 
     @classmethod
     def from_database(cls, query_string='SELECT * FROM public.images'):
