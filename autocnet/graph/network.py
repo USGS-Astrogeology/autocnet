@@ -1458,7 +1458,7 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         cnet.to_isis(path, df, self.serials())
         cnet.write_filelist(self.files, path=flistpath)
 
-    def update_from_jigsaw(self, path):
+    def update_from_jigsaw(path):
         """
         Updates the measures table in the database with data from
         a jigsaw bundle adjust
@@ -1469,7 +1469,7 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
                Full path to a bundle adjusted isis control network
         """
         # Ingest isis control net as a df and do some massaging
-        data = from_isis(path)
+        data = cnet.from_isis(path)
         data['jigsawFullRejected'] = data['pointJigsawRejected'] | data['jigsawRejected']
         data_to_update = data[['id', 'serialnumber', 'jigsawFullRejected', 'sampleResidual', 'lineResidual', 'samplesigma', 'linesigma', 'adjustedCovar', 'apriorisample', 'aprioriline']]
         data_to_update = data_to_update.rename(columns = {'serialnumber': 'serial', 'jigsawFullRejected': 'jigreject', 'sampleResidual': 'sampler', 'lineResidual': 'liner', 'adjustedCovar': 'covar'})
@@ -1489,7 +1489,7 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         """
 
         session = Session()
-        res = session.execute(sql)
+        session.execute(sql)
         session.close()
 
     @classmethod
