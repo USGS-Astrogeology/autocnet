@@ -6,7 +6,7 @@ cluster:
     queue: 'shortall'
     # Location to put <jobid.log> files for cluster jobs
     cluster_log_dir: '/scratch/jlaura/elysium/logs'
-    # What cluster submission tool should be user
+    # What cluster submission tool should be used
     cluster_submission: 'slurm'  # or `pbs`
     # What scratch or temporary area should be used for temporary file creation
     tmp_scratch_dir: '/scratch/jlaura'
@@ -17,7 +17,7 @@ cluster:
 
 ### Database Configuration ###
 database:
-    # Name of the database. For example, postgresql or sqlite
+    # Name of the database management system. For example, postgresql or sqlite
     type: 'postgresql'
     # Username used to log in to the database
     username: 'sample'
@@ -41,17 +41,21 @@ pfeffernusse:
 
 ### Redis Configuration ###
 redis:
-    # Name of the redis queue
+    # Name of the redis queue. Ensure it is unique to avoid multiple uses
+    # of the same redis queue.
     basename: 'elysium'
     # Hostname (or localhost) where the redis server is running
     host: 'smalls'
     # Port that redis is accepting connections on
     port: '8084'
-    # The name of the queue that successful job messages are pushed
+    # The name of the queue that successful job messages are pushed. This
+    # name should be unique to avoid collision with other users.
     completed_queue: 'jely:done'
-    # The name of the queue used for jobs that need to be started
+    # The name of the queue used for jobs that need to be started. This
+    # name should be unique to avoid collision with other users.
     processing_queue: 'jely:proc'
-    # The name of the queue that currently processing jobs are pushed 
+    # The name of the queue that currently processing jobs are pushed to. This
+    # name should be unique to avoid collision with other users. 
     working_queue: 'jely:working'
 
 ### Spatial Reference Setup ###
@@ -59,9 +63,10 @@ spatial:
     # The spatial reference identifier in the database. This value needs
     # to be added to the database that is storing the spatial information.
     srid: 949900
-    # The radii of the body. If the body is a sphere, these values should match
-    semimajor_rad: 3396190  # in meters
-    semiminor_rad: 3376200  # in meters
+    # The radii of the body. If the body is a sphere, these values should match.
+    # Units are in meters
+    semimajor_rad: 3396190
+    semiminor_rad: 3376200
     # A compliant proj4 string. Checkout http://spatialreference.org for examples 
     # for planetary bodies.
     proj4_str: '+proj:longlat +a:3396190 +b:3376200 +no_defs'
@@ -71,3 +76,40 @@ directories:
     # The directory where VRTs should be created
     vrt_dir: '/sratch/jlaura/elysium/vrt'
 
+### Algorithms ###
+# This section contains definitions for algorithms available
+# to AutoCNet. When populated, the values in these blocks
+# are parsed on job submission and used as the args/kwargs.
+# When an algorithm has multiple entries, e.g., 3 for `ring_match`, 
+# the algorithm will be run up to 3 times. The first time, it is
+# assumed that the strictest parametrization is used. If this 
+# fails, the next parametrization is used and so forth until either
+# the algorithm returns successfully or all parameter combinations
+# have been applied. This capability is experimental!
+algorithms:		
+     ring_match:		
+         - target_points: 25		
+           tolerance: 0.01		
+         - target_points: 20		
+           tolerance: 0.01		
+         - target_points: 25		
+           tolerance: 0.02		
+     compute_fundamental_matrix:		
+         - tolerance: 0.3		
+           reproj_threshold: 10		
+           initial_x_size: 500		
+           initial_y_size: 500		
+           corr_x_size: 40		
+           corr_y_size: 40		
+         - tolerance: 0.3		
+           reproj_threshold: 15		
+           initial_x_size: 500		
+           initial_y_size: 500		
+           corr_x_size: 40		
+           corr_y_size: 40		
+         - tolerance: 0.25		
+           reproj_threshold: 20		
+           initial_x_size: 500		
+           initial_y_size: 500		
+           corr_x_size: 40		
+           corr_y_size: 40
