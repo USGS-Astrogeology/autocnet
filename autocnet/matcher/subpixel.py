@@ -248,6 +248,11 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
     dsample = dx
     dline = dy
 
+    s_template, _, _ = clip_roi(s_img, sx, sy,
+                               size_x=size, size_y=size)
+    d_search, dxr, dyr = clip_roi(d_img, dx, dy,
+                             size_x=size, size_y=size)
+
     while  abs(shift_x) <= convergence_threshold and\
            abs(shift_y) <= convergence_threshold and\
            abs(dist) <= max_dist:
