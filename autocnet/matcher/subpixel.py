@@ -238,11 +238,6 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
     subpixel_phase : the function that applies a single iteration of the phase matcher
     """
 
-    # intialize iterative vars
-    shift_x = float("inf")
-    shift_y = float("inf")
-    dist = float("inf")
-
     # get initial destination location
     dsample = dx
     dline = dy
