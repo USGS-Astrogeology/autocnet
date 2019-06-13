@@ -1607,3 +1607,35 @@ AND i1.id < i2.id""".format(query_string)
         obj = cls(adjacency, node_id_map=adjacency_lookup, config=config)
 
         return obj
+
+    def clear(self, tables=None):
+        """
+        Truncate all of the database tables and reset any
+        autoincrement columns to start with 1.
+
+        Parameters
+        ----------
+        table : str or list of str, optional
+                the table name of a list of table names to truncate
+        """
+        session = Session()
+        session.rollback() # In case any transactions are not done
+        if tables:
+            if isinstance(tables, str):
+                tables = [tables]
+        else:
+            tables = engine.table_names()
+        
+        for t in tables:
+            session.execute(f'TRUNCATE TABLE {t} CASCADE')
+            try:
+                session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
+            except:
+                session.rollback()
+        session.commit()
+        session.close()
+
+
+
+
+            
