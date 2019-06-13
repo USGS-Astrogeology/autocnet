@@ -246,7 +246,6 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
     # get initial destination location
     dsample = dx
     dline = dy
-    print(convergence_threshold)
     while True:
         s_template, _, _ = clip_roi(s_img, sx, sy,
                                    size_x=size, size_y=size)
