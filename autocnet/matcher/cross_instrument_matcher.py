@@ -168,21 +168,27 @@ def themis_ground_to_ctx_matcher(cnet):
                     match_results.append(ex)
                     continue
 
-                if ret is not None:
+                if ret is not None and None not in ret:
                     x,y,metrics = ret
                 else:
                     match_results.append("Failed to Converge")
                     continue
-
-                dist = np.linalg.norm([x-dx, -1*(y-dy)])
-                match_results.append([k, x-dx, -1*(y-dy), dist])
+                try:
+                  dist = np.linalg.norm([x-dx, -1*(y-dy)])
+                  match_results.append([k, x-dx, -1*(y-dy), dist])
+                except:
+                  continue
 
             # get best offsets, if possible we need better metric for what a
             # good match looks like
             match_results = np.asarray([res for res in match_results if isinstance(res, list)])
+            if match_results.shape[0] == 0:
+                # no matches
+                continue
             match_results = match_results[np.argwhere(match_results[:,3] == match_results[:,3].min())][0][0]
 
             if match_results[3] > 2:
+                # best match diverged too much
                 continue
 
             measure = measures.loc[match_results[0]]
@@ -228,7 +234,7 @@ def themis_ground_to_ctx_matcher(cnet):
 
 
     # These should be defined somewhere in Autocnet/plio, if so it should be imported
-    columns = ['point_id', 'PointType', 'chooserName', 'datetime', 'editLock', 'ignore',
+    columns = ['point_id', 'type', 'chooserName', 'datetime', 'editLock', 'ignore',
            'jigsawRejected', 'referenceIndex', 'AprioriSource',
            'aprioriSurfPointSourceFile', 'RadiusSource',
            'aprioriRadiusSourceFile', 'latitudeConstrained',

@@ -193,7 +193,7 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, search_size=251, template_si
     dy += (y_offset + dyr)
     return dx, dy, strength
 
-def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, convergence_threshold=1.0, **kwargs):
+def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, convergence_threshold=1.0, max_dist=50, **kwargs):
     """
     Iteratively apply a subpixel phase matcher to source (s_img) amd destination (d_img)
     images. The size parameter is used to set the initial search space. The algorithm
@@ -237,42 +237,59 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
     --------
     subpixel_phase : the function that applies a single iteration of the phase matcher
     """
-    s_template, _, _ = clip_roi(s_img, sx, sy,
-                             size_x=size, size_y=size)
-    d_search, dxr, dyr = clip_roi(d_img, dx, dy,
-                           size_x=size, size_y=size)
-    if (s_template is None) or (d_search is None):
-        return None, None, None
 
-    if s_template.shape != d_search.shape:
-        s_size = s_template.shape
-        d_size = d_search.shape
-        updated_size = int(min(s_size + d_size) / 2)
-        # Since the image is smaller than the requested size, set the size to
-        # the current maximum image size and reduce from there on potential
-        # future iterations.
-        size = updated_size
+    # intialize iterative vars
+    shift_x = float("inf")
+    shift_y = float("inf")
+    dist = float("inf")
+    metrics = []
+
+    # get initial destination location
+    dsample = dx
+    dline = dy
+
+    while  abs(shift_x) <= convergence_threshold and\
+           abs(shift_y) <= convergence_threshold and\
+           abs(dist) <= max_dist:
+
         s_template, _, _ = clip_roi(s_img, sx, sy,
-                             size_x=updated_size, size_y=updated_size)
+                               size_x=size, size_y=size)
         d_search, dxr, dyr = clip_roi(d_img, dx, dy,
-                            size_x=updated_size, size_y=updated_size)
+                             size_x=size, size_y=size)
+
         if (s_template is None) or (d_search is None):
             return None, None, None
 
-    # Apply the phase matcher
-    try:
-        shift_x, shift_y, metrics = subpixel_phase(s_template, d_search,**kwargs)
-    except:
-        return None, None, None
-    # Apply the shift to d_search and compute the new correspondence location
-    dx += (shift_x + dxr)
-    dy += (shift_y + dyr)
+        if s_template.shape != d_search.shape:
+            s_size = s_template.shape
+            d_size = d_search.shape
+            updated_size = int(min(s_size + d_size) / 2)
+            # Since the image is smaller than the requested size, set the size to
+            # the current maximum image size and reduce from there on potential
+            # future iterations.
+            size = updated_size
+            s_template, _, _ = clip_roi(s_img, sx, sy,
+                                 size_x=updated_size, size_y=updated_size)
+            d_search, dxr, dyr = clip_roi(d_img, dx, dy,
+                                size_x=updated_size, size_y=updated_size)
+            if (s_template is None) or (d_search is None):
+                return None, None, None
 
-    # Break if the solution has converged
-    size -= reduction
-    if abs(shift_x) <= convergence_threshold and abs(shift_y) <= convergence_threshold:
-        return dx, dy, metrics
-    elif size <1:
-        return None, None, None
-    else:
-        return iterative_phase(sx, sy,  dx, dy, s_img, d_img, size, **kwargs)
+        # Apply the phase matcher
+        try:
+            shift_x, shift_y, m = subpixel_phase(s_template, d_search,**kwargs)
+        except:
+            return None, None, None
+        # Apply the shift to d_search and compute the new correspondence location
+        dx += (shift_x + dxr)
+        dy += (shift_y + dyr)
+        metrics.append(m)
+
+        # Break if the solution has converged
+        size -= reduction
+        dist = np.linalg.norm([dsample-dx, dline-dy])
+
+        if size <1:
+            return None, None, None
+    return dx, dy, metrics
+

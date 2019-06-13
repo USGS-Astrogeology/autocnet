@@ -1470,14 +1470,13 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
               The sql query to execute in the database.
 
         """
-
         df = pd.read_sql(sql, engine)
-        df.rename(columns={'imageid':'image_index','id':'point_id',
-                           'sample':'x', 'line':'y'}, inplace=True)
+        df.rename(columns={'imageid':'image_index','id':'point_id', 'pointtype' : 'type',
+            'sample':'x', 'line':'y', 'serial': 'serialnumber'}, inplace=True)
         if flistpath is None:
             flistpath = os.path.splitext(path)[0] + '.lis'
 
-        cnet.to_isis(path, df, self.serials())
+        cnet.to_isis(df, path)
         cnet.write_filelist(self.files, path=flistpath)
 
     @staticmethod
@@ -1545,9 +1544,9 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
             # images in the DB
             image_name = os.path.basename(f)
             NetworkNode(image_path=f, image_name=image_name)
-        
+
         return cls.from_database()
-        
+
     @classmethod
     def from_database(cls, query_string='SELECT * FROM public.images'):
         """
