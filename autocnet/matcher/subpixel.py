@@ -242,29 +242,19 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
     shift_x = float("inf")
     shift_y = float("inf")
     dist = float("inf")
-    metrics = []
 
     # get initial destination location
     dsample = dx
     dline = dy
-
-    s_template, _, _ = clip_roi(s_img, sx, sy,
-                               size_x=size, size_y=size)
-    d_search, dxr, dyr = clip_roi(d_img, dx, dy,
-                             size_x=size, size_y=size)
-
-    while  abs(shift_x) <= convergence_threshold and\
-           abs(shift_y) <= convergence_threshold and\
-           abs(dist) <= max_dist:
-
+    print(convergence_threshold)
+    while True:
         s_template, _, _ = clip_roi(s_img, sx, sy,
-                               size_x=size, size_y=size)
+                                   size_x=size, size_y=size)
         d_search, dxr, dyr = clip_roi(d_img, dx, dy,
-                             size_x=size, size_y=size)
+                                 size_x=size, size_y=size)
 
         if (s_template is None) or (d_search is None):
             return None, None, None
-
         if s_template.shape != d_search.shape:
             s_size = s_template.shape
             d_size = d_search.shape
@@ -273,28 +263,30 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
             # the current maximum image size and reduce from there on potential
             # future iterations.
             size = updated_size
-            s_template, _, _ = clip_roi(s_img, sx, sy,
+            s_template, _, _ = clip_roi(s_template, sx, sy,
                                  size_x=updated_size, size_y=updated_size)
-            d_search, dxr, dyr = clip_roi(d_img, dx, dy,
+            d_search, dxr, dyr = clip_roi(d_search, dx, dy,
                                 size_x=updated_size, size_y=updated_size)
             if (s_template is None) or (d_search is None):
                 return None, None, None
 
         # Apply the phase matcher
         try:
-            shift_x, shift_y, m = subpixel_phase(s_template, d_search,**kwargs)
+            shift_x, shift_y, metrics = subpixel_phase(s_template, d_search,**kwargs)
         except:
             return None, None, None
         # Apply the shift to d_search and compute the new correspondence location
         dx += (shift_x + dxr)
         dy += (shift_y + dyr)
-        metrics.append(m)
 
         # Break if the solution has converged
         size -= reduction
         dist = np.linalg.norm([dsample-dx, dline-dy])
-
         if size <1:
             return None, None, None
+        if abs(shift_x) <= convergence_threshold and\
+           abs(shift_y) <= convergence_threshold and\
+           abs(dist) <= max_dist:
+            break
     return dx, dy, metrics
 
