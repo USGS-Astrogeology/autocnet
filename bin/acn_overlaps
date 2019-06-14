@@ -11,6 +11,8 @@ import yaml
 from autocnet.io.db import connection
 from autocnet.io.db.redis_queue import pop_computetime_push, finalize
 
+from plio.io.io_gdal import GeoDataset
+
 #Load the config file
 try:
     with open(os.environ['autocnet_config'], 'r') as f:

@@ -280,8 +280,8 @@ class Edge(dict, MutableMapping):
                  (self.matches["destination_idx"].isin(d_idx))] = True
         self.masks['overlap'] = mask
 
-    def symmetry_check(self):
-        self.masks['symmetry'] = od.mirroring_test(self.matches)
+    def symmetry_check(self, clean_keys=[], maskname='symmetry', **kwargs):
+        self.masks[maskname] = od.mirroring_test(self.matches)
 
     def ratio_check(self, clean_keys=[], maskname='ratio', **kwargs):
         matches, mask = self.clean(clean_keys)
