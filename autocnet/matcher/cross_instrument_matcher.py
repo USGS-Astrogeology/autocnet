@@ -173,11 +173,9 @@ def themis_ground_to_ctx_matcher(cnet):
                 else:
                     match_results.append("Failed to Converge")
                     continue
-                try:
-                  dist = np.linalg.norm([x-dx, -1*(y-dy)])
-                  match_results.append([k, x-dx, -1*(y-dy), dist])
-                except:
-                  continue
+
+                dist = np.linalg.norm([x-dx, -1*(y-dy)])
+                match_results.append([k, x-dx, -1*(y-dy), dist])
 
             # get best offsets, if possible we need better metric for what a
             # good match looks like
