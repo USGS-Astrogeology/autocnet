@@ -27,6 +27,7 @@ dependencies:
   - pyproj
   - pytest
   - pytest-cov
+  - pysis
   - scikit-image
   - scipy
   - shapely

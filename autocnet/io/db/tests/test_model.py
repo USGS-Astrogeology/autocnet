@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 import pytest
 import sqlalchemy
-from shapely.geometry import Polygon, Point
+from shapely.geometry import MultiPolygon, Polygon, Point
 from unittest.mock import MagicMock, patch
 
 from autocnet.io.db import model
@@ -168,3 +168,19 @@ def test_jigsaw_append(mockFunc, session, measure_data, point_data, image_data):
     resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
     assert resp.liner == 0.1
     assert resp.sampler == 0.1
+
+def test_broken_bad_geom(session):
+    # An irreperablly damaged poly
+    geom = MultiPolygon([Polygon([(0,0), (1,1), (1,2), (1,1), (0,0)])])
+    i = model.Images.create(session, footprint_latlon=geom,
+                                      serial = 'serial')
+    resp = session.query(model.Images).filter(model.Images.id==i.id).one()
+    assert resp.active == False
+    
+def test_fix_bad_geom(session):
+    geom = MultiPolygon([Polygon([(0,0), (0,1), (1,1), (0,1), (1,1), (1,0), (0,0) ])])
+    i = model.Images.create(session, footprint_latlon=geom,
+                                     serial = 'serial' )
+    resp = session.query(model.Images).filter(model.Images.id==i.id).one()
+    assert resp.active == True
+    assert resp.footprint_latlon == MultiPolygon([Polygon([(0,0), (0,1), (1,1), (1,0), (0,0) ])])

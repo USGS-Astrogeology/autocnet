@@ -14,6 +14,8 @@ from autocnet.spatial.overlap import place_points_in_overlap
 from autocnet.graph.node import NetworkNode
 from autocnet import Session
 
+from plio.io.io_gdal import GeoDataset
+
 #Load the config file
 try:
     with open(os.environ['autocnet_config'], 'r') as f:

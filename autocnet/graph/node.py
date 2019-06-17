@@ -650,7 +650,13 @@ class NetworkNode(Node):
         res = Session().query(Images).filter(Images.id == self['node_id']).first()
         if res is None:
             boundary = generate_boundary(self.geodata.raster_size[::-1])  # yx to xy
-            footprint_latlon = generate_latlon_footprint(self.camera, boundary)
+            spatial = config.get('spatial')
+            try:
+                geodata = GeoDataset(spatial.get('dem'))
+            except Exception as e:
+                warnings.warn('Unable to get the Geodata from dem.\n{}'.format(e))
+                geodata = 0.0
+            footprint_latlon = generate_latlon_footprint(self.camera, boundary, dem=geodata)
             footprint_latlon.FlattenTo2D()
         else:
             footprint_latlon = res.footprint_latlon

@@ -42,6 +42,7 @@ requirements:
     - ncurses                                                                        
     - geopandas
     - imageio
+    - pysis
 test:
   imports:
     - autocnet

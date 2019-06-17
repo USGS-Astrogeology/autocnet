@@ -1,5 +1,30 @@
 from sqlalchemy.schema import DDL
 
+valid_geom_function = DDL("""
+CREATE OR REPLACE FUNCTION validate_geom()
+  RETURNS trigger AS
+$BODY$
+  BEGIN
+      NEW.footprint_latlon = ST_MAKEVALID(NEW.footprint_latlon);
+      RETURN NEW;
+    EXCEPTION WHEN OTHERS THEN
+      NEW.active = false;
+      RETURN NEW;
+END;
+$BODY$
+
+LANGUAGE plpgsql VOLATILE -- Says the function is implemented in the plpgsql language; VOLATILE says the function has side effects.
+COST 100; -- Estimated execution cost of the function.
+""")
+
+valid_geom_trigger = DDL("""
+CREATE TRIGGER image_inserted
+  BEFORE INSERT OR UPDATE
+  ON images
+  FOR EACH ROW
+EXECUTE PROCEDURE validate_geom();
+""")
+
 valid_point_function = DDL("""
 CREATE OR REPLACE FUNCTION validate_points()
   RETURNS trigger AS

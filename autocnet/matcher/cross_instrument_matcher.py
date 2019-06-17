@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 import scipy
 from matplotlib import pyplot as plt
-from scipy.misc import imresize
+from skimage.transform import resize
 from sqlalchemy import (Boolean, Column, Float, ForeignKey, Integer,
                         LargeBinary, String, UniqueConstraint, create_engine,
                         event, orm, pool)
@@ -151,7 +151,7 @@ def themis_ground_to_ctx_matcher(cnet):
             scaled_ctx_line = (ctx_arr.shape[0]-ctx_line)*ctx_to_themis_scale
             scaled_ctx_sample = ctx_sample*ctx_to_themis_scale
 
-            ctx_arr = imresize(ctx_arr, ctx_to_themis_scale)[::-1]
+            ctx_arr = resize(ctx_arr, ctx_to_themis_scale)[::-1]
 
             # list of matching results in the format:
             # [measure_index, x_offset, y_offset, offset_magnitude]
