@@ -217,7 +217,7 @@ def place_points_in_overlap(nodes, geom, dem=None, cam_type="csm",
         for i, dest in enumerate(nodes):
             if cam_type == "csm":
                 dic = dest.camera.groundToImage(gnd)
-                dline, sample = dic.line, dic.sam
+                dline, sample = dic.line, dic.samp
             if cam_type == "isis":
                 dline, dsample = isis.groud_to_image(dest["data"]["image_path"], lat, lon)
 
