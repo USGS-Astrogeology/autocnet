@@ -202,14 +202,14 @@ def compute_voronoi(keypoints, intersection=None, geometry=False, s=30): # ADDED
 def single_centroid(geom):
     """
     For a geom, return the centroid
-    
+
     Parameters
     ----------
     geom : shapely.geom object
-    
+
     Returns
     -------
-    
+
     valid : list
             in the form [(x,y)]
     """
@@ -221,7 +221,7 @@ def nearest(pt, search):
     """
     Fine the index of nearest (Euclidean) point in a list
     of points.
-    
+
     Parameters
     ----------
     pt : ndarray
@@ -230,8 +230,8 @@ def nearest(pt, search):
              (n,2) array of points to search within. The
              returned index is the closet point in this set
              to the search
-             
-    Returns 
+
+    Returns
     -------
      : int
        The index to the nearest point.
@@ -240,24 +240,24 @@ def nearest(pt, search):
 
 def distribute_points(geom, nspts, ewpts):
     """
-    This is a decision tree that attempts to perform a 
-    very simplistic approximation of the shape 
+    This is a decision tree that attempts to perform a
+    very simplistic approximation of the shape
     of the geometry and then place some number of
     north/south and east/west points into the geometry.
-    
+
     Parameters
     ----------
     geom : shapely.geom
            A shapely geometry object
-        
+
     nspts : int
             The number of points to attempt to place
             in the N/S (up/down) direction
-            
+
     ewpts : int
             The number of points to attempt to place
             in the E/W (right/left) direction
-            
+
     Returns
     -------
     valid : list
@@ -271,7 +271,7 @@ def distribute_points(geom, nspts, ewpts):
     lr = coords[1]
     ur = coords[2]
     ul = coords[3]
-        
+
     # Find the points nearest the ul and ur
     ul_actual = geom_coords[nearest(ul, geom_coords)]
     ur_actual = geom_coords[nearest(ur, geom_coords)]
@@ -283,7 +283,7 @@ def distribute_points(geom, nspts, ewpts):
     for x in xnodes[1:-1]:
         newtop.append((x, m*x+b))
 
-    # Find the points nearest the ll and lr 
+    # Find the points nearest the ll and lr
 
     ll_actual = geom_coords[nearest(ll, geom_coords)]
     lr_actual = geom_coords[nearest(lr, geom_coords)]
@@ -365,10 +365,10 @@ def distribute_points_in_geom(geom):
         valid = single_centroid(geom)
     elif ns==True:
         # Class, north/south poly, multi-point
-        nspts = int(round(long, 1) * 10)
+        nspts = int(round(long, 1) * 15)
         if nspts >= 5:
             nspts = int(nspts/(nspts/3))
-        ewpts = max(int(round(short, 1) * 5), 1)
+        ewpts = max(int(round(short, 1) * 10), 1)
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:

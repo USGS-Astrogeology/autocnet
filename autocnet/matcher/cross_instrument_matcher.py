@@ -163,7 +163,7 @@ def themis_ground_to_ctx_matcher(cnet):
                 dx, dy = scaled_ctx_sample, scaled_ctx_line
                 try:
                     # not sure what the best parameters are here
-                    ret = iterative_phase(sx, sy, dx, dy, themis_arr, ctx_arr, size=30, reduction=1, convergence_threshold=2)
+                    ret = iterative_phase(sx, sy, dx, dy, themis_arr, ctx_arr, size=20, reduction=1, max_dist=2, convergence_threshold=2)
                 except Exception as ex:
                     match_results.append(ex)
                     continue
@@ -197,7 +197,7 @@ def themis_ground_to_ctx_matcher(cnet):
 
             images.append(row["path"])
             ctx_constrained_net.append([cpoint,                # point id
-                                       3,                      # point type
+                                       4,                      # point type
                                        "autocnet",             # choosername
                                        measure["datetime"].iloc[1],    # datetime
                                        False,                  # EditLock
