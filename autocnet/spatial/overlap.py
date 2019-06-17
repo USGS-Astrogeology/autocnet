@@ -203,7 +203,7 @@ def place_points_in_overlap(nodes, geom, dem=None, cam_type="csm",
             x, y, z = pyproj.transform(lla, ecef, lon, lat, height)
             gnd = csmapi.EcefCoord(x, y, z)
             sic = source_camera.groundToImage(gnd)
-            ssample, sline = sic.sample, sic.line
+            ssample, sline = sic.samp, sic.line
         if cam_type == "isis":
             sline, ssample = isis.ground_to_image(source["data"]["image_path"], lat ,lon)
 
@@ -217,7 +217,7 @@ def place_points_in_overlap(nodes, geom, dem=None, cam_type="csm",
         for i, dest in enumerate(nodes):
             if cam_type == "csm":
                 dic = dest.camera.groundToImage(gnd)
-                dline, sample = dic.line, dic.sample
+                dline, sample = dic.line, dic.sam
             if cam_type == "isis":
                 dline, dsample = isis.groud_to_image(dest["data"]["image_path"], lat, lon)
 
