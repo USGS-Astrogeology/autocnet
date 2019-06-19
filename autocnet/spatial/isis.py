@@ -10,14 +10,27 @@ def point_info(cube_path, x, y, point_type):
     """
     Use Isis's campt to get image/ground point info from an image
 
+    Parameters
+    ----------
+    cube_path : str
+                path to the input cube
+
+    x : float
+        point in the x direction. Either a sample or a longitude value
+        depending on the point_type flag
+
+    y : float
+        point in the y direction. Either a line or a latitude value
+        depending on the point_type flag
+
+    point_type : str
+                 whether x,y are in image space (sample, line) or
+                 ground space (longitude, lattiude)
+
     Returns
     -------
-    : Line
-      The line
-
-    : Sample
-      The sample
-
+    : PvlObject
+      Pvl object containing campt returns
     """
     if isinstance(x, Number) and isinstance(y, Number):
         x, y = [x], [y]
@@ -39,16 +52,15 @@ def point_info(cube_path, x, y, point_type):
 
 def image_to_ground(cube_path, line, sample, lattype="PlanetocentricLatitude", lonttype="PositiveEast360Longitude"):
     """
-    Use Isis's campt to convert a lat lon point to line sample in
-    an image
+    Use Isis's campt to convert a line sample point on an image to lat lon
 
     Returns
     -------
-    : Line
-      The line
+    lats : np.array, float
+           1-D array of latitudes or single floating point latitude
 
-    : Sample
-      The sample
+    lons : np.array, float
+           1-D array of longitudes or single floating point longitude
 
     """
     # campt always does x,y
@@ -66,11 +78,11 @@ def ground_to_image(cube_path, lat, lon):
 
     Returns
     -------
-    : Line
-      The line
+    lines : np.array, float
+            array of lines or single flaoting point line
 
-    : Sample
-      The sample
+    samples : np.array, float
+              array of samples or single dloating point sample
 
     """
 
