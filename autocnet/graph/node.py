@@ -517,7 +517,8 @@ class NetworkNode(Node):
             cam = self.create_camera()
             try:
                 fp = self.footprint
-            except:
+            except Exception as e:
+                warnings.warn(f'Failed to compute footprint for node: {e}')
                 fp = None
             # Create the image
             i = Images(name=kwargs['image_name'],
@@ -648,19 +649,26 @@ class NetworkNode(Node):
     @property
     def footprint(self):
         res = Session().query(Images).filter(Images.id == self['node_id']).first()
+        # not in database, create footprint
         if res is None:
-            boundary = generate_boundary(self.geodata.raster_size[::-1])  # yx to xy
-            spatial = config.get('spatial')
-            try:
-                geodata = GeoDataset(spatial.get('dem'))
-            except Exception as e:
-                warnings.warn('Unable to get the Geodata from dem.\n{}'.format(e))
-                geodata = 0.0
-            footprint_latlon = generate_latlon_footprint(self.camera, boundary, dem=geodata)
-            footprint_latlon.FlattenTo2D()
+            # get ISIS footprint if possible
+            if utils.find_in_dict(self.geodata.metadata, "Polygon"):
+                footprint_latlon =  shapely.wkt.loads(self.geodata.footprint.ExportToWkt())
+                return footprint_latlon
+            # Get CSM footprint
+            else:
+                boundary = generate_boundary(self.geodata.raster_size[::-1])  # yx to xy
+                try:
+                    geodata = GeoDataset(spatial.get('dem'))
+                except Exception as e:
+                    warnings.warn('Unable to get the Geodata from dem.\n{}'.format(e))
+                    geodata = 0.0
+                footprint_latlon = generate_latlon_footprint(self.camera, boundary, dem=geodata)
+                footprint_latlon.FlattenTo2D()
         else:
+            # in database, return footprint
             footprint_latlon = res.footprint_latlon
-        return footprint_latlon
+            return footprint_latlon
 
     @property
     def points(self):
