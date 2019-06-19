@@ -169,6 +169,11 @@ def test_jigsaw_append(mockFunc, session, measure_data, point_data, image_data):
     assert resp.liner == 0.1
     assert resp.sampler == 0.1
 
+def test_null_footprint(session):
+    i = model.Images.create(session, footprint_latlon=None,
+                                      serial = 'serial')
+    assert i.footprint_latlon is None
+
 def test_broken_bad_geom(session):
     # An irreperablly damaged poly
     geom = MultiPolygon([Polygon([(0,0), (1,1), (1,2), (1,1), (0,0)])])
@@ -176,7 +181,7 @@ def test_broken_bad_geom(session):
                                       serial = 'serial')
     resp = session.query(model.Images).filter(model.Images.id==i.id).one()
     assert resp.active == False
-    
+
 def test_fix_bad_geom(session):
     geom = MultiPolygon([Polygon([(0,0), (0,1), (1,1), (0,1), (1,1), (1,0), (0,0) ])])
     i = model.Images.create(session, footprint_latlon=geom,

@@ -365,10 +365,8 @@ def distribute_points_in_geom(geom):
         valid = single_centroid(geom)
     elif ns==True:
         # Class, north/south poly, multi-point
-        nspts = int(round(long, 1) * 15)
-        if nspts >= 5:
-            nspts = int(nspts/(nspts/3))
-        ewpts = max(int(round(short, 1) * 10), 1)
+        nspts = int(round(long, 1) * 10)
+        ewpts = max(int(round(short, 1) * 5), 1)
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
@@ -376,8 +374,6 @@ def distribute_points_in_geom(geom):
     elif ew == True:
         # Since this is an LS, we should place these diagonally from the 'lower left' to the 'upper right'
         nspts = max(int(round(short, 1) * 5), 1)
-        if nspts >= 5:
-            nspts = int(nspts/(npts/3))
         ewpts = int(round(long, 1) * 10)
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)

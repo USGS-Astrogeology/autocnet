@@ -518,7 +518,7 @@ class NetworkNode(Node):
             try:
                 fp = self.footprint
             except Exception as e:
-                warnings.warn(f'Failed to compute footprint for node: {e}')
+                warnings.warn('Unable to generate image footprint.\n{}'.format(e))
                 fp = None
             # Create the image
             i = Images(name=kwargs['image_name'],

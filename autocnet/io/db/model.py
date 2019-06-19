@@ -226,7 +226,10 @@ class Images(BaseMixin, Base):
         if isinstance(geom, osgeo.ogr.Geometry):
             # If an OGR geom, convert to shapely
             geom = shapely.wkt.loads(geom.ExportToWkt())
-        self._footprint_latlon = from_shape(geom, srid=srid)
+        if geom is None:
+            self._footprint_latlon = None
+        else:
+            self._footprint_latlon = from_shape(geom, srid=srid)
 
 class Overlay(BaseMixin, Base):
     __tablename__ = 'overlay'
@@ -290,7 +293,7 @@ class Points(BaseMixin, Base):
         if isinstance(v, int):
             v = PointType(v)
         self._pointtype = v
-        
+
 class MeasureType(enum.IntEnum):
     """
     Enum to enforce measure type for ISIS control networks
