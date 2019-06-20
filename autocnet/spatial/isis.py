@@ -24,8 +24,9 @@ def point_info(cube_path, x, y, point_type):
         depending on the point_type flag
 
     point_type : str
-                 whether x,y are in image space (sample, line) or
-                 ground space (longitude, lattiude)
+                 Options: {"image", "ground"}
+                 Pass "image" if  x,y are in image space (sample, line) or
+                 "ground" if in ground space (longitude, lattiude)
 
     Returns
     -------

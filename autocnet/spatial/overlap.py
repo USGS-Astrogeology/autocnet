@@ -103,6 +103,10 @@ def cluster_place_points_in_overlaps(size_threshold=0.0007,
 
     walltime : str
         Cluster job wall time as a string HH:MM:SS
+
+    cam_type : str
+               options: {"csm", "isis"}
+               Pick what kind of camera model implementation to use
     """
     if not Session:
         warnings.warn('This function requires a database connection configured via an autocnet config file.')
@@ -158,6 +162,10 @@ def place_points_in_overlap(nodes, geom, dem=None, cam_type="csm",
 
     iterative_phase_kwargs : dict
         Dictionary of keyword arguments for the iterative phase matcher function
+
+    cam_type : str
+               options: {"csm", "isis"}
+               Pick what kind of camera model implementation to use
 
     Returns
     -------
