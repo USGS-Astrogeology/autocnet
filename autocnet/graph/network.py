@@ -1298,9 +1298,6 @@ class NetworkCandidateGraph(CandidateGraph):
         for s, d, e in self.edges(data='data'):
             e.parent = self
 
-        # Execute the computation to compute overlapping geometries
-        self._execute_sql(compute_overlaps_sql)
-
         # Setup the redis queues
         redis = config.get('redis')
         if redis:
@@ -1545,7 +1542,11 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
             image_name = os.path.basename(f)
             NetworkNode(image_path=f, image_name=image_name)
 
-        return cls.from_database()
+        obj = cls.from_database()
+        # Execute the computation to compute overlapping geometries
+        obj._execute_sql(compute_overlaps_sql)
+        
+        return obj
 
     @classmethod
     def from_database(cls, query_string='SELECT * FROM public.images'):
