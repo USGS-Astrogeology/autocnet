@@ -44,7 +44,7 @@ def main(msg, config):
         gd = None
 
     print('Placing points in overlap', id)
-    points = place_points_in_overlap(nodes, overlap.geom, gd, msg["cam_type"]
+    points = place_points_in_overlap(nodes, overlap.geom, gd, msg["cam_type"],
                                      msg['iterative_phase_kwargs'])
     session.add_all(points)
     session.commit()
