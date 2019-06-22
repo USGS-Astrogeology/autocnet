@@ -14,6 +14,7 @@ cluster:
     # The amount of RAM (in MB) to request for jobs
     extractor_memory: 8192
     processing_memory: 8192
+    bin: /home/jlaura/anaconda3/envs/autocnet/bin/
 
 ### Database Configuration ###
 database:
