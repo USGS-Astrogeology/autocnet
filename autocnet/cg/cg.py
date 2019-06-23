@@ -350,10 +350,25 @@ def distribute_points_in_geom(geom,
     is made, the algorithm places points in the geometry and returns
     a list of valid (intersecting) points.
 
+    The kwargs for this algorithm take a function that expects a number
+    as an input and returns an integer number of points to place. The 
+    input number is the distance between the top/bottom or left/right
+    sides of the geometry. 
+
+    This algorithm does not know anything about the units being used
+    so the caller is responsible for acocunting for units (if appropriate)
+    in the passed funcs.
+
     Parameters
     ----------
     geom : shapely.geom object
            The geometry object
+
+    nspts_func : obj
+                 Function taking a Number and returning an int
+    
+    ewpts_func : obj
+                 Function taking a Number and returning an int
 
     Returns
     -------
