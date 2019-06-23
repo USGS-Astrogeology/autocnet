@@ -1,3 +1,4 @@
+from math import isclose
 import warnings
 
 import pandas as pd
@@ -210,12 +211,11 @@ def single_centroid(geom):
     Returns
     -------
 
-    valid : list
+     : list
             in the form [(x,y)]
     """
     x, y = geom.centroid.xy
-    valid = [(x[0],y[0])]
-    return valid
+    return [(x[0],y[0])]
 
 def nearest(pt, search):
     """
@@ -237,6 +237,52 @@ def nearest(pt, search):
        The index to the nearest point.
     """
     return np.argmin(np.sum((search - pt)**2, axis=1))
+
+def compute_slope(a, b):
+    if b[1] - a[1] == 0:
+        # Horizontal
+        return 0
+    elif b[0]-a[0] == 0:
+        # Vertical
+        return 
+    else:
+        return (b[1] - a[1]) / (b[0]-a[0])
+
+def create_points_along_line(p1, p2, npts):
+
+    m = compute_slope(p1, p2)
+    # The +2 is because the start/stop are later stripped from the list
+    if m is not None:
+        b = (p1[1] - p1[0] * m)
+        nodes = np.linspace(p1[0], p2[0], num=npts+2)
+        points = [(x, m*x+b) for x in nodes[1:-1]]
+    else:
+        nodes = np.linspace(p1[1], p2[1], num=npts+2)
+        points = [(p1[0], y) for y in nodes[1:-1]]
+    return points
+
+def xy_in_polygon(x,y, geom):
+    """
+    Returns true is an x,y pair is contained within
+    the geom. 
+
+    Parameters
+    ----------
+    x : Number
+        The x coordinate
+    
+    y : Number
+        The y coordinate
+
+    Returns
+    -------
+     : bool
+       True if the point is contained within the geom.
+    """
+    pt = Point(x, y)
+    if geom.contains(pt):
+        return True
+    return False
 
 def distribute_points(geom, nspts, ewpts):
     """
@@ -275,44 +321,28 @@ def distribute_points(geom, nspts, ewpts):
     # Find the points nearest the ul and ur
     ul_actual = geom_coords[nearest(ul, geom_coords)]
     ur_actual = geom_coords[nearest(ur, geom_coords)]
-    dist = np.sqrt((ul_actual[1] - ur_actual[1])**2 + (ul_actual[0] - ur_actual[0])**2)
-    m = (ul_actual[1]-ur_actual[1])/(ul_actual[0]-ur_actual[0])
-    b = (ul_actual[1] - ul_actual[0] * m)
-    newtop = []
-    xnodes = np.linspace(ul_actual[0], ur_actual[0], num=ewpts+2)
-    for x in xnodes[1:-1]:
-        newtop.append((x, m*x+b))
+    newtop = create_points_along_line(ul_actual, ur_actual, ewpts)
 
     # Find the points nearest the ll and lr
-
     ll_actual = geom_coords[nearest(ll, geom_coords)]
     lr_actual = geom_coords[nearest(lr, geom_coords)]
-    dist = np.sqrt((ll_actual[1] - lr_actual[1])**2 + (ll_actual[0] - lr_actual[0])**2)
-    m = (ll_actual[1]- lr_actual[1])/(ll_actual[0]-lr_actual[0])
-    b = (ll_actual[1] - ll_actual[0] * m)
-    newbot = []
-    xnodes = np.linspace(ll_actual[0], lr_actual[0], num=ewpts+2)
-    for x in xnodes[1:-1]:
-        newbot.append((x, m*x+b))
-    newpts = []
+    newbot = create_points_along_line(ll_actual, lr_actual, ewpts)
+
+    points = []
     for i in range(len(newtop)):
         top = newtop[i]
         bot = newbot[i]
-        # Compute the line between top and bottom
-        m = (top[1] - bot[1]) / (top[0] - bot[0])
-        b = (top[1] - top[0] * m)
-        xnodes = np.linspace(bot[0], top[0], nspts+2)
-        for x in xnodes[1:-1]:
-            newpts.append((x, m*x+b))
-    valid = []
+        
+        line_of_points = create_points_along_line(top, bot, nspts)
+        points += line_of_points
+
     # Perform a spatial intersection check to eject points that are not valid
-    for p in newpts:
-        pt = Point(p[0], p[1])
-        if geom.contains(pt):
-            valid.append(p)
+    valid = [p for p in points if xy_in_polygon(p[0], p[1], geom)]
     return valid
 
-def distribute_points_in_geom(geom):
+def distribute_points_in_geom(geom, 
+                              nspts_func=lambda x: int(round(x,1)*10), 
+                              ewpts_func=lambda x: int(round(x,1)*5)):
     """
     Given a geometry, attempt a basic classification of the shape.
     RIght now, this simply attempts to determine if the bounding box
@@ -333,7 +363,7 @@ def distribute_points_in_geom(geom):
     """
     coords = list(zip(*geom.envelope.exterior.xy))
     short = np.inf
-    long = -np.inf
+    lng = -np.inf
     shortid = 0
     longid = 0
     for i, p in enumerate(coords[:-1]):
@@ -341,21 +371,20 @@ def distribute_points_in_geom(geom):
         if d < short:
             short = d
             shortid = i
-        if d > long:
-            long = d
+        if d > lng:
+            lng = d
             longid = i
-    ratio = short/long
+    ratio = short/lng
     ns = False
     ew = False
     valid = []
-
     # The polygons should be encoded with a lower left origin in counter-clockwise direction.
     # Therefore, if the 'bottom' is the short edge it should be id 0 and modulo 2 == 0.
     if shortid % 2 == 0:
+        # Also if the geom is a perfect square
         ns = True
     elif longid % 2 == 0:
         ew = True
-
     # Decision Tree
     if ratio < 0.16 and geom.area < 0.01:
         # Class: Slivers - ignore.
@@ -365,16 +394,16 @@ def distribute_points_in_geom(geom):
         valid = single_centroid(geom)
     elif ns==True:
         # Class, north/south poly, multi-point
-        nspts = int(round(long, 1) * 10)
-        ewpts = max(int(round(short, 1) * 5), 1)
+        nspts = nspts_func(lng)
+        ewpts = ewpts_func(short)
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
             valid = distribute_points(geom, nspts, ewpts)
     elif ew == True:
         # Since this is an LS, we should place these diagonally from the 'lower left' to the 'upper right'
-        nspts = max(int(round(short, 1) * 5), 1)
-        ewpts = int(round(long, 1) * 10)
+        nspts = ewpts_func(short)
+        ewpts = nspts_func(lng)
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
