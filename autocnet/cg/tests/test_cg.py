@@ -80,11 +80,3 @@ def test_voronoi_keypoint_intersection(keypoints):
 def test_points_in_geom(polygon, nexpected):
     pts = cg.distribute_points_in_geom(polygon)
     assert len(pts) == nexpected
-
-@pytest.mark.parametrize("a, b, expected", [
-    ((0,0), (1,0, 0), 0),
-    ((0,0), (1,1), 1),
-    ((0,0), (0,0), 0)
-])
-def test_compute_slope(a, b, expected):
-    assert cg.compute_slope(a,b) == expected

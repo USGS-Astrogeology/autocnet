@@ -238,28 +238,8 @@ def nearest(pt, search):
     """
     return np.argmin(np.sum((search - pt)**2, axis=1))
 
-def compute_slope(a, b):
-    if b[1] - a[1] == 0:
-        # Horizontal
-        return 0
-    elif b[0]-a[0] == 0:
-        # Vertical
-        return 
-    else:
-        return (b[1] - a[1]) / (b[0]-a[0])
-
 def create_points_along_line(p1, p2, npts):
-
-    m = compute_slope(p1, p2)
-    # The +2 is because the start/stop are later stripped from the list
-    if m is not None:
-        b = (p1[1] - p1[0] * m)
-        nodes = np.linspace(p1[0], p2[0], num=npts+2)
-        points = [(x, m*x+b) for x in nodes[1:-1]]
-    else:
-        nodes = np.linspace(p1[1], p2[1], num=npts+2)
-        points = [(p1[0], y) for y in nodes[1:-1]]
-    return points
+    return np.linspace(p1, p2, npts+2)[1:-1]
 
 def xy_in_polygon(x,y, geom):
     """
