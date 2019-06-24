@@ -259,10 +259,7 @@ def xy_in_polygon(x,y, geom):
      : bool
        True if the point is contained within the geom.
     """
-    pt = Point(x, y)
-    if geom.contains(pt):
-        return True
-    return False
+    return geom.contains(Point(x, y))
 
 def distribute_points(geom, nspts, ewpts):
     """
