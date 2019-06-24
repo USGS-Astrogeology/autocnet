@@ -239,6 +239,28 @@ def nearest(pt, search):
     return np.argmin(np.sum((search - pt)**2, axis=1))
 
 def create_points_along_line(p1, p2, npts):
+    """
+    Compute a set of nodes equally spaced between
+    two points, not including the end points.
+
+    Parameters
+    ----------
+    p1 : iterable
+         in the form (x,y)
+    
+    p2 : iterable
+         in the form(x,y)
+
+    npts : int
+           The number of nodes to be returned
+
+    Returns
+    -------
+     : ndarray
+       (n,2) array of nodes
+    """
+    # npts +2 since the endpoints are included in linspace
+    # but this func clips them
     return np.linspace(p1, p2, npts+2)[1:-1]
 
 def xy_in_polygon(x,y, geom):
