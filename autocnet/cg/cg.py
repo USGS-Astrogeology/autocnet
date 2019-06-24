@@ -314,8 +314,9 @@ def distribute_points(geom, nspts, ewpts):
         bot = newbot[i]
         
         line_of_points = create_points_along_line(top, bot, nspts)
-        points += line_of_points
+        points.append(line_of_points)
 
+    points = np.vstack(points)
     # Perform a spatial intersection check to eject points that are not valid
     valid = [p for p in points if xy_in_polygon(p[0], p[1], geom)]
     return valid
