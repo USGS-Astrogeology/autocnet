@@ -53,8 +53,8 @@ def test_place_points_in_overlap(point_distributer, phase_matcher):
     third_node['data'].camera.groundToImage.assert_called()
     fourth_node['data'].camera.groundToImage.assert_called()
     phase_matcher.assert_any_call(0.0, 1.0, 1.0, 1.0,
-                                  first_node.geodata, second_node.geodata, size=71)
+                                  first_node['data'].geodata, second_node['data'].geodata, size=71)
     phase_matcher.assert_any_call(0.0, 1.0, 1.0, 0.0,
-                                  first_node.geodata, third_node.geodata, size=71)
+                                  first_node['data'].geodata, third_node['data'].geodata, size=71)
     phase_matcher.assert_any_call(0.0, 1.0, 0.0, 0.0,
-                                  first_node.geodata, fourth_node.geodata, size=71)
+                                  first_node['data'].geodata, fourth_node['data'].geodata, size=71)
