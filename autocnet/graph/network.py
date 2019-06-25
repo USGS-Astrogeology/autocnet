@@ -1534,7 +1534,7 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         elif os.path.exists(filelist):
             filelist = io_utils.file_to_list(filelist)
         else:
-            warning.warn('Unable to parse the passed filelist')
+            warnings.warn('Unable to parse the passed filelist')
 
         for f in filelist:
             # Create the nodes in the graph. Really, this is creating the
@@ -1545,7 +1545,7 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         obj = cls.from_database()
         # Execute the computation to compute overlapping geometries
         obj._execute_sql(compute_overlaps_sql)
-        
+
         return obj
 
     @classmethod
@@ -1572,23 +1572,21 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         intersect the user provided polygon (the LINESTRING) in the given spatial reference system
         (SRID), 949900.
 
-        "SELECT * FROM Images WHERE ST_INTERSECTS(footprint_latlon, ST_Polygon(ST_GeomFromText('LINESTRING(159 10, 159 11, 160 11, 160 10, 159 10)'),949900)) = TRUE"
-from_database
+        SELECT * FROM Images WHERE ST_INTERSECTS(footprint_latlon, ST_Polygon(ST_GeomFromText('LINESTRING(159 10, 159 11, 160 11, 160 10, 159 10)'),949900)) = TRUE
+
         ## Select from a specific orbit
         This example selects those images that are from a particular orbit. In this case,
         the regex string pulls all P##_* orbits and creates a graph from them. This method
         does not guarantee that the graph is fully connected.
 
-        "SELECT * FROM Images WHERE (split_part(path, '/', 6) ~ 'P[0-9]+_.+') = True"
-
+        SELECT * FROM Images WHERE (split_part(path, '/', 6) ~ 'P[0-9]+_.+') = True
         """
-        composite_query = """WITH
-	i as ({})
-SELECT i1.id as i1_id,i1.path as i1_path, i2.id as i2_id, i2.path as i2_path
-FROM
-	i as i1, i as i2
-WHERE ST_INTERSECTS(i1.footprint_latlon, i2.footprint_latlon) = TRUE
-AND i1.id < i2.id""".format(query_string)
+
+        composite_query = '''WITH i as ({}) SELECT i1.id
+        as i1_id,i1.path as i1_path, i2.id as i2_id, i2.path as i2_path
+        FROM i  as i1, i as i2
+        WHERE ST_INTERSECTS(i1.footprint_latlon, i2.footprint_latlon) = TRUE
+        AND i1.id < i2.id'''.format(query_string)
 
         session = Session()
         res = session.execute(composite_query)
@@ -1625,7 +1623,7 @@ AND i1.id < i2.id""".format(query_string)
                 tables = [tables]
         else:
             tables = engine.table_names()
-        
+
         for t in tables:
             session.execute(f'TRUNCATE TABLE {t} CASCADE')
             try:
@@ -1634,8 +1632,3 @@ AND i1.id < i2.id""".format(query_string)
                 session.rollback()
         session.commit()
         session.close()
-
-
-
-
-            

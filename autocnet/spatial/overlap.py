@@ -185,12 +185,13 @@ def place_points_in_overlap(nodes, geom, dem=None, cam_type="csm",
 
     valid = compgeom.distribute_points_in_geom(geom)
     if not valid:
-        raise ValueError('Failed to distribute points in overlap')
+        warnings.warn('Failed to distribute points in overlap')
+        return []
 
     # Grab the source image. This is just the node with the lowest ID, nothing smart.
     source = nodes[0]
     nodes.remove(source)
-    source_camera = source.camera
+    source_camera = source["data"].camera
     for v in valid:
         lon = v[0]
         lat = v[1]
@@ -217,28 +218,27 @@ def place_points_in_overlap(nodes, geom, dem=None, cam_type="csm",
 
         point.measures.append(Measures(sample=ssample,
                                        line=sline,
-                                       imageid=source['node_id'],
-                                       serial=source.isis_serial,
+                                       imageid=source['data']['node_id'],
+                                       serial=source['data'].isis_serial,
                                        measuretype=3))
 
 
         for i, dest in enumerate(nodes):
             if cam_type == "csm":
-                dic = dest.camera.groundToImage(gnd)
+                dic = dest['data'].camera.groundToImage(gnd)
                 dline, dsample = dic.line, dic.samp
             if cam_type == "isis":
                 dline, dsample = isis.groud_to_image(dest["data"]["image_path"], lat, lon)
 
             dx, dy, _ = iterative_phase(ssample, sline, dsample, dline,
-                                        source.geodata, dest.geodata,
+                                        source['data'].geodata, dest['data'].geodata,
                                         **iterative_phase_kwargs)
             if dx is not None or dy is not None:
                 point.measures.append(Measures(sample=dx,
                                                line=dy,
-                                               imageid=dest['node_id'],
-                                               serial=dest.isis_serial,
+                                               imageid=dest['data']['node_id'],
+                                               serial=dest['data'].isis_serial,
                                                measuretype=3))
         if len(point.measures) >= 2:
             points.append(point)
     return points
-
