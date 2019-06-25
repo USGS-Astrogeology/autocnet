@@ -6,6 +6,7 @@ import warnings
 from csmapi import csmapi
 import numpy as np
 import pandas as pd
+
 from plio.io.io_gdal import GeoDataset
 from plio.io.isis_serial_number import generate_serial_number
 from skimage.transform import resize
@@ -663,8 +664,10 @@ class NetworkNode(Node):
                 except Exception as e:
                     warnings.warn('Unable to get the Geodata from dem.\n{}'.format(e))
                     geodata = 0.0
+
                 footprint_latlon = generate_latlon_footprint(self.camera, boundary, dem=geodata)
                 footprint_latlon.FlattenTo2D()
+                return footprint_latlon
         else:
             # in database, return footprint
             footprint_latlon = res.footprint_latlon

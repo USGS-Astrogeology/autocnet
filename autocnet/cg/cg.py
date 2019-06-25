@@ -247,7 +247,7 @@ def create_points_along_line(p1, p2, npts):
     ----------
     p1 : iterable
          in the form (x,y)
-    
+
     p2 : iterable
          in the form(x,y)
 
@@ -266,13 +266,13 @@ def create_points_along_line(p1, p2, npts):
 def xy_in_polygon(x,y, geom):
     """
     Returns true is an x,y pair is contained within
-    the geom. 
+    the geom.
 
     Parameters
     ----------
     x : Number
         The x coordinate
-    
+
     y : Number
         The y coordinate
 
@@ -331,17 +331,20 @@ def distribute_points(geom, nspts, ewpts):
     for i in range(len(newtop)):
         top = newtop[i]
         bot = newbot[i]
-        
+
         line_of_points = create_points_along_line(top, bot, nspts)
         points.append(line_of_points)
+
+    if len(points) == 0:
+        return []
 
     points = np.vstack(points)
     # Perform a spatial intersection check to eject points that are not valid
     valid = [p for p in points if xy_in_polygon(p[0], p[1], geom)]
     return valid
 
-def distribute_points_in_geom(geom, 
-                              nspts_func=lambda x: int(round(x,1)*10), 
+def distribute_points_in_geom(geom,
+                              nspts_func=lambda x: int(round(x,1)*10),
                               ewpts_func=lambda x: int(round(x,1)*5)):
     """
     Given a geometry, attempt a basic classification of the shape.
@@ -351,9 +354,9 @@ def distribute_points_in_geom(geom,
     a list of valid (intersecting) points.
 
     The kwargs for this algorithm take a function that expects a number
-    as an input and returns an integer number of points to place. The 
+    as an input and returns an integer number of points to place. The
     input number is the distance between the top/bottom or left/right
-    sides of the geometry. 
+    sides of the geometry.
 
     This algorithm does not know anything about the units being used
     so the caller is responsible for acocunting for units (if appropriate)
@@ -366,7 +369,7 @@ def distribute_points_in_geom(geom,
 
     nspts_func : obj
                  Function taking a Number and returning an int
-    
+
     ewpts_func : obj
                  Function taking a Number and returning an int
 
