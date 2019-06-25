@@ -17,6 +17,9 @@ import shapely.geometry
 import shapely.wkt as swkt
 import shapely.ops
 
+import pyproj
+
+from plio.io.io_controlnetwork import from_isis
 from plio.io import io_hdf, io_json
 from plio.utils import utils as io_utils
 from plio.io.io_gdal import GeoDataset
@@ -1632,3 +1635,83 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
                 session.rollback()
         session.commit()
         session.close()
+
+
+    def place_points_from_cnet(self, cnet):
+        semi_major, semi_minor = config["spatial"]["semimajor_rad"], config["spatial"]["semiminor_rad"]
+        ecef = pyproj.Proj(proj='geocent', a=semi_major, b=semi_minor)
+        lla = pyproj.Proj(proj='latlon', a=semi_major, b=semi_minor)
+
+        if isinstance(cnet, str):
+            cnet = from_isis(cnet)
+
+        # rename some columns
+        newcols = []
+        for i, c in enumerate(cnet.columns):
+            if i == 1:
+                newcols.append('pointtype')
+            elif i == 5:
+                newcols.append('pointignore')
+            elif i == 6:
+                newcols.append('pointjigsawRejected')
+            elif i == 25:
+                newcols.append('measuretype')
+            else:
+                newcols.append(c)
+        cnet.columns = newcols
+
+        cnetpoints = cnet.groupby('id')
+        points = []
+
+        for id, cnetpoint in cnetpoints:
+            def get_measures(row):
+                session = Session()
+                res = session.query(Images).filter(Images.serial == row.serialnumber).one()
+                session.close()
+                return Measures(pointid=id,
+                         imageid=res.id, # Need to grab this
+                         measuretype=row.measuretype,
+                         serial=row.serialnumber,
+                         sample=row['sample'],
+                         line=row['line'],
+                         sampler=row.sampleResidual,
+                         liner=row.lineResidual,
+                         active=row.ignore,
+                         jigreject=row.jigsawRejected,
+                         aprioriline=row.aprioriline,
+                         apriorisample=row.apriorisample,
+                         linesigma=row.linesigma,
+                         samplesigma=row.samplesigma)
+
+            measures = cnetpoint.apply(get_measures, axis=1)
+            row = cnetpoint.iloc[0]
+            x,y,z= row.adjustedX, row.adjustedY, row.adjustedZ
+            lon, lat, alt = pyproj.transform(ecef, lla, x, y, z)
+
+            point = Points(identifier=id,
+                           geom=shapely.geometry.Point(lon,lat),
+                           active=row.pointignore,
+                           apriorix=row.aprioriX,
+                           aprioriy=row.aprioriY,
+                           aprioriz=row.aprioriZ,
+                           adjustedx=row.adjustedX,
+                           adjustedy=row.adjustedY,
+                           adjustedz=row.adjustedZ,
+                           pointtype=row.pointtype)
+
+            point.measures = list(measures)
+            points.append(point)
+
+        session = Session()
+        session.add_all(points)
+        session.commit()
+        session.close()
+
+    @classmethod
+    def from_cnet(cls, cnet, filelist):
+        """
+
+        """
+        networkobj = cls.from_filelist(filelist)
+        networkobj.place_points_from_cnet(cnet)
+        return networkobj
