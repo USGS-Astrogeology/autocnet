@@ -968,7 +968,7 @@ class NetworkEdge(Edge):
                          destination=self.destination['node_id'],
                          fundamental = v)
             session.add(edge)
-            session.commit()
+        session.commit()
 
     def get_overlapping_indices(self, kps):
         ecef = pyproj.Proj(proj='geocent',

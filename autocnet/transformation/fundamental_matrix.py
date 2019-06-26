@@ -293,7 +293,7 @@ def compute_fundamental_matrix(kp1, kp2, method='mle', reproj_threshold=2.0,
         raise ValueError("Unknown estimation method. Choices are: 'lme', 'ransac', 'lmeds', '8point', or 'normal'.")
 
     if len(kp1) == 0 or len(kp2) == 0:
-        warnings.warn("F Computation Failed.")
+        warnings.warn("F-matix computation failed. One of the keypoint args is empty. kp1:{}, kp2:{}.".format(len(kp1), len(kp2)))
         return None, None
 
     # OpenCV wants arrays
@@ -310,7 +310,7 @@ def compute_fundamental_matrix(kp1, kp2, method='mle', reproj_threshold=2.0,
                                          ransacReprojThreshold=reproj_threshold,
                                          confidence=confidence)
     if F is None:
-        warnings.warn("F Computation Failed.")
+        warnings.warn("F computation failed with no result. Returning None.")
         return None, None
     if F.shape != (3,3):
         warnings.warn('F computation fell back to 7-point algorithm, not setting F.')
