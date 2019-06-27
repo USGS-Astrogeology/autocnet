@@ -62,12 +62,14 @@ def test_creation():
 
 
 @pytest.mark.parametrize("image_data, expected", [({'id':1, 'serial': 'BRUH'}, 1)])
-def test_place_points_from_cnet(session, cnet, image_data, expected):
+def test_place_points_from_cnet(session, cnet, image_data, expected_npoints):
     model.Images.create(session, **image_data)
     ncg = NetworkCandidateGraph.from_database()
 
     ncg.place_points_from_cnet(cnet)
 
     resp = session.query(model.Points)
-    assert len(resp.all()) == expected
+    assert len(resp.all()) == expected_npoints
+    assert len(resp.all()) == cnet.shape[0]
+
 
