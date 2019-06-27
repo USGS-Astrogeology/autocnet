@@ -1470,7 +1470,6 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
 
         """
         df = pd.read_sql(sql, engine)
-        print(df.head())
         df.rename(columns={'imageid':'image_index','id':'point_id', 'pointtype' : 'type',
             'sample':'x', 'line':'y', 'serial': 'serialnumber'}, inplace=True)
         if flistpath is None:
@@ -1666,8 +1665,6 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
 
         for id, cnetpoint in cnetpoints:
             def get_measures(row):
-                print(row)
-                print(row.index)
                 res = session.query(Images).filter(Images.serial == row.serialnumber).one()
                 return Measures(pointid=id,
                          imageid=int(res.id), # Need to grab this
