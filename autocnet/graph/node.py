@@ -503,8 +503,6 @@ class NetworkNode(Node):
         else:
             self.parent = parent
 
-        srid = config['spatial']['srid']
-
         # Create a session to work in
         session = Session()
 

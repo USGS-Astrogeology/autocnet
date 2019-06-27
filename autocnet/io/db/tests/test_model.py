@@ -23,7 +23,9 @@ def session(tables, request):
     def cleanup():
         session.rollback()  # Necessary because some tests intentionally fail
         for t in reversed(tables):
-            session.execute(f'TRUNCATE TABLE {t} CASCADE')
+            # Skip the srid table
+            if t != 'spatial_ref_sys':
+                session.execute(f'TRUNCATE TABLE {t} CASCADE')
             # Reset the autoincrementing
             if t in ['Images', 'Cameras', 'Matches', 'Measures']:
                 session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
@@ -114,14 +116,36 @@ def test_points_exists(tables):
 @pytest.mark.parametrize("data", [
     {'id':1, 'pointtype':2},
     {'pointtype':2, 'identifier':'123abc'},
-    {'pointtype':3, 'geom':Point(0,0)},
-    {'pointtype':2, 'geom':Point(1,1), 'active':True},
+    {'pointtype':3, 'apriori':Point(0,0,0)},
+    {'pointtype':3, 'adjusted':Point(0,0,0)},
+    {'pointtype':2, 'adjusted':Point(1,1,1), 'active':True},
     {'pointtype':2, 'rms':0.001}
 ])
 def test_create_point(session, data):
     p = model.Points.create(session, **data)
     resp = session.query(model.Points).filter(model.Points.id == p.id).first()
     assert p == resp
+
+@pytest.mark.parametrize("data, expected", [
+    ({'pointtype':3, 'adjusted':Point(0,-1,0)}, Point(-90, 0)),
+    ({'pointtype':3}, None)
+])
+def test_create_point_geom(session, data, expected):
+    p = model.Points.create(session, **data)
+    resp = session.query(model.Points).filter(model.Points.id == p.id).first()
+    assert resp.geom == expected
+
+@pytest.mark.parametrize("data, new_adjusted, expected", [
+    ({'pointtype':3, 'adjusted':Point(0,-1,0)}, None, None),
+    ({'pointtype':3, 'adjusted':Point(0,-1,0)}, Point(0,1,0), Point(90, 0)),
+    ({'pointtype':3}, Point(0,-1,0), Point(-90, 0))
+])
+def test_update_point_geom(session, data, new_adjusted, expected):
+    p = model.Points.create(session, **data)
+    p.adjusted = new_adjusted
+    session.commit()
+    resp = session.query(model.Points).filter(model.Points.id == p.id).first()
+    assert resp.geom == expected
 
 def test_measures_exists(tables):
     assert model.Measures.__tablename__ in tables

@@ -55,19 +55,23 @@ redis:
     # name should be unique to avoid collision with other users.
     processing_queue: 'jely:proc'
     # The name of the queue that currently processing jobs are pushed to. This
-    # name should be unique to avoid collision with other users. 
+    # name should be unique to avoid collision with other users.
     working_queue: 'jely:working'
 
 ### Spatial Reference Setup ###
 spatial:
-    # The spatial reference identifier in the database. This value needs
-    # to be added to the database that is storing the spatial information.
-    srid: 949900
+    # The following two values need to be added to the database that is storing
+    # the spatial information.
+    #
+    # The spatial reference identifier for latitudinal geometries in the database.
+    latitudinal_srid: 949900
+    # The spatial reference identifier for rectangular geometries in the database.
+    rectangular_srid: 949980
     # The radii of the body. If the body is a sphere, these values should match.
     # Units are in meters
     semimajor_rad: 3396190
     semiminor_rad: 3376200
-    # A compliant proj4 string. Checkout http://spatialreference.org for examples 
+    # A compliant proj4 string. Checkout http://spatialreference.org for examples
     # for planetary bodies.
     proj4_str: '+proj:longlat +a:3396190 +b:3376200 +no_defs'
     # DEM used to generate height values for projection
@@ -82,36 +86,36 @@ directories:
 # This section contains definitions for algorithms available
 # to AutoCNet. When populated, the values in these blocks
 # are parsed on job submission and used as the args/kwargs.
-# When an algorithm has multiple entries, e.g., 3 for `ring_match`, 
+# When an algorithm has multiple entries, e.g., 3 for `ring_match`,
 # the algorithm will be run up to 3 times. The first time, it is
-# assumed that the strictest parametrization is used. If this 
+# assumed that the strictest parametrization is used. If this
 # fails, the next parametrization is used and so forth until either
 # the algorithm returns successfully or all parameter combinations
 # have been applied. This capability is experimental!
-algorithms:		
-     ring_match:		
-         - target_points: 25		
-           tolerance: 0.01		
-         - target_points: 20		
-           tolerance: 0.01		
-         - target_points: 25		
-           tolerance: 0.02		
-     compute_fundamental_matrix:		
-         - tolerance: 0.3		
-           reproj_threshold: 10		
-           initial_x_size: 500		
-           initial_y_size: 500		
-           corr_x_size: 40		
-           corr_y_size: 40		
-         - tolerance: 0.3		
-           reproj_threshold: 15		
-           initial_x_size: 500		
-           initial_y_size: 500		
-           corr_x_size: 40		
-           corr_y_size: 40		
-         - tolerance: 0.25		
-           reproj_threshold: 20		
-           initial_x_size: 500		
-           initial_y_size: 500		
-           corr_x_size: 40		
+algorithms:
+     ring_match:
+         - target_points: 25
+           tolerance: 0.01
+         - target_points: 20
+           tolerance: 0.01
+         - target_points: 25
+           tolerance: 0.02
+     compute_fundamental_matrix:
+         - tolerance: 0.3
+           reproj_threshold: 10
+           initial_x_size: 500
+           initial_y_size: 500
+           corr_x_size: 40
+           corr_y_size: 40
+         - tolerance: 0.3
+           reproj_threshold: 15
+           initial_x_size: 500
+           initial_y_size: 500
+           corr_x_size: 40
+           corr_y_size: 40
+         - tolerance: 0.25
+           reproj_threshold: 20
+           initial_x_size: 500
+           initial_y_size: 500
+           corr_x_size: 40
            corr_y_size: 40

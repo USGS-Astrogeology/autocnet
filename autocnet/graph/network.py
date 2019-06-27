@@ -35,8 +35,7 @@ from autocnet.graph.edge import Edge, NetworkEdge
 from autocnet.graph.node import Node, NetworkNode
 from autocnet.io import network as io_network
 from autocnet.io.db.model import (Images, Keypoints, Matches, Cameras,
-                                  Base, Overlay, Edges, Costs,
-                                  Points, Measures)
+                                  Base, Overlay, Edges, Costs, Measures)
 from autocnet.io.db.connection import new_connection, Parent
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control

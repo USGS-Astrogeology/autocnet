@@ -335,7 +335,7 @@ def distribute_points(geom, nspts, ewpts):
         line_of_points = create_points_along_line(top, bot, nspts)
         points.append(line_of_points)
 
-    if len(points) == 0:
+    if len(points) < 1:
         return []
 
     points = np.vstack(points)

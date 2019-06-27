@@ -195,21 +195,21 @@ def place_points_in_overlap(nodes, geom, dem=None, cam_type="csm",
     for v in valid:
         lon = v[0]
         lat = v[1]
-        geom = shapely.geometry.Point(lon, lat)
-        point = Points(geom=geom,
+        # Calculate the height, the distance (in meters) above or
+        # below the aeroid (meters above or below the BCBF spheroid).
+        if dem is None:
+            height = 0
+        else:
+            px, py = dem.latlon_to_pixel(lat, lon)
+            height = dem.read_array(1, [px, py, 1, 1])[0][0]
+        # Get the BCEF coordinate from the lon, lat
+        x, y, z = pyproj.transform(lla, ecef, lon, lat, height)
+        geom = shapely.geometry.Point(x, y, z)
+        point = Points(apriori=geom,
+                       adjusted=geom,
                        pointtype=2) # Would be 3 or 4 for ground
 
         if cam_type == "csm":
-            # Calculate the height, the distance (in meters) above or
-            # below the aeroid (meters above or below the BCBF spheroid).
-            if dem is None:
-                height = 0
-            else:
-                px, py = dem.latlon_to_pixel(lat, lon)
-                height = dem.read_array(1, [px, py, 1, 1])[0][0]
-
-            # Get the BCEF coordinate from the lon, lat
-            x, y, z = pyproj.transform(lla, ecef, lon, lat, height)
             gnd = csmapi.EcefCoord(x, y, z)
             sic = source_camera.groundToImage(gnd)
             ssample, sline = sic.samp, sic.line
