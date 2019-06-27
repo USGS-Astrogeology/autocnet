@@ -33,7 +33,7 @@ def session(tables, request):
 def cnet():
     return pd.DataFrame.from_dict({
             'id' : [1],
-            'pointtype' : 3,
+            'pointtype' : 2,
             'serialnumber' : ['BRUH'],
             'jigsawRejected' : [False],
             'sampleResidual' : [0.1],
@@ -64,8 +64,6 @@ def test_creation():
 @pytest.mark.parametrize("image_data, expected", [({'id':1, 'serial': 'BRUH'}, 1)])
 def test_place_points_from_cnet(session, cnet, image_data, expected):
     model.Images.create(session, **image_data)
-    print(cnet.dtypes)
-    print(session.query(model.Images).first())
     ncg = NetworkCandidateGraph.from_database()
 
     ncg.place_points_from_cnet(cnet)

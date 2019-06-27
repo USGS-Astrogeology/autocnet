@@ -34,7 +34,7 @@ from autocnet.graph import markov_cluster
 from autocnet.graph.edge import Edge, NetworkEdge
 from autocnet.graph.node import Node, NetworkNode
 from autocnet.io import network as io_network
-from autocnet.io.db.model import (Images, Keypoints, Matches, Cameras,
+from autocnet.io.db.model import (Images, Keypoints, Matches, Cameras, Points,
                                   Base, Overlay, Edges, Costs, Measures)
 from autocnet.io.db.connection import new_connection, Parent
 from autocnet.vis.graph_view import plot_graph, cluster_plot
@@ -1691,14 +1691,9 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
             lon, lat, alt = pyproj.transform(ecef, lla, x, y, z)
 
             point = Points(identifier=id,
-                           geom=shapely.geometry.Point(lon,lat),
                            active=not row.pointignore, # active = ~ignored
-                           apriorix=float(row.aprioriX),
-                           aprioriy=float(row.aprioriY),
-                           aprioriz=float(row.aprioriZ),
-                           adjustedx=float(row.adjustedX),
-                           adjustedy=float(row.adjustedY),
-                           adjustedz=float(row.adjustedZ),
+                           apriori= shapely.geometry.Point(float(row.aprioriX), float(row.aprioriY), float(row.aprioriZ)),
+                           adjusted= shapely.geometry.Point(float(row.adjustedX),float(row.adjustedY),float(row.adjustedZ)),
                            pointtype=float(row.pointtype))
 
             point.measures = list(measures)
