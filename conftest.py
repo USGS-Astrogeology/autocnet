@@ -9,6 +9,8 @@ from autocnet.control import control
 from autocnet.graph.network import CandidateGraph
 from autocnet.graph import edge, node
 from autocnet.graph.node import Node
+from autocnet import engine, Session
+
 from plio.io.io_gdal import GeoDataset
 
 @pytest.fixture(scope='session')
@@ -135,6 +137,30 @@ def controlnetwork():
     df['match_idx'] = df['match_idx'].astype(object)
 
     return df
+
+
+@pytest.fixture
+def tables():
+    return engine.table_names()
+
+@pytest.fixture
+def session(tables, request):
+    session = Session()
+
+    def cleanup():
+        session.rollback()  # Necessary because some tests intentionally fail
+        for t in reversed(tables):
+            # Skip the srid table
+            if t != 'spatial_ref_sys':
+                session.execute(f'TRUNCATE TABLE {t} CASCADE')
+            # Reset the autoincrementing
+            if t in ['Images', 'Cameras', 'Matches', 'Measures']:
+                session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
+        session.commit()
+
+    request.addfinalizer(cleanup)
+
+    return session
 
 """@pytest.fixture(scope='session')
 def bad_controlnetwork(controlnetwork_data):

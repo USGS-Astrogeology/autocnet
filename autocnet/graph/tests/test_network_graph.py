@@ -8,27 +8,6 @@ from autocnet.graph.network import NetworkCandidateGraph
 
 from unittest.mock import patch, PropertyMock, MagicMock
 
-@pytest.fixture
-def tables():
-    return engine.table_names()
-
-@pytest.fixture
-def session(tables, request):
-    session = Session()
-
-    def cleanup():
-        session.rollback()  # Necessary because some tests intentionally fail
-        for t in reversed(tables):
-            session.execute(f'TRUNCATE TABLE {t} CASCADE')
-            # Reset the autoincrementing
-            if t in ['Images', 'Cameras', 'Matches', 'Measures']:
-                session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
-        session.commit()
-
-    request.addfinalizer(cleanup)
-
-    return session
-
 @pytest.fixture()
 def cnet():
     return pd.DataFrame.from_dict({
@@ -61,7 +40,7 @@ def test_creation():
     ncg = NetworkCandidateGraph()
 
 
-@pytest.mark.parametrize("image_data, expected", [({'id':1, 'serial': 'BRUH'}, 1)])
+@pytest.mark.parametrize("image_data, expected_npoints", [({'id':1, 'serial': 'BRUH'}, 1)])
 def test_place_points_from_cnet(session, cnet, image_data, expected_npoints):
     model.Images.create(session, **image_data)
     ncg = NetworkCandidateGraph.from_database()
