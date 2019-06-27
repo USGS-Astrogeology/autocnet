@@ -1471,6 +1471,7 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
 
         """
         df = pd.read_sql(sql, engine)
+        print(df.head())
         df.rename(columns={'imageid':'image_index','id':'point_id', 'pointtype' : 'type',
             'sample':'x', 'line':'y', 'serial': 'serialnumber'}, inplace=True)
         if flistpath is None:
@@ -1662,47 +1663,47 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
 
         cnetpoints = cnet.groupby('id')
         points = []
+        session = Session()
 
         for id, cnetpoint in cnetpoints:
             def get_measures(row):
-                session = Session()
+                print(row)
+                print(row.index)
                 res = session.query(Images).filter(Images.serial == row.serialnumber).one()
-                session.close()
                 return Measures(pointid=id,
-                         imageid=res.id, # Need to grab this
-                         measuretype=row.measuretype,
+                         imageid=int(res.id), # Need to grab this
+                         measuretype=int(row.measuretype),
                          serial=row.serialnumber,
-                         sample=row['sample'],
-                         line=row['line'],
-                         sampler=row.sampleResidual,
-                         liner=row.lineResidual,
-                         active=row.ignore,
+                         sample=float(row['sample']),
+                         line=float(row['line']),
+                         sampler=float(row.sampleResidual),
+                         liner=float(row.lineResidual),
+                         active=not row.ignore, # active = ~ignored
                          jigreject=row.jigsawRejected,
-                         aprioriline=row.aprioriline,
-                         apriorisample=row.apriorisample,
-                         linesigma=row.linesigma,
-                         samplesigma=row.samplesigma)
+                         aprioriline=float(row.aprioriline),
+                         apriorisample=float(row.apriorisample),
+                         linesigma=float(row.linesigma),
+                         samplesigma=float(row.samplesigma))
 
             measures = cnetpoint.apply(get_measures, axis=1)
+
             row = cnetpoint.iloc[0]
             x,y,z= row.adjustedX, row.adjustedY, row.adjustedZ
             lon, lat, alt = pyproj.transform(ecef, lla, x, y, z)
 
             point = Points(identifier=id,
                            geom=shapely.geometry.Point(lon,lat),
-                           active=row.pointignore,
-                           apriorix=row.aprioriX,
-                           aprioriy=row.aprioriY,
-                           aprioriz=row.aprioriZ,
-                           adjustedx=row.adjustedX,
-                           adjustedy=row.adjustedY,
-                           adjustedz=row.adjustedZ,
-                           pointtype=row.pointtype)
+                           active=not row.pointignore, # active = ~ignored
+                           apriorix=float(row.aprioriX),
+                           aprioriy=float(row.aprioriY),
+                           aprioriz=float(row.aprioriZ),
+                           adjustedx=float(row.adjustedX),
+                           adjustedy=float(row.adjustedY),
+                           adjustedz=float(row.adjustedZ),
+                           pointtype=float(row.pointtype))
 
             point.measures = list(measures)
             points.append(point)
-
-        session = Session()
         session.add_all(points)
         session.commit()
         session.close()
