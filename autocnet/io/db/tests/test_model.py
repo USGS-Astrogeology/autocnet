@@ -5,12 +5,13 @@ import numpy as np
 import pandas as pd
 import pytest
 import sqlalchemy
-from shapely.geometry import MultiPolygon, Polygon, Point
 from unittest.mock import MagicMock, patch
 
 from autocnet.io.db import model
 from autocnet import Session, engine
 from autocnet.graph.network import NetworkCandidateGraph
+
+from shapely.geometry import MultiPolygon, Polygon, Point
 
 @pytest.fixture
 def tables():
