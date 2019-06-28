@@ -59,8 +59,8 @@ def point_info(cube_path, x, y, point_type):
             pvlres = isis.campt(from_=cube_path, coordlist=f.name ,usecoordlist=True, coordtype=point_type)
             for r in pvlres:
                 # convert all pixels to PLIO pixels from ISIS
-                r[1]["Sample"] = r[1]["Sample"]-.5
-                r[1]["Line"] = r[1]["Line"]-.5
+                r[1]["Sample"] -= .5
+                r[1]["Line"] -= .5
 
         except ProcessError as e:
             warn(f"CAMPT call failed, image: {cube_path}\n{e.stderr}")
