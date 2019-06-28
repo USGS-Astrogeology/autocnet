@@ -8,10 +8,11 @@ import sys
 from redis import StrictRedis
 import yaml
 
-from autocnet.io.db import connection
 from autocnet.io.db.redis_queue import pop_computetime_push, finalize
 from autocnet.graph.node import NetworkNode
 from autocnet.graph.edge import NetworkEdge
+
+from autocnet import Session
 
 #Load the config file
 try:
@@ -63,7 +64,7 @@ if __name__ == '__main__':
     #remove_key = copy.deepcopy(msg)
     
     # Pseudo-mock graph parent; used for the DB session only
-
+    
     # Apply the algorithm
     response = main(msg, config)
 

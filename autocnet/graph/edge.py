@@ -750,11 +750,12 @@ class NetworkEdge(Edge):
 
     @property
     def masks(self):
-        res = Session().query(Edges.masks).\
+        session = Session()
+        res = session.query(Edges.masks).\
                                         filter(Edges.source == self.source['node_id']).\
                                         filter(Edges.destination == self.destination['node_id']).\
                                         first()
-
+        session.close()
         try:
             df = pd.DataFrame.from_records(res[0])
             df.index = df.index.map(int)
@@ -789,14 +790,16 @@ class NetworkEdge(Edge):
             res.masks = as_dict
             session.add(res)
             session.commit()
+        session.close()
 
     @property
     def costs(self):
         # these are np.float coming out, sqlalchemy needs ints
         ids = list(map(int, self.matches.index.values))
-        res = Session().query(Costs).filter(Costs.match_id.in_(ids)).all()
+        session = Session()
+        res = session.query(Costs).filter(Costs.match_id.in_(ids)).all()
         #qf = q.filter(Costs.match_id.in_(ids))
-
+        session.close()
         if res:
         # Parse the JSON dicts in the cost field into a full dimension dataframe
             costs = {r.match_id:r._cost for r in res}
@@ -843,6 +846,7 @@ class NetworkEdge(Edge):
         if to_db_add:
             session.bulk_save_objects(to_db_add)
         session.commit()
+        session.close()
 
     @property
     def matches(self):
@@ -907,6 +911,7 @@ class NetworkEdge(Edge):
         if to_db_update:
             session.bulk_update_mappings(Matches, to_db_update)
         session.commit()
+        session.close()
 
     @matches.deleter
     def matches(self):
@@ -939,6 +944,7 @@ class NetworkEdge(Edge):
                          ring=ring)
             session.add(edge)
             session.commit()
+        session.close()
         return
 
     @property
@@ -969,6 +975,7 @@ class NetworkEdge(Edge):
                          fundamental = v)
             session.add(edge)
         session.commit()
+        session.close()
 
     def get_overlapping_indices(self, kps):
         ecef = pyproj.Proj(proj='geocent',
@@ -984,7 +991,10 @@ class NetworkEdge(Edge):
 
     @property
     def measures(self):
-        return Session().query(Measures).filter(sqlalchemy.or_(Measures.imageid == self.source['node_id'], Measures.imageid == self.destination['node_id'])).all()
+        session = Session()
+        res = session.query(Measures).filter(sqlalchemy.or_(Measures.imageid == self.source['node_id'], Measures.imageid == self.destination['node_id'])).all()
+        session.close()
+        return res
 
     def network_to_matches(self, active_point=True, active_measure=True, rejected_jigsaw=False):
         """
@@ -1012,7 +1022,8 @@ class NetworkEdge(Edge):
         if source > destin:
             source, destin = destin, source
 
-        q = Session().query(Points.id,
+        session = Session()
+        q = session.query(Points.id,
                   Points.pointtype,
                   Measures.id.label('mid'),
                   Measures.sample,
@@ -1031,6 +1042,7 @@ class NetworkEdge(Edge):
                'lat', 'lon', 'geom', 'source_x', 'source_y', 'destination_x',
                'destination_y', 'shift_x', 'shift_y', 'original_destination_x',
                'original_destination_y']
+        session.close()
 
         def net2matches(grp, matches, source, destin):
             # Grab the image ids and then get the cartesian product of the ids to know which
@@ -1081,5 +1093,5 @@ class NetworkEdge(Edge):
             # necessarily bad in all of the other images. Doing it this way assumes that it is...
             bad[o.source_measure_id] = 1
             bad[o.destin_measure_id] = 1
-
+        session.close()
         return Counter(bad)

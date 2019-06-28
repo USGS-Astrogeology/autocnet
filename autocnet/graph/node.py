@@ -508,6 +508,7 @@ class NetworkNode(Node):
 
         # For now, just use the PATH to determine if the node/image is in the DB
         res = session.query(Images).filter(Images.path == kwargs['image_path']).first()
+        session.close()
         if res is None:
             kpspath = io_keypoints.create_output_path(self.geodata.file_name)
 
@@ -580,6 +581,7 @@ class NetworkNode(Node):
             res = self._from_db(Keypoints)
         res.nkeypoints = len(kps)
         session.commit()
+        session.close()
 
     @property
     def descriptors(self):
@@ -647,7 +649,9 @@ class NetworkNode(Node):
 
     @property
     def footprint(self):
-        res = Session().query(Images).filter(Images.id == self['node_id']).first()
+        session = Session()
+        res = session.query(Images).filter(Images.id == self['node_id']).first()
+        session.close()
         # not in database, create footprint
         if res is None:
             # get ISIS footprint if possible
@@ -673,13 +677,18 @@ class NetworkNode(Node):
 
     @property
     def points(self):
-        pids = Session().query(Measures.pointid).filter(Measures.imageid == self['node_id']).all()
-        res = Session().query(Points).filter(Points.id.in_(pids)).all()
+        session = Session()
+        pids = session.query(Measures.pointid).filter(Measures.imageid == self['node_id']).all()
+        res = session.query(Points).filter(Points.id.in_(pids)).all()
+        session.close()
         return res
 
     @property
     def measures(self):
-        return Session().query(Measures).filter(Measures.imageid == self['node_id']).all()
+        session = Session()
+        res = session.query(Measures).filter(Measures.imageid == self['node_id']).all()
+        session.close()
+        return res
 
     def generate_vrt(self, **kwargs):
         """
