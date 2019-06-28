@@ -33,11 +33,26 @@ def point_info(cube_path, x, y, point_type):
     : PvlObject
       Pvl object containing campt returns
     """
+    point_type = point_type.lower()
+
+    if point_type not in {"image", "ground"}:
+        raise Exception(f'{point_type} is not a valid point type, valid types are ["image", "ground"]')
+
+
     if isinstance(x, Number) and isinstance(y, Number):
         x, y = [x], [y]
 
     with tempfile.NamedTemporaryFile("w+") as f:
         # ISIS wants points in a file, so write to a temp file
+        if point_type == "ground":
+            # campt uses lat, lon for ground but sample, line for image.
+            # So swap x,y for ground-to-image calls
+            x,y = y,x
+        elif point_type == "image":
+            # convert to ISIS pixels
+            x = np.add(x, .5)
+            y = np.add(y, .5)
+
         f.write("\n".join(["{}, {}".format(xval,yval) for xval,yval in zip(x, y)]))
         f.flush()
         try:
@@ -51,7 +66,7 @@ def point_info(cube_path, x, y, point_type):
     return pvlres
 
 
-def image_to_ground(cube_path, line, sample, lattype="PlanetocentricLatitude", lonttype="PositiveEast360Longitude"):
+def image_to_ground(cube_path, sample, line, lattype="PlanetocentricLatitude", lonttype="PositiveEast360Longitude"):
     """
     Use Isis's campt to convert a line sample point on an image to lat lon
 
@@ -72,7 +87,7 @@ def image_to_ground(cube_path, line, sample, lattype="PlanetocentricLatitude", l
 
     return lats, lons
 
-def ground_to_image(cube_path, lat, lon):
+def ground_to_image(cube_path, lon, lat):
     """
     Use Isis's campt to convert a lat lon point to line sample in
     an image
@@ -87,7 +102,7 @@ def ground_to_image(cube_path, lat, lon):
 
     """
 
-    pvlres = point_info(cube_path, lat, lon, "ground")
+    pvlres = point_info(cube_path, lon, lat, "ground")
     lines, samples = np.asarray([[r[1]["Line"], r[1]["Sample"]] for r in pvlres]).T
     if len(lines) == 1 and len(samples) == 1:
         lines, samples = lines[0], samples[0]
