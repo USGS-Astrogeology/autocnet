@@ -548,10 +548,11 @@ class NetworkNode(Node):
 
     @property
     def keypoint_file(self):
-        res = self._from_db(Keypoints)
-        if res is None:
-            return
-        return res.path
+        with session_scope() as session:
+            res = session.query(Keypoints).filter(Keypoints.image_id == self['node_id']).first()
+            if res is None:
+                return
+            return res.path
 
     @property
     def keypoints(self):
@@ -566,10 +567,10 @@ class NetworkNode(Node):
         with session_scope() as session:
             res = session.query(Keypoints).filter(getattr(Keypoints,'image_id') == self['node_id']).first()
             if res is None:
-                _ = self.keypoint_file
-                res = self._from_db(Keypoints)
+                res = Keypoints()
+            res.path = self.keypoint_file
             res.nkeypoints = len(kps)
-
+            session.add(res)
 
     @property
     def descriptors(self):
@@ -588,9 +589,10 @@ class NetworkNode(Node):
         """
         Get the number of keypoints from the database
         """
-        res = self._from_db(Keypoints)
-        nkps = res.nkeypoints
-        return nkps
+        with session_scope() as session:
+            res = session.query(Keypoints).filter(getattr(Keypoints,'image_id') == self['node_id']).first()
+            nkps = res.nkeypoints
+            return nkps
 
     def create_camera(self):
         # Create the camera entry
@@ -626,8 +628,8 @@ class NetworkNode(Node):
         """
         # TODO: This should use knoten once it is stable.
         import csmapi
-        if not getattr(self, '_camera', None):
-            res = self._from_db(Cameras)
+        with session_scope() as session:
+            res = session.query(Cameras).filter(Cameras.image_id == self['node_id']).first()
             plugin = csmapi.Plugin.findPlugin('UsgsAstroPluginCSM')
             if res is not None:
                 self._camera = plugin.constructModelFromState(res.camera)

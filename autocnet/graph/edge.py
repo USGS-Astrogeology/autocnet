@@ -731,23 +731,6 @@ class NetworkEdge(Edge):
         super(NetworkEdge, self).__init__(*args, **kwargs)
         self.job_status = defaultdict(dict)
 
-    def _from_db(self, table_obj):
-        """
-        Generic database query to pull the row associated with this node
-        from an arbitrary table. We assume that the row id matches the node_id.
-
-        Parameters
-        ----------
-        table_obj : object
-                    The declared table class (from db.model)
-        """
-        with session_scope() as session:
-            res = session.query(table_obj).\
-                filter(table_obj.source == self.source['node_id']).\
-                filter(table_obj.destination == self.destination['node_id'])
-            
-        return res
-
     @property
     def masks(self):
         with session_scope() as session:
@@ -912,14 +895,15 @@ class NetworkEdge(Edge):
 
     @property
     def ring(self):
-        res = self._from_db(Edges).first()
-        if res:
-            return res.ring
+        with session_scope() as session:
+            res = session.query(Edges).\
+                filter(Edges.source == self.source['node_id']).\
+                filter(Edges.destination == self.destination['node_id']).first()
+            if res:
+                return res.ring
 
     @ring.setter
     def ring(self, ring):
-        # Setters need a single session and so should not make use of the
-        # syntax sugar _from_db
         with session_scope() as session:
             res = session.query(Edges).\
                 filter(Edges.source == self.source['node_id']).\
@@ -942,9 +926,12 @@ class NetworkEdge(Edge):
 
     @property
     def fundamental_matrix(self):
-        res = self._from_db(Edges).first()
-        if res:
-            return np.asarray(res.fundamental)
+        with session_scope() as session:
+            res = session.query(Edges).\
+                filter(Edges.source == self.source['node_id']).\
+                filter(Edges.destination == self.destination['node_id']).first()
+            if res:
+                return np.asarray(res.fundamental)
 
     @fundamental_matrix.setter
     def fundamental_matrix(self, v):
