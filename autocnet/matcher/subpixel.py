@@ -10,7 +10,7 @@ import geopandas as gpd
 import pandas as pd
 
 # TODO: look into KeyPoint.size and perhaps use to determine an appropriately-sized search/template.
-def _prep_subpixel(nmatches, nstrengths=2):
+def _prep_subpixel(method, nmatches, nstrengths=2):
     """
     Setup the data strutures to return for subpixel matching.
 
@@ -180,15 +180,56 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, search_size=251, template_si
                                 size_x=search_size, size_y=search_size)
     if template is None or search is None:
         return None, None, None
-    if 'method' in kwargs.keys():
-        method = kwargs['method']
-        kwargs.pop('method', None)
-    else:
-        method = 'naive'
 
-    functions = { 'naive' : naive_template.pattern_match,
-                  'ciratefi' : ciratefi.ciratefi}
-    x_offset, y_offset, strength = functions[method](template, search, **kwargs)
+    x_offset, y_offset, strength = naive_template.pattern_match(template, search, **kwargs)
+    dx += (x_offset + dxr)
+    dy += (y_offset + dyr)
+    return dx, dy, strength
+
+def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_size=51, **kwargs):
+    """
+    Uses a pattern-matcher on subsets of two images determined from the passed-in keypoints and optional sizes to
+    compute an x and y offset from the search keypoint to the template keypoint and an associated strength.
+
+    Parameters
+    ----------
+    sx : numeric
+         The x position of the center of the template to be matched to
+    sy : numeric
+         The y position of the center of the template to be matched to
+    dx : numeric
+         The x position of the center of the search to be matched from
+    dy : numeric
+         The y position of the center of the search to be matched to
+    s_img : object
+            A plio geodata object from which the template is extracted
+    d_img : object
+            A plio geodata object from which the search is extracted
+    search_size : int
+                  An odd integer for the size of the search image
+    template_size : int
+                    A odd integer for the size of the template that is iterated
+                    over the search images
+
+    Returns
+    -------
+    x_offset : float
+               Shift in the x-dimension
+
+    y_offset : float
+               Shift in the y-dimension
+
+    strength : float
+               Strength of the correspondence in the range [-1, 1]
+    """
+    template, _, _ = clip_roi(d_img, dx, dy,
+                              size_x=template_size, size_y=template_size)
+    search, dxr, dyr = clip_roi(s_img, sx, sy,
+                                size_x=search_size, size_y=search_size)
+    if template is None or search is None:
+        return None, None, None
+    
+    x_offset, y_offset, strength = ciratefi.ciratefi(template, search, **kwargs)
     dx += (x_offset + dxr)
     dy += (y_offset + dyr)
     return dx, dy, strength

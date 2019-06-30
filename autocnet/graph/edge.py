@@ -410,22 +410,22 @@ class Edge(dict, MutableMapping):
         mask[mask] = hmask
         self.masks['homography'] = mask
 
+
     def subpixel_register(self, method='phase', clean_keys=[],
-                          template_size=251, search_size=251, **kwargs):
+                          template_size=251, search_size=251, 
+                          **kwargs):
         """
         For the entire graph, compute the subpixel offsets using pattern-matching and add the result
         as an attribute to each edge of the graph.
 
         Parameters
         ----------
+        method : {'phase', 'template', 'ciratefi'}
+                 determining which subpixel registration method to use
+
         clean_keys : list
                      of string keys to masking arrays
                      (created by calling outlier detection)
-
-        threshold : float
-                    On the range [-1, 1].  Values less than or equal to
-                    this threshold are masked and can be considered
-                    outliers
 
         upsampling : int
                      The multiplier to the template and search shapes to upsample
@@ -438,7 +438,6 @@ class Edge(dict, MutableMapping):
         search_size : int
                       The size of the search area. When method='template', this size should
                       be >= the template size
-
         """
         # Build up a composite mask from all of the user specified masks
         matches, mask = self.clean(clean_keys)
@@ -447,7 +446,7 @@ class Edge(dict, MutableMapping):
         s_img = self.source.geodata
         d_img = self.destination.geodata
 
-        # Determine which algorithm is going ot be used.
+        # Determine which algorithm is going to be used.
         if method == 'phase':
             func = sp.iterative_phase
             nstrengths = 2
