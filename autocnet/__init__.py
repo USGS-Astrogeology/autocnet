@@ -23,6 +23,7 @@ except DistributionNotFound:
 else:
     __version__ = _dist.version
 
+
 #Load the config file and setup a global DB session factory
 try:
     with open(os.environ['autocnet_config'], 'r') as f:
@@ -41,27 +42,16 @@ if 'dem' in config['spatial']:
 else:
     dem = None
 
-try:
-    db_uri = '{}://{}:{}@{}:{}/{}'.format(config['database']['type'],
-                                            config['database']['username'],
-                                            config['database']['password'],
-                                            config['database']['host'],
-                                            config['database']['pgbouncer_port'],
-                                            config['database']['name'])
-    hostname = socket.gethostname()
-    engine = create_engine(db_uri, poolclass=pool.NullPool,
-                    connect_args={"application_name":"AutoCNet_{}".format(hostname)},
-                    isolation_level="AUTOCOMMIT")                   
-    Session = orm.session.sessionmaker(bind=engine)
-except: 
-    def sessionwarn():
-        raise RuntimeError('This call requires a database connection.')
-    
-    Session = sessionwarn
-    engine = sessionwarn
+# Funcs/Objs for the root namespace
+from autocnet.io.db.connection import session_scope, engine
+from autocnet.graph.network import CandidateGraph, NetworkCandidateGraph
 
+# Check to see if the desired DB exists. If not, create it.
+from autocnet.io.db.connection import Session as _Session
+from autocnet.io.db.createdb import createdb as _createdb
+_createdb(_Session, engine)
 
-
+# Convenience to the next level
 import autocnet.examples
 import autocnet.camera
 import autocnet.cg
@@ -70,10 +60,7 @@ import autocnet.graph
 import autocnet.matcher
 import autocnet.transformation
 import autocnet.utils
-import autocnet.spatial
-
-# Patch the candidate graph into the root namespace
-from autocnet.graph.network import CandidateGraph
+import autocnet.spatial 
 
 def get_data(filename):
     packagdir = autocnet.__path__[0]

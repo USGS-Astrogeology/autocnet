@@ -28,7 +28,7 @@ from plio.io import io_controlnetwork as cnet
 
 from plurmy import Slurm
 
-from autocnet import Session, engine, config
+from autocnet import session_scope, engine, config
 from autocnet.cg import cg
 from autocnet.graph import markov_cluster
 from autocnet.graph.edge import Edge, NetworkEdge
@@ -36,7 +36,6 @@ from autocnet.graph.node import Node, NetworkNode
 from autocnet.io import network as io_network
 from autocnet.io.db.model import (Images, Keypoints, Matches, Cameras, Points,
                                   Base, Overlay, Edges, Costs, Measures)
-from autocnet.io.db.connection import new_connection, Parent
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
 from autocnet.spatial.overlap import compute_overlaps_sql
@@ -1480,7 +1479,7 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         cnet.write_filelist(self.files, path=flistpath)
 
     @staticmethod
-    def update_from_jigsaw(session, path):
+    def update_from_jigsaw(path):
         """
         Updates the measures table in the database with data from
         a jigsaw bundle adjust
@@ -1510,8 +1509,8 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         DROP TABLE temp_measures;
         """
 
-        session.execute(sql)
-        session.commit()
+        with session_scope() as session:
+            session.execute(sql)
 
     @classmethod
     def from_filelist(cls, filelist, clear_db=False):
@@ -1594,19 +1593,19 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         WHERE ST_INTERSECTS(i1.footprint_latlon, i2.footprint_latlon) = TRUE
         AND i1.id < i2.id'''.format(query_string)
 
-        session = Session()
-        res = session.execute(composite_query)
-
         adjacency = defaultdict(list)
         adjacency_lookup = {}
-        for r in res:
-            sid, spath, did, dpath = r
 
-            adjacency_lookup[spath] = sid
-            adjacency_lookup[dpath] = did
-            if spath != dpath:
-                adjacency[spath].append(dpath)
-        session.close()
+        with session_scope() as session:
+            res = session.execute(composite_query)
+            for r in res:
+                sid, spath, did, dpath = r
+
+                adjacency_lookup[spath] = sid
+                adjacency_lookup[dpath] = did
+                if spath != dpath:
+                    adjacency[spath].append(dpath)
+
         # Add nodes that do not overlap any images
         obj = cls(adjacency, node_id_map=adjacency_lookup, config=config)
 
@@ -1623,23 +1622,19 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         table : str or list of str, optional
                 the table name of a list of table names to truncate
         """
-        session = Session()
-        session.rollback() # In case any transactions are not done
-        if tables:
-            if isinstance(tables, str):
-                tables = [tables]
-        else:
-            tables = engine.table_names()
+        with session_scope() as session:
+            if tables:
+                if isinstance(tables, str):
+                    tables = [tables]
+            else:
+                tables = engine.table_names()
 
-        for t in tables:
-          if t != 'spatial_ref_sys':
-            try:
-                session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
-            except Exception as e:
-                warnings.warn(f'Failed to truncate table {t}, {t} not modified')
-                session.rollback()
-        session.commit()
-        session.close()
+            for t in tables:
+            if t != 'spatial_ref_sys':
+                try:
+                    session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
+                except Exception as e:
+                    warnings.warn(f'Failed to truncate table {t}, {t} not modified')
 
     def place_points_from_cnet(self, cnet):
         semi_major, semi_minor = config["spatial"]["semimajor_rad"], config["spatial"]["semiminor_rad"]
@@ -1666,10 +1661,9 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
 
         cnetpoints = cnet.groupby('id')
         points = []
-        session = Session()
 
         for id, cnetpoint in cnetpoints:
-            def get_measures(row):
+            def get_measures(row, session):
                 res = session.query(Images).filter(Images.serial == row.serialnumber).one()
                 return Measures(pointid=id,
                          imageid=int(res.id), # Need to grab this
@@ -1686,7 +1680,8 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
                          linesigma=float(row.linesigma),
                          samplesigma=float(row.samplesigma))
 
-            measures = cnetpoint.apply(get_measures, axis=1)
+            with session_scope() as session:
+                measures = cnetpoint.apply(get_measures, args=(session,), axis=1)
 
             row = cnetpoint.iloc[0]
             x,y,z= row.adjustedX, row.adjustedY, row.adjustedZ
@@ -1700,9 +1695,8 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
 
             point.measures = list(measures)
             points.append(point)
-        session.add_all(points)
-        session.commit()
-        session.close()
+
+        Points.bulkadd(points)
 
     @classmethod
     def from_cnet(cls, cnet, filelist):

@@ -13,12 +13,11 @@ from skimage.transform import resize
 import shapely
 from knoten.csm import generate_latlon_footprint, generate_vrt, create_camera, generate_boundary
 
-from autocnet import Session, engine, config
+from autocnet import session_scope, engine, config
 from autocnet.matcher import cpu_extractor as fe
 from autocnet.matcher import cpu_outlier_detector as od
 from autocnet.cg import cg
 from autocnet.io.db.model import Images, Keypoints, Matches, Cameras,  Base, Overlay, Edges, Costs, Points, Measures
-from autocnet.io.db.connection import Parent
 from autocnet.io import keypoints as io_keypoints
 from autocnet.vis.graph_view import plot_node
 from autocnet.utils import utils
@@ -497,18 +496,11 @@ class Node(dict, MutableMapping):
 class NetworkNode(Node):
     def __init__(self, *args, parent=None, **kwargs):
         super(NetworkNode, self).__init__(*args, **kwargs)
-        # If this is the first time that the image is seen, add it to the DB
-        if parent is None:
-            self.parent = Parent(config)
-        else:
-            self.parent = parent
 
-        # Create a session to work in
-        session = Session()
+        with session_scope() as session:
+            # For now, just use the PATH to determine if the node/image is in the DB
+            res = session.query(Images).filter(Images.path == kwargs['image_path']).first()
 
-        # For now, just use the PATH to determine if the node/image is in the DB
-        res = session.query(Images).filter(Images.path == kwargs['image_path']).first()
-        session.close()
         if res is None:
             kpspath = io_keypoints.create_output_path(self.geodata.file_name)
 
@@ -527,10 +519,9 @@ class NetworkNode(Node):
                        keypoints=kps,
                        cameras=cam,
                        serial=self.isis_serial)
-            session = Session()
-            session.add(i)
-            session.commit()
-            session.close()
+            with session_scope() as session:
+                session.add(i)
+
         self.job_status = defaultdict(dict)
 
     def _from_db(self, table_obj, key='image_id'):
@@ -551,9 +542,8 @@ class NetworkNode(Node):
         """
         if 'node_id' not in self.keys():
             return
-        session = Session()
-        res = session.query(table_obj).filter(getattr(table_obj,key) == self['node_id']).first()
-        session.close()
+        with session_scope() as session:
+            res = session.query(table_obj).filter(getattr(table_obj,key) == self['node_id']).first()
         return res
 
     @property
@@ -572,16 +562,14 @@ class NetworkNode(Node):
 
     @keypoints.setter
     def keypoints(self, kps):
-        session = Session()
         io_keypoints.to_hdf(self.keypoint_file, keypoints=kps)
-        res = session.query(Keypoints).filter(getattr(Keypoints,'image_id') == self['node_id']).first()
+        with session_scope() as session:
+            res = session.query(Keypoints).filter(getattr(Keypoints,'image_id') == self['node_id']).first()
+            if res is None:
+                _ = self.keypoint_file
+                res = self._from_db(Keypoints)
+            res.nkeypoints = len(kps)
 
-        if res is None:
-            _ = self.keypoint_file
-            res = self._from_db(Keypoints)
-        res.nkeypoints = len(kps)
-        session.commit()
-        session.close()
 
     @property
     def descriptors(self):
@@ -649,9 +637,8 @@ class NetworkNode(Node):
 
     @property
     def footprint(self):
-        session = Session()
-        res = session.query(Images).filter(Images.id == self['node_id']).first()
-        session.close()
+        with session_scope() as session:
+            res = session.query(Images).filter(Images.id == self['node_id']).first()
         # not in database, create footprint
         if res is None:
             # get ISIS footprint if possible
@@ -677,17 +664,15 @@ class NetworkNode(Node):
 
     @property
     def points(self):
-        session = Session()
-        pids = session.query(Measures.pointid).filter(Measures.imageid == self['node_id']).all()
-        res = session.query(Points).filter(Points.id.in_(pids)).all()
-        session.close()
+        with session_scope() as session:
+            pids = session.query(Measures.pointid).filter(Measures.imageid == self['node_id']).all()
+            res = session.query(Points).filter(Points.id.in_(pids)).all()
         return res
 
     @property
     def measures(self):
-        session = Session()
-        res = session.query(Measures).filter(Measures.imageid == self['node_id']).all()
-        session.close()
+        with session_scope() as session:
+            res = session.query(Measures).filter(Measures.imageid == self['node_id']).all()
         return res
 
     def generate_vrt(self, **kwargs):

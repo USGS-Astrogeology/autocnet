@@ -3,7 +3,6 @@ import pytest
 import pandas as pd
 
 from autocnet.io.db import model
-from autocnet import Session, engine
 from autocnet.graph.network import NetworkCandidateGraph
 
 from unittest.mock import patch, PropertyMock, MagicMock
@@ -39,16 +38,14 @@ def cnet():
 def test_creation():
     ncg = NetworkCandidateGraph()
 
-
 @pytest.mark.parametrize("image_data, expected_npoints", [({'id':1, 'serial': 'BRUH'}, 1)])
 def test_place_points_from_cnet(session, cnet, image_data, expected_npoints):
-    model.Images.create(session, **image_data)
+    model.Images.create(**image_data)
     ncg = NetworkCandidateGraph.from_database()
-
     ncg.place_points_from_cnet(cnet)
-
-    resp = session.query(model.Points)
-    assert len(resp.all()) == expected_npoints
-    assert len(resp.all()) == cnet.shape[0]
+    with session() as sess:
+        resp = sess.query(model.Points)
+        assert len(resp.all()) == expected_npoints
+        assert len(resp.all()) == cnet.shape[0]
 
 

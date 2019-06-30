@@ -2,38 +2,45 @@ from contextlib import contextmanager
 
 import sqlalchemy
 from sqlalchemy import create_engine, pool, orm
-from sqlalchemy.orm import create_session, scoped_session, sessionmaker
 
 import os
 import socket
 import warnings
 import yaml
 
+from autocnet import config
 
-class Parent:
-    def __init__(self, config):
-        self.session, _ = new_connection(config)
-        self.session.begin()
+try:
+    db_uri = '{}://{}:{}@{}:{}/{}'.format(config['database']['type'],
+                                            config['database']['username'],
+                                            config['database']['password'],
+                                            config['database']['host'],
+                                            config['database']['pgbouncer_port'],
+                                            config['database']['name'])
+    hostname = socket.gethostname()
+    engine = create_engine(db_uri, poolclass=pool.NullPool,
+                    connect_args={"application_name":"AutoCNet_{}".format(hostname)},
+                    isolation_level="AUTOCOMMIT")                   
+    Session = orm.session.sessionmaker(bind=engine)
 
-def new_connection(config):
-    """
-    Using the user supplied config create a NullPool database connection.
+except: 
+    def sessionwarn():
+        raise RuntimeError('This call requires a database connection.')
+    
+    Session = sessionwarn
+    engine = sessionwarn
 
-    Returns
-    -------
-    Session : object
-              An SQLAlchemy session object
 
-    engine : object
-             An SQLAlchemy engine object
-    """
-    db = config['database']
-    db_uri = 'postgresql://{}:{}@{}:{}/{}'.format(db['username'],
-                                                  db['password'],
-                                                  db['host'],
-                                                  db['pgbouncer_port'],
-                                                  db['name'])    
-    engine = sqlalchemy.create_engine(db_uri,
-                                      poolclass=sqlalchemy.pool.NullPool)
-    Session = sqlalchemy.orm.sessionmaker(bind=engine, autocommit=True)
-    return Session(), engine
+@contextmanager
+def session_scope():
+    """Provide a transactional scope around a series of operations."""
+    session = Session()
+    try:
+        yield session
+        session.commit()
+    except:
+        session.rollback()
+        raise
+    finally:
+        session.close()
+

@@ -9,7 +9,7 @@ from autocnet.control import control
 from autocnet.graph.network import CandidateGraph
 from autocnet.graph import edge, node
 from autocnet.graph.node import Node
-from autocnet import engine, Session
+from autocnet import engine, session_scope
 
 from plio.io.io_gdal import GeoDataset
 
@@ -145,25 +145,24 @@ def tables():
 
 @pytest.fixture
 def session(tables, request):
-    session = Session()
 
     def cleanup():
-        session.rollback()  # Necessary because some tests intentionally fail
-        for t in reversed(tables):
-            # Skip the srid table
-            if t != 'spatial_ref_sys':
-                session.execute(f'TRUNCATE TABLE {t} CASCADE')
-            # Reset the autoincrementing
-            if t in ['Images', 'Cameras', 'Matches', 'Measures']:
-                session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
-        session.commit()
-        # Ensure that this is the only connection to the DB
-        num_con = session.execute('SELECT sum(numbackends) FROM pg_stat_database;').scalar()
-        assert num_con == 1
-
+        with session_scope() as session:
+            #session.rollback()  # Necessary because some tests intentionally fail
+            for t in reversed(tables):
+                # Skip the srid table
+                if t not in ['spatial_ref_sys', 'temp_measures']:
+                    session.execute(f'TRUNCATE TABLE {t} CASCADE')
+                # Reset the autoincrementing
+                if t in ['Images', 'Cameras', 'Matches', 'Measures']:
+                    session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
+            # Ensure that this is the only connection to the DB
+            num_con = session.execute('SELECT sum(numbackends) FROM pg_stat_database;').scalar()
+            assert num_con == 1
+            
     request.addfinalizer(cleanup)
 
-    return session
+    return session_scope
 
 """@pytest.fixture(scope='session')
 def bad_controlnetwork(controlnetwork_data):

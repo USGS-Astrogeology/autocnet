@@ -8,10 +8,10 @@ import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import (Column, String, Integer, Float, \
                         ForeignKey, Boolean, LargeBinary, \
-                        UniqueConstraint, event)
+                        UniqueConstraint)
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import relationship, backref
-from sqlalchemy_utils import database_exists, create_database
+
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.ext.hybrid import hybrid_property
 
@@ -20,7 +20,7 @@ from geoalchemy2.shape import from_shape, to_shape
 
 import osgeo
 import shapely
-from autocnet import engine, Session, config
+from autocnet import config
 
 Base = declarative_base()
 
@@ -31,18 +31,25 @@ rectangular_srid = spatial['rectangular_srid']
 
 class BaseMixin(object):
     @classmethod
-    def create(cls, session, **kw):
+    def create(cls, **kw):
+        from autocnet import session_scope
         obj = cls(**kw)
-        session.add(obj)
-        session.commit()
-        return obj
+        with session_scope() as session:
+            session.add(obj)
 
     @staticmethod
     def bulkadd(iterable):
-        session = Session()
-        session.add_all(iterable)
-        session.commit()
-        session.close()
+        """
+        Bulk add objects (simple and complex) to the DB.
+
+        Parameters
+        ----------
+        iterable : iterable
+                   An iterable of model instances
+        """
+        from autocnet import session_scope
+        with session_scope() as session:
+            session.add_all(iterable)
 
 class JsonEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -268,11 +275,11 @@ class Overlay(BaseMixin, Base):
         size_threshold : Number
                         area >= this arg are returned
         """
-        session = Session()
-        res = session.query(cls).\
-                filter(sqlalchemy.func.ST_Area(cls.geom) >= size_threshold).\
-                filter(sqlalchemy.func.array_length(cls.intersections, 1) > 1)
-        session.close()
+        from autocnet import session_scope
+        with session_scope() as session:
+            res = session.query(cls).\
+                    filter(sqlalchemy.func.ST_Area(cls.geom) >= size_threshold).\
+                    filter(sqlalchemy.func.array_length(cls.intersections, 1) > 1)
         return res
 
 class PointType(enum.IntEnum):
@@ -382,28 +389,3 @@ class Measures(BaseMixin, Base):
         if isinstance(v, int):
             v = MeasureType(v)
         self._measuretype = v
-
-if Session:
-    from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, update_point_function, update_point_trigger, valid_geom_function, valid_geom_trigger
-    # Create the database
-    if not database_exists(engine.url):
-        create_database(engine.url, template='template_postgis')  # This is a hardcode to the local template
-
-    # Trigger that watches for points that should be active/inactive
-    # based on the point count.
-    if not engine.dialect.has_table(engine, "points"):
-        event.listen(Base.metadata, 'before_create', valid_point_function)
-        event.listen(Measures.__table__, 'after_create', valid_point_trigger)
-        event.listen(Base.metadata, 'before_create', update_point_function)
-        event.listen(Points.__table__, 'after_create', update_point_trigger)
-        event.listen(Base.metadata, 'before_create', valid_geom_function)
-        event.listen(Images.__table__, 'after_create', valid_geom_trigger)
-
-    Base.metadata.bind = engine
-    # If the table does not exist, this will create it. This is used in case a
-    # user has manually dropped a table so that the project is not wrecked.
-    Base.metadata.create_all(tables=[Overlay.__table__,
-                                     Edges.__table__, Costs.__table__, Matches.__table__,
-                                     Cameras.__table__, Points.__table__,
-                                     Measures.__table__, Images.__table__,
-                                     Keypoints.__table__])

@@ -3,38 +3,21 @@ import json
 
 import numpy as np
 import pandas as pd
+import psycopg2
 import pytest
 import sqlalchemy
 from unittest.mock import MagicMock, patch
 
 from autocnet.io.db import model
-from autocnet import Session, engine
+
 from autocnet.graph.network import NetworkCandidateGraph
 
 from shapely.geometry import MultiPolygon, Polygon, Point
 
 @pytest.fixture
 def tables():
+    from autocnet import engine
     return engine.table_names()
-
-@pytest.fixture
-def session(tables, request):
-    session = Session()
-
-    def cleanup():
-        session.rollback()  # Necessary because some tests intentionally fail
-        for t in reversed(tables):
-            # Skip the srid table
-            if t != 'spatial_ref_sys':
-                session.execute(f'TRUNCATE TABLE {t} CASCADE')
-            # Reset the autoincrementing
-            if t in ['Images', 'Cameras', 'Matches', 'Measures']:
-                session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
-        session.commit()
-
-    request.addfinalizer(cleanup)
-
-    return session
 
 def test_keypoints_exists(tables):
     assert model.Keypoints.__tablename__ in tables
@@ -56,20 +39,21 @@ def test_measures_exists(tables):
 
 def test_create_camera_without_image(session):
     with pytest.raises(sqlalchemy.exc.IntegrityError):
-        model.Cameras.create(session, **{'image_id':1})
+        model.Cameras.create(**{'image_id':1})
 
 def test_create_camera(session):
     #with pytest.raises(sqlalchemy.exc.IntegrityError):
-    c = model.Cameras.create(session)
-    res = session.query(model.Cameras).first()
-    assert c.id == res.id
+    c = model.Cameras.create(**{'id':1})
+    with session() as session:
+        res = session.query(model.Cameras).one()
+        assert 1 == res.id
 
 def test_create_camera_unique_constraint(session):
-    model.Images.create(session, **{'id':1})
     data = {'image_id':1}
-    model.Cameras.create(session, **data)
+    model.Images.create(**{'id': 1})    
+    model.Cameras.create(**data)
     with pytest.raises(sqlalchemy.exc.IntegrityError):
-        model.Cameras.create(session, **data)
+        model.Cameras.create(**data)
 
 def test_images_exists(tables):
     assert model.Images.__tablename__ in tables
@@ -80,21 +64,23 @@ def test_images_exists(tables):
      'path':'/neither/here/nor/there'},
     ])
 def test_create_images(session, data):
-    i = model.Images.create(session, **data)
-    resp = session.query(model.Images).filter(model.Images.id==i.id).first()
-    assert i == resp
+    model.Images.create(**data)
+    with session() as session:
+        resp = session.query(model.Images).first()
+        for k, v in data.items():
+            assert getattr(resp, k) == v
 
 @pytest.mark.parametrize('data', [
-    {'id':1},
     {'serial':'foo'}
 ])
-def test_create_images_constrined(session, data):
+def test_create_images_constrained(session, data):
     """
     Test that the images unique constraint is being observed.
     """
-    model.Images.create(session, **data)
-    with pytest.raises(sqlalchemy.exc.IntegrityError):
-        model.Images.create(session, **data)
+    with session() as session:
+        model.Images.create(**data)
+        with pytest.raises(sqlalchemy.exc.IntegrityError):
+            model.Images.create(**data)
 
 def test_overlay_exists(tables):
     assert model.Overlay.__tablename__ in tables
@@ -107,33 +93,40 @@ def test_overlay_exists(tables):
 
 ])
 def test_create_overlay(session, data):
-    d = model.Overlay.create(session, **data)
-    resp = session.query(model.Overlay).filter(model.Overlay.id == d.id).first()
-    assert d == resp
+    model.Overlay.create(**data)
+    key = data['id']
+    with session() as session:
+        resp = session.query(model.Overlay).filter(model.Overlay.id == key).one()
+        for k, v in data.items():
+                assert getattr(resp, k) == v
 
 def test_points_exists(tables):
     assert model.Points.__tablename__ in tables
 
 @pytest.mark.parametrize("data", [
     {'id':1, 'pointtype':2},
-    {'pointtype':2, 'identifier':'123abc'},
-    {'pointtype':3, 'apriori':Point(0,0,0)},
-    {'pointtype':3, 'adjusted':Point(0,0,0)},
-    {'pointtype':2, 'adjusted':Point(1,1,1), 'active':True}
+    {'id':2, 'pointtype':2, 'identifier':'123abc'},
+    {'id':1, 'pointtype':3, 'apriori':Point(0,0,0)},
+    {'id':2, 'pointtype':3, 'adjusted':Point(0,0,0)},
+    {'id':1, 'pointtype':2, 'adjusted':Point(1,1,1), 'active':True}
 ])
 def test_create_point(session, data):
-    p = model.Points.create(session, **data)
-    resp = session.query(model.Points).filter(model.Points.id == p.id).first()
-    assert p == resp
+    model.Points.create(**data)
+    key = data['id']
+    with session() as session:
+        resp = session.query(model.Points).filter(model.Points.id == key).one()
+        for k, v in data.items():
+            assert getattr(resp, k) == v
 
 @pytest.mark.parametrize("data, expected", [
     ({'pointtype':3, 'adjusted':Point(0,-1,0)}, Point(-90, 0)),
     ({'pointtype':3}, None)
 ])
 def test_create_point_geom(session, data, expected):
-    p = model.Points.create(session, **data)
-    resp = session.query(model.Points).filter(model.Points.id == p.id).first()
-    assert resp.geom == expected
+    model.Points.create(**data)
+    with session() as session:
+        resp = session.query(model.Points).first()
+        assert resp.geom == expected
 
 @pytest.mark.parametrize("data, new_adjusted, expected", [
     ({'pointtype':3, 'adjusted':Point(0,-1,0)}, None, None),
@@ -141,11 +134,13 @@ def test_create_point_geom(session, data, expected):
     ({'pointtype':3}, Point(0,-1,0), Point(-90, 0))
 ])
 def test_update_point_geom(session, data, new_adjusted, expected):
-    p = model.Points.create(session, **data)
-    p.adjusted = new_adjusted
-    session.commit()
-    resp = session.query(model.Points).filter(model.Points.id == p.id).first()
-    assert resp.geom == expected
+    model.Points.create(**data)
+    with session() as sess:
+        p = sess.query(model.Points).one()
+        p.adjusted = new_adjusted
+    with session() as sess:    
+        resp = sess.query(model.Points).one()
+        assert resp.geom == expected
 
 def test_measures_exists(tables):
     assert model.Measures.__tablename__ in tables
@@ -181,35 +176,39 @@ def test_json_encoder(data, serialized):
                                                                                      'apriorisample': [0],
                                                                                      'aprioriline': [0]}))
 def test_jigsaw_append(mockFunc, session, measure_data, point_data, image_data):
-    model.Images.create(session, **image_data)
-    model.Points.create(session, **point_data)
-    model.Measures.create(session, **measure_data)
-    resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
-    assert resp.liner == None
-    assert resp.sampler == None
+    model.Images.create(**image_data)
+    model.Points.create(**point_data)
+    model.Measures.create(**measure_data)
+    with session() as sess:
+        resp = sess.query(model.Measures).first()
+        assert resp.liner == None
+        assert resp.sampler == None
 
-    NetworkCandidateGraph.update_from_jigsaw(session, '/Some/Path/To/An/ISISNetwork.cnet')
-    resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
-    assert resp.liner == 0.1
-    assert resp.sampler == 0.1
+    # Intentionally 2 sessions as this approximates the workflow
+    with session() as sess:
+        NetworkCandidateGraph.update_from_jigsaw('/Some/Path/To/An/ISISNetwork.cnet')
+        resp = sess.query(model.Measures).filter(model.Measures.id == 1).first()
+        assert resp.liner == 0.1
+        assert resp.sampler == 0.1
 
 def test_null_footprint(session):
-    i = model.Images.create(session, footprint_latlon=None,
-                                      serial = 'serial')
-    assert i.footprint_latlon is None
+    model.Images.create(footprint_latlon=None, serial = 'serial')
+    with session() as session:
+        i = session.query(model.Images).first()
+        assert i.footprint_latlon is None
 
 def test_broken_bad_geom(session):
     # An irreperablly damaged poly
     geom = MultiPolygon([Polygon([(0,0), (1,1), (1,2), (1,1), (0,0)])])
-    i = model.Images.create(session, footprint_latlon=geom,
-                                      serial = 'serial')
-    resp = session.query(model.Images).filter(model.Images.id==i.id).one()
-    assert resp.active == False
+    model.Images.create(footprint_latlon=geom, serial = 'serial')
+    with session() as session:
+        resp = session.query(model.Images).one()
+        assert resp.active == False
 
 def test_fix_bad_geom(session):
     geom = MultiPolygon([Polygon([(0,0), (0,1), (1,1), (0,1), (1,1), (1,0), (0,0) ])])
-    i = model.Images.create(session, footprint_latlon=geom,
-                                     serial = 'serial' )
-    resp = session.query(model.Images).filter(model.Images.id==i.id).one()
-    assert resp.active == True
-    assert resp.footprint_latlon == MultiPolygon([Polygon([(0,0), (0,1), (1,1), (1,0), (0,0) ])])
+    model.Images.create(footprint_latlon=geom, serial = 'serial' )
+    with session() as session:
+        resp = session.query(model.Images).one()
+        assert resp.active == True
+        assert resp.footprint_latlon == MultiPolygon([Polygon([(0,0), (0,1), (1,1), (1,0), (0,0) ])])

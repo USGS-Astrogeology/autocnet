@@ -12,7 +12,7 @@ from autocnet.io.db.redis_queue import pop_computetime_push, finalize
 from autocnet.io.db.model import Overlay, Images, Points
 from autocnet.spatial.overlap import place_points_in_overlap
 from autocnet.graph.node import NetworkNode
-from autocnet import Session
+from autocnet import session_scope, dem
 
 #Load the config file
 try:
@@ -23,26 +23,23 @@ except:
     sys.exit(1)
 
 def main(msg, config):
-    session = Session()
     id = msg['id']
-    res = session.query(Overlay).filter(Overlay.id == msg['id'])
-    if res is None:
-        print('Could not find overlap with ID', id)
-        sys.exit(1)
-    overlap = res.first()
-    geom = overlap.geom
-    nodes = []
-    for id in overlap.intersections:
-        res = session.query(Images).filter(Images.id == id).first()
-        nodes.append(NetworkNode(node_id=id, image_path=res.path))
-    session.close()
-    
-    print('Placing points in overlap', id)
-    points = place_points_in_overlap(nodes, overlap.geom, msg["cam_type"],
+    with session_scope() as session:
+        res = session.query(Overlay).filter(Overlay.id == msg['id'])
+        if res is None:
+            print('Could not find overlap with ID', id)
+            sys.exit(1)
+        overlap = res.first()
+        geom = overlap.geom
+        nodes = []
+        
+        for id in overlap.intersections:
+            res = session.query(Images).filter(Images.id == id).first()
+            nodes.append(NetworkNode(node_id=id, image_path=res.path))
+
+    points = place_points_in_overlap(nodes, overlap.geom, dem, msg["cam_type"],
+                                     msg['iterative_phase_kwargs'],
                                      msg['distribute_points_kwargs'])
-    session.add_all(points)
-    session.commit()
-    session.close()
     
     print('Adding {} points to the database.'.format(len(points)))
     Points.bulkadd(points)
