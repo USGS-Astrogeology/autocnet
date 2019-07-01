@@ -483,9 +483,9 @@ class Edge(dict, MutableMapping):
                     new_y[i] = res[1]
                     strengths[i] = res[2]
             elif method == 'template':
-                new_x[i], new_y[i], strengths[i] = sp.subpixel_template(sx, sy, dx, dy, s_img, d_img,
-                                                                     search_size=search_size,
-                                                                     template_size=template_size, **kwargs)
+                new_x[i], new_y[i], strengths[i] = sp.iterative_template(sx, sy, dx, dy, s_img, d_img,
+                                                                         search_size=search_size,
+                                                                         template_size=template_size, **kwargs)
 
             # Capture the shifts
             shifts_x[i] = new_x[i] - dx

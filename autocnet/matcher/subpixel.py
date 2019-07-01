@@ -137,7 +137,8 @@ def subpixel_phase(template, search, **kwargs):
     (y_shift, x_shift), error, diffphase = register_translation(search, template, **kwargs)
     return x_shift, y_shift, (error, diffphase)
 
-def subpixel_template(sx, sy, dx, dy, s_img, d_img, search_size=251, template_size=51, **kwargs):
+#def subpixel_template(sx, sy, dx, dy, s_img, d_img, search_size=251, template_size=51, **kwargs):
+def subpixel_template(template, search, **kwargs):
     """
     Uses a pattern-matcher on subsets of two images determined from the passed-in keypoints and optional sizes to
     compute an x and y offset from the search keypoint to the template keypoint and an associated strength.
@@ -164,27 +165,28 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, search_size=251, template_si
 
     Returns
     -------
-    x_offset : float
+    x_shift : float
                Shift in the x-dimension
 
-    y_offset : float
+    y_shift : float
                Shift in the y-dimension
 
     strength : float
                Strength of the correspondence in the range [-1, 1]
     """
 
-    template, _, _ = clip_roi(d_img, dx, dy,
+    """template, _, _ = clip_roi(d_img, dx, dy,
                               size_x=template_size, size_y=template_size)
     search, dxr, dyr = clip_roi(s_img, sx, sy,
                                 size_x=search_size, size_y=search_size)
     if template is None or search is None:
         return None, None, None
 
-    x_offset, y_offset, strength = naive_template.pattern_match(template, search, **kwargs)
-    dx += (x_offset + dxr)
-    dy += (y_offset + dyr)
-    return dx, dy, strength
+    if template.shape >= search.shape:
+        return None, None, None"""
+
+    x_shift, y_shift, strength = naive_template.pattern_match(template, search, **kwargs)
+    return x_shift, y_shift, strength
 
 def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_size=51, **kwargs):
     """
@@ -234,9 +236,53 @@ def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_si
     dy += (y_offset + dyr)
     return dx, dy, strength
 
+def iterative_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), template_size=(51,51), reduction=11, convergence_threshold=1.0, max_dist=50, **kwargs):
+    """
+    Iterativel apply a subpixel template matcher to the source (s_img) and destination(d_img) images.
+    """
+    dsample = dx
+    dline = dy
+    while True:
+        s_image, _, _ = clip_roi(s_img, sx, sy,
+                                size_x=image_size[0], size_y=image_size[1])
+        d_template, dxr, dyr = clip_roi(d_img, dx, dy,
+                                        size_x=template_size[0], size_y=template_size[1])
+
+        if (s_image is None) or (d_template is None):
+            return None, None, None
+
+        if s_image.shape >= d_template.shape:
+            return None, None, None
+
+        # Apply the template matcher. Args are image, template
+        try:
+            shift_x, shift_y, metrics = subpixel_template(s_image, d_template,**kwargs)
+        except:
+            return None, None, None
+
+        # Apply the shift to d_search and compute the new correspondence location
+        dx += (shift_x + dxr)
+        dy += (shift_y + dyr)
+
+        # Break if the solution has converged
+        x_size -= reduction
+        y_size -= reduction
+        dist = np.linalg.norm([dsample-dx, dline-dy])
+        
+        if abs(shift_x) <= convergence_threshold and\
+           abs(shift_y) <= convergence_threshold and\
+           abs(dist) <= max_dist:
+            break
+
+        if x_size < 1 or y_size < 1:
+            return None, None, None
+        
+        return dx, dy, metrics        
+
+
 def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, convergence_threshold=1.0, max_dist=50, **kwargs):
     """
-    Iteratively apply a subpixel phase matcher to source (s_img) amd destination (d_img)
+    Iteratively apply a subpixel phase matcher to source (s_img) and destination (d_img)
     images. The size parameter is used to set the initial search space. The algorithm
     is recursively applied to reduce the total search space by reduction until the convergence criteria
     are met. Convergence is defined as the point at which the computed shifts (x_shift,y_shift) are
