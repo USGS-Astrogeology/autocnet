@@ -412,7 +412,7 @@ class Edge(dict, MutableMapping):
 
 
     def subpixel_register(self, method='phase', clean_keys=[],
-                          template_size=251, search_size=251, 
+                          image_size=(251, 251), template_size=(51,51), 
                           **kwargs):
         """
         For the entire graph, compute the subpixel offsets using pattern-matching and add the result
@@ -428,16 +428,16 @@ class Edge(dict, MutableMapping):
                      (created by calling outlier detection)
 
         upsampling : int
-                     The multiplier to the template and search shapes to upsample
+                     The multiplier to the image and template shapes to upsample
                      for subpixel accuracy
 
-        template_size : int
-                        The size of the template in pixels, must be odd. If using phase,
+        image_size : int
+                        The size of the image/subimage in pixels, must be odd. If using phase,
                         only the template size is used.
 
-        search_size : int
+        template_size : int
                       The size of the search area. When method='template', this size should
-                      be >= the template size
+                      be >= the image size
         """
         # Build up a composite mask from all of the user specified masks
         matches, mask = self.clean(clean_keys)
@@ -484,7 +484,7 @@ class Edge(dict, MutableMapping):
                     strengths[i] = res[2]
             elif method == 'template':
                 new_x[i], new_y[i], strengths[i] = sp.iterative_template(sx, sy, dx, dy, s_img, d_img,
-                                                                         search_size=search_size,
+                                                                         image_size=image_size,
                                                                          template_size=template_size, **kwargs)
 
             # Capture the shifts

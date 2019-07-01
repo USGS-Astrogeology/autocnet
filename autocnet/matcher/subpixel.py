@@ -264,9 +264,11 @@ def iterative_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), temp
         dx += (shift_x + dxr)
         dy += (shift_y + dyr)
 
-        # Break if the solution has converged
-        x_size -= reduction
-        y_size -= reduction
+        # Adjust the image/template sizes
+        x_size = (x_size[0] - reduction, x_size[1] - reduction)
+        y_size = (y_size[0] - reduction, y_size[1] - reduction)
+
+        # Determine the total distance moved
         dist = np.linalg.norm([dsample-dx, dline-dy])
         
         if abs(shift_x) <= convergence_threshold and\
