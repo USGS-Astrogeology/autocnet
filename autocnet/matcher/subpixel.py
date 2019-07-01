@@ -276,7 +276,7 @@ def iterative_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), temp
            abs(dist) <= max_dist:
             break
 
-        if x_size < 1 or y_size < 1:
+        if min(x_size) < 1 or min(y_size) < 1:
             return None, None, None
         
         return dx, dy, metrics        
