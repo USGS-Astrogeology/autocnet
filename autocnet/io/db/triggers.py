@@ -71,6 +71,7 @@ BEGIN
     NEW.geom = ST_Force_2D(ST_Transform(NEW.adjusted, {}));
     RETURN NEW;
   EXCEPTION WHEN OTHERS THEN
+    raise notice 'FAILED TO PROJECT POINT';
     NEW.geom = Null;
     RETURN NEW;
 END;
@@ -82,7 +83,7 @@ COST 100; -- Estimated execution cost of the function.
 
 update_point_trigger = DDL("""
 CREATE TRIGGER point_inserted
-  BEFORE INSERT OR UPDATE
+  AFTER INSERT OR UPDATE
   ON points
   FOR EACH ROW
 EXECUTE PROCEDURE update_points();

@@ -388,12 +388,13 @@ if Session:
     if not database_exists(engine.url):
         create_database(engine.url, template='template_postgis')  # This is a hardcode to the local template
 
-        # Trigger that watches for points that should be active/inactive
-        # based on the point count.
+    # Trigger that watches for points that should be active/inactive
+    # based on the point count.
+    if not engine.dialect.has_table(engine, "points"):
         event.listen(Base.metadata, 'before_create', valid_point_function)
         event.listen(Measures.__table__, 'after_create', valid_point_trigger)
         event.listen(Base.metadata, 'before_create', update_point_function)
-        event.listen(Images.__table__, 'after_create', update_point_trigger)
+        event.listen(Points.__table__, 'after_create', update_point_trigger)
         event.listen(Base.metadata, 'before_create', valid_geom_function)
         event.listen(Images.__table__, 'after_create', valid_geom_trigger)
 

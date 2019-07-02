@@ -1411,7 +1411,7 @@ class NetworkCandidateGraph(CandidateGraph):
                      mem_per_cpu=config['cluster']['processing_memory'],
                      time=walltime,
                      partition=config['cluster']['queue'],
-                     output=config['cluster']['cluster_log_dir']+'/slurm-%A_%a.out')
+                     output=config['cluster']['cluster_log_dir']+f'/autocnet.{function}-%j')
         submitter.submit(array='1-{}'.format(job_counter))
         return job_counter
 
@@ -1627,14 +1627,14 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
             tables = engine.table_names()
 
         for t in tables:
-            session.execute(f'TRUNCATE TABLE {t} CASCADE')
+          if t != 'spatial_ref_sys':
             try:
                 session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
-            except:
+            except Exception as e:
+                warnings.warn(f'Failed to truncate table {t}, {t} not modified')
                 session.rollback()
         session.commit()
         session.close()
-
 
     def place_points_from_cnet(self, cnet):
         semi_major, semi_minor = config["spatial"]["semimajor_rad"], config["spatial"]["semiminor_rad"]
