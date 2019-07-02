@@ -1133,11 +1133,6 @@ class CandidateGraph(nx.Graph):
             self, self.controlnetwork, **kwargs)
         return cc
 
-    def to_isis(self, outname, *args, **kwargs):
-        serials = self.serials()
-        files = self.files()
-        self.controlnetwork.to_isis(outname, serials, files, *args, **kwargs)
-
     def nodes_iter(self, data=False):
         for i, n in self.nodes.data('data'):
             if data:
@@ -1253,6 +1248,7 @@ class CandidateGraph(nx.Graph):
         as functions such as subpixel matching can result in orphaned measures.
         """
         return self.controlnetwork.groupby('point_id').apply(lambda g: g if len(g) > 1 else None)
+
 
     def to_isis(self, outname, serials, olist, *args, **kwargs):  # pragma: no cover
         """
@@ -1445,8 +1441,8 @@ class NetworkCandidateGraph(CandidateGraph):
             n.generate_vrt(**kwargs)
 
     def to_isis(self, path, flistpath=None,sql = """
-SELECT points.id, measures.serial, points.pointtype, measures.sample, measures.line, measures.measuretype,
-measures.imageid
+SELECT points.id, measures.serial, points.pointtype, points.apriori, points.adjusted,
+measures.sample, measures.line, measures.measuretype, measures.imageid
 FROM measures INNER JOIN points ON measures.pointid = points.id
 WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE;
 """):
@@ -1472,6 +1468,27 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         df = pd.read_sql(sql, engine)
         df.rename(columns={'imageid':'image_index','id':'point_id', 'pointtype' : 'type',
             'sample':'x', 'line':'y', 'serial': 'serialnumber'}, inplace=True)
+
+        #create columns in the dataframe
+        df['aprioriX'] = np.nan
+        df['aprioriY'] = np.nan
+        df['aprioriZ'] = np.nan
+        df['adjustedX'] = np.nan
+        df['adjustedY'] = np.nan
+        df['adjustedZ'] = np.nan
+
+        #populate the new columns
+        for i, row in df.iterrows():
+            apriori_geom = loads(row['apriori'], hex=True)
+            row['aprioriX'] = apriori_geom.x
+            row['aprioriY'] = apriori_geom.y
+            row['aprioriZ'] = apriori_geom.z
+            adjusted_geom = loads(row['adjusted'], hex=True)
+            row['adjustedX'] = adjusted_geom.x
+            row['adjustedY'] = adjusted_geom.y
+            row['adjustedZ'] = adjusted_geom.z
+            df.iloc[i] = row
+
         if flistpath is None:
             flistpath = os.path.splitext(path)[0] + '.lis'
 
