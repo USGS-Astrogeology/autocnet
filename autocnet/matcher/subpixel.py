@@ -10,7 +10,7 @@ import geopandas as gpd
 import pandas as pd
 
 # TODO: look into KeyPoint.size and perhaps use to determine an appropriately-sized search/template.
-def _prep_subpixel(method, nmatches, nstrengths=2):
+def _prep_subpixel(nmatches, nstrengths=2):
     """
     Setup the data strutures to return for subpixel matching.
 
@@ -41,12 +41,9 @@ def _prep_subpixel(method, nmatches, nstrengths=2):
             (nmatches, 1) to store the updated y coordinates
     """
     # Setup to store output to append to dataframes
-    shifts_x = np.empty(nmatches)
-    shifts_x[:] = np.nan
-    shifts_y = np.empty(nmatches)
-    shifts_y[:] = np.nan
-    strengths = np.empty((nmatches, nstrengths))
-    strengths[:] = np.nan
+    shifts_x = np.zeros(nmatches)
+    shifts_y = np.zeros(nmatches)
+    strengths = np.zeros((nmatches, nstrengths))
 
     new_x = np.empty(nmatches)
     new_y = np.empty(nmatches)
@@ -69,7 +66,7 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200):
              (x,y) coordinates to center the roi
 
     img_size : int
-               Odd, total image size
+               Total image size
 
     Returns
     -------
@@ -90,12 +87,13 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200):
     if ax - size_x < 0:
         size_x = int(ax)
     if ay + size_y > raster_size[1]:
-        size_y = floor(raster_size[1] - center_y)
+        size_y =floor(raster_size[1] - center_y)
     if ay - size_y < 0:
         size_y = int(ay)
-
+    
     # Read from the upper left origin
-    pixels=(int(ax-size_x), int(ay-size_y), size_x * 2, size_y * 2)
+    pixels=[ax-size_x, ay-size_y, size_x * 2, size_y * 2]
+    pixels=list(map(int, pixels))  # 
     if isinstance(img, np.ndarray):
         subarray = img[pixels[1]:pixels[1] + pixels[3] + 1, pixels[0]:pixels[0] + pixels[2] + 1]
     else:
@@ -236,6 +234,19 @@ def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_si
     dy += (y_offset + dyr)
     return dx, dy, strength
 
+def check_image_size(imagesize):
+    """
+    Given an x,y tuple, ensure that the values
+    are odd.
+    """
+    x = imagesize[0] / 2
+    y = imagesize[1] / 2
+    if x % 2 == 0:
+        x += 1
+    if y % 2 == 0:
+        y += 1
+    return x,y
+
 def iterative_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), template_size=(51,51), reduction=11, convergence_threshold=1.0, max_dist=50, **kwargs):
     """
     Iterativel apply a subpixel template matcher to the source (s_img) and destination(d_img) images.
@@ -243,30 +254,37 @@ def iterative_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), temp
     dsample = dx
     dline = dy
     while True:
+        print(dsample, dline)
+        # Phase multiplies shape by 2, need to divide by 2 here
+        image_size = check_image_size(image_size)
+        template_size = check_image_size(template_size)
+        
         s_image, _, _ = clip_roi(s_img, sx, sy,
                                 size_x=image_size[0], size_y=image_size[1])
         d_template, dxr, dyr = clip_roi(d_img, dx, dy,
                                         size_x=template_size[0], size_y=template_size[1])
-
+        
         if (s_image is None) or (d_template is None):
             return None, None, None
 
-        if s_image.shape >= d_template.shape:
+        if s_image.shape < d_template.shape:
             return None, None, None
 
         # Apply the template matcher. Args are image, template
-        try:
-            shift_x, shift_y, metrics = subpixel_template(s_image, d_template,**kwargs)
-        except:
-            return None, None, None
+        #try:
+        shift_x, shift_y, metrics = subpixel_template(d_template, s_image, **kwargs)
+        
+        #except:
+        #    return None, None, None
 
         # Apply the shift to d_search and compute the new correspondence location
         dx += (shift_x + dxr)
         dy += (shift_y + dyr)
-
+        print(dx, dy, shift_x, shift_y, metrics)
+        
         # Adjust the image/template sizes
-        x_size = (x_size[0] - reduction, x_size[1] - reduction)
-        y_size = (y_size[0] - reduction, y_size[1] - reduction)
+        image_size = (image_size[0] - reduction, image_size[1] - reduction)
+        template_size = (template_size[0] - reduction, template_size[1] - reduction)
 
         # Determine the total distance moved
         dist = np.linalg.norm([dsample-dx, dline-dy])
@@ -275,11 +293,11 @@ def iterative_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), temp
            abs(shift_y) <= convergence_threshold and\
            abs(dist) <= max_dist:
             break
-
-        if min(x_size) < 1 or min(y_size) < 1:
+        print(image_size, template_size)
+        if min(image_size) < 1 or min(template_size) < 1:
             return None, None, None
-        
-        return dx, dy, metrics        
+    print('DX', dx, dy, metrics)     
+    return dx, dy, metrics        
 
 
 def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, convergence_threshold=1.0, max_dist=50, **kwargs):

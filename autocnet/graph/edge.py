@@ -454,7 +454,7 @@ class Edge(dict, MutableMapping):
             func = sp.subpixel_template
             nstrengths = 1
         shifts_x, shifts_y, strengths, new_x, new_y = sp._prep_subpixel(len(matches), nstrengths)
-
+        
         # for each edge, calculate this for each keypoint pair
         for i, (idx, row) in enumerate(matches.iterrows()):
             s_idx = int(row['source_idx'])
@@ -478,20 +478,20 @@ class Edge(dict, MutableMapping):
 
             if method == 'phase':
                 res = sp.iterative_phase(sx, sy, dx, dy, s_img, d_img, size=template_size, **kwargs)
-                if res[0]:
-                    new_x[i] = res[0]
-                    new_y[i] = res[1]
-                    strengths[i] = res[2]
+               
             elif method == 'template':
-                new_x[i], new_y[i], strengths[i] = sp.iterative_template(sx, sy, dx, dy, s_img, d_img,
-                                                                         image_size=image_size,
-                                                                         template_size=template_size, **kwargs)
-
+                res = sp.iterative_template(sx, sy, dx, dy, s_img, d_img,
+                                            image_size=image_size,template_size=template_size, **kwargs)
+            if res[0]:
+                new_x[i] = res[0]
+                new_y[i] = res[1]
+                strengths[i] = res[2]
+            
             # Capture the shifts
             shifts_x[i] = new_x[i] - dx
             shifts_y[i] = new_y[i] - dy
-
-        self.matches.loc[mask, 'shift_x'] = shifts_x
+        #print(new_x, new_y)
+        """self.matches.loc[mask, 'shift_x'] = shifts_x
         self.matches.loc[mask, 'shift_y'] = shifts_y
         self.matches.loc[mask, 'destination_x'] = new_x
         self.matches.loc[mask, 'destination_y'] = new_y
@@ -500,7 +500,7 @@ class Edge(dict, MutableMapping):
             self.costs.loc[mask, 'phase_diff'] = strengths[:,0]
             self.costs.loc[mask, 'rmse'] = strengths[:,1]
         elif method == 'template':
-            self.costs.loc[mask, 'correlation'] = strengths[:,0]
+            self.costs.loc[mask, 'correlation'] = strengths[:,0]"""
 
 
     def suppress(self, suppression_func=spf.correlation, clean_keys=[], maskname='suppression', **kwargs):
