@@ -83,7 +83,7 @@ COST 100; -- Estimated execution cost of the function.
 
 update_point_trigger = DDL("""
 CREATE TRIGGER point_inserted
-  AFTER INSERT OR UPDATE
+  BEFORE INSERT OR UPDATE
   ON points
   FOR EACH ROW
 EXECUTE PROCEDURE update_points();
