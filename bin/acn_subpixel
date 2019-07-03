@@ -25,20 +25,20 @@ except:
     sys.exit(1)
 
 def main(msg, config):
-session = Session()
-id = msg['id']
-point = session.query(Points).filter(Points.id == id).one()
-pointid = point.id
-session.close()
-if point is None:
-    print(f'Unable to find point {pointid}')
+    session = Session()
+    id = msg['id']
+    point = session.query(Points).filter(Points.id == id).one()
+    pointid = point.id
+    session.close()
+    if point is None:
+        print(f'Unable to find point {pointid}')
 
-print(f'Subpixel registering point {pointid}')
-subpixel_register_point(pointid,
-                        iterative_phase_kwargs=msg['iterative_phase_kwargs'],
-                        subpixel_template_kwargs=msg['subpixel_template_kwargs'],
-                        threshold=msg['threshold'])
- print('Subpixel registration complete.')
+    print(f'Subpixel registering point {pointid}')
+    subpixel_register_point(pointid,
+                            iterative_phase_kwargs=msg['iterative_phase_kwargs'],
+                            subpixel_template_kwargs=msg['subpixel_template_kwargs'],
+                            threshold=msg['threshold'])
+    print('Subpixel registration complete.')
 
 if __name__ == '__main__':
     conf = config['redis']

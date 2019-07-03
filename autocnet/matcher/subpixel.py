@@ -1,10 +1,16 @@
+import json
 from math import modf, floor
 import numpy as np
 
 from skimage.feature import register_translation
+from redis import StrictRedis
+from plurmy import Slurm
 
+from autocnet import Session, config
 from autocnet.matcher import naive_template
 from autocnet.matcher import ciratefi
+from autocnet.io.db.model import Points, Images
+from autocnet.graph.node import NetworkNode
 
 import geopandas as gpd
 import pandas as pd
@@ -143,7 +149,7 @@ def subpixel_phase(template, search, **kwargs):
     search : ndarray
              The search image
 
-    Returns
+    Returnsslurm-2235260_89.out.2235260_89.out
     -------
     x_offset : float
                Shift in the x-dimension
@@ -395,7 +401,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
                 the database.
     """
     session = Session()
-    point = session.query(Points).filter(Points.id == pointid)
+    point = session.query(Points).filter(Points.id == pointid).one()
     measures = point.measures
     source = measures[0]
     
@@ -408,10 +414,10 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
         cost = None
         destinationid = measure.imageid
 
-        resself,  = session.query(Images).filter(Images.id == destinationid).one()
-        desself, tination_node = NetworkNode(node_id=destinationid, image_path=res.path)
-        self, 
-        newself, _phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample, 
+        res = session.query(Images).filter(Images.id == destinationid).one()
+        destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
+        
+        new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample, 
                                                                 source.line, 
                                                                 measure.sample, 
                                                                 measure.line,
@@ -420,6 +426,8 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
                                                                 **iterative_phase_kwargs)
         if new_phase_x == None:
             active = False  # Unable to phase match
+            measure.active = active
+            continue
 
         new_template_x, new_template_y, template_metric = subpixel_template(source.sample,
                                                                 source.line,
@@ -427,7 +435,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
                                                                 new_phase_y,
                                                                 source_node.geodata,
                                                                 destination_node.geodata,
-                                                                **iterative_template_kwargs)
+                                                                **subpixel_template_kwargs)
         if new_template_x == None:
             active = False  # Unable to template match
 
@@ -435,6 +443,8 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
         cost = cost_func(dist, template_metric)
         if cost <= threshold:
             active = False  # Bad point
+            measure.active = active
+            continue
 
         # Update the measure
         measure.active = active
@@ -522,7 +532,7 @@ def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 71},
 
 
     session = Session()
-    for point in session.query(Points):
+    for i, point in enumerate(session.query(Points)):
         msg = {'id' : point.id,
                'iterative_phase_kwargs' : iterative_phase_kwargs,
                'subpixel_template_kwargs' : subpixel_template_kwargs,
@@ -531,7 +541,7 @@ def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 71},
         rqueue.rpush(queuename, json.dumps(msg))
     session.close()
 
-    job_counter = len([*overlaps]) + 1
+    job_counter = i + 1
     
     # Submit the jobs
     submitter = Slurm('acn_subpixel',
