@@ -74,7 +74,7 @@ def test_voronoi_keypoint_intersection(keypoints):
 @pytest.mark.parametrize("polygon, nexpected",[
     (Polygon([(0,0), (.2,0), (.2,1), (0,1), (0,0)]), 10),
     (Polygon([(0,0), (1,0), (1,.2), (0,.2), (0,0)]), 10),
-    (Polygon([(0,0), (.2, .1), (.2,1.1), (-0.1, 1), (0,0)]), 11)
+    (Polygon([(0,0), (.2, .1), (.2,1.1), (-0.1, 1), (0,0)]), 22)
 ],
     ids=['vertical', 'horizontal', 'verticalskewed'])
 def test_points_in_geom(polygon, nexpected):
