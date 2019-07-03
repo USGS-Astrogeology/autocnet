@@ -410,34 +410,35 @@ class Edge(dict, MutableMapping):
         mask[mask] = hmask
         self.masks['homography'] = mask
 
-
     def subpixel_register(self, method='phase', clean_keys=[],
-                          image_size=(251, 251), template_size=(51,51), 
-                          **kwargs):
+                          template_size=251, search_size=251, **kwargs):
         """
         For the entire graph, compute the subpixel offsets using pattern-matching and add the result
         as an attribute to each edge of the graph.
 
         Parameters
         ----------
-        method : {'phase', 'template', 'ciratefi'}
-                 determining which subpixel registration method to use
-
         clean_keys : list
                      of string keys to masking arrays
                      (created by calling outlier detection)
 
+        threshold : float
+                    On the range [-1, 1].  Values less than or equal to
+                    this threshold are masked and can be considered
+                    outliers
+
         upsampling : int
-                     The multiplier to the image and template shapes to upsample
+                     The multiplier to the template and search shapes to upsample
                      for subpixel accuracy
 
-        image_size : int
-                        The size of the image/subimage in pixels, must be odd. If using phase,
+        template_size : int
+                        The size of the template in pixels, must be odd. If using phase,
                         only the template size is used.
 
-        template_size : int
+        search_size : int
                       The size of the search area. When method='template', this size should
-                      be >= the image size
+                      be >= the template size
+
         """
         # Build up a composite mask from all of the user specified masks
         matches, mask = self.clean(clean_keys)
@@ -446,7 +447,7 @@ class Edge(dict, MutableMapping):
         s_img = self.source.geodata
         d_img = self.destination.geodata
 
-        # Determine which algorithm is going to be used.
+        # Determine which algorithm is going ot be used.
         if method == 'phase':
             func = sp.iterative_phase
             nstrengths = 2
@@ -454,7 +455,7 @@ class Edge(dict, MutableMapping):
             func = sp.subpixel_template
             nstrengths = 1
         shifts_x, shifts_y, strengths, new_x, new_y = sp._prep_subpixel(len(matches), nstrengths)
-        
+
         # for each edge, calculate this for each keypoint pair
         for i, (idx, row) in enumerate(matches.iterrows()):
             s_idx = int(row['source_idx'])
@@ -478,20 +479,20 @@ class Edge(dict, MutableMapping):
 
             if method == 'phase':
                 res = sp.iterative_phase(sx, sy, dx, dy, s_img, d_img, size=template_size, **kwargs)
-               
+                if res[0]:
+                    new_x[i] = res[0]
+                    new_y[i] = res[1]
+                    strengths[i] = res[2]
             elif method == 'template':
-                res = sp.iterative_template(sx, sy, dx, dy, s_img, d_img,
-                                            image_size=image_size,template_size=template_size, **kwargs)
-            if res[0]:
-                new_x[i] = res[0]
-                new_y[i] = res[1]
-                strengths[i] = res[2]
-            
+                new_x[i], new_y[i], strengths[i] = sp.subpixel_template(sx, sy, dx, dy, s_img, d_img,
+                                                                     search_size=search_size,
+                                                                     template_size=template_size, **kwargs)
+
             # Capture the shifts
             shifts_x[i] = new_x[i] - dx
             shifts_y[i] = new_y[i] - dy
-        #print(new_x, new_y)
-        """self.matches.loc[mask, 'shift_x'] = shifts_x
+
+        self.matches.loc[mask, 'shift_x'] = shifts_x
         self.matches.loc[mask, 'shift_y'] = shifts_y
         self.matches.loc[mask, 'destination_x'] = new_x
         self.matches.loc[mask, 'destination_y'] = new_y
@@ -500,7 +501,7 @@ class Edge(dict, MutableMapping):
             self.costs.loc[mask, 'phase_diff'] = strengths[:,0]
             self.costs.loc[mask, 'rmse'] = strengths[:,1]
         elif method == 'template':
-            self.costs.loc[mask, 'correlation'] = strengths[:,0]"""
+            self.costs.loc[mask, 'correlation'] = strengths[:,0]
 
 
     def suppress(self, suppression_func=spf.correlation, clean_keys=[], maskname='suppression', **kwargs):
