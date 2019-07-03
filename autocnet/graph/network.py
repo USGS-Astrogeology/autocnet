@@ -15,7 +15,9 @@ from redis import StrictRedis
 import shapely.affinity
 import shapely.geometry
 import shapely.wkt as swkt
+import shapely.wkb as swkb
 import shapely.ops
+
 
 import pyproj
 
@@ -1470,24 +1472,27 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
             'sample':'x', 'line':'y', 'serial': 'serialnumber'}, inplace=True)
 
         #create columns in the dataframe
-        df['aprioriX'] = np.nan
-        df['aprioriY'] = np.nan
-        df['aprioriZ'] = np.nan
-        df['adjustedX'] = np.nan
-        df['adjustedY'] = np.nan
-        df['adjustedZ'] = np.nan
+        df['aprioriX'] = 0
+        df['aprioriY'] = 0
+        df['aprioriZ'] = 0
+        df['adjustedX'] = 0
+        df['adjustedY'] = 0
+        df['adjustedZ'] = 0
 
-        #populate the new columns
+        #populate the new columns, only for ground points. Otherwise, let isis
+        #recalculate the control point lat/lon from control measures "massaged"
+        #by the phase and template matcher.
         for i, row in df.iterrows():
-            apriori_geom = loads(row['apriori'], hex=True)
-            row['aprioriX'] = apriori_geom.x
-            row['aprioriY'] = apriori_geom.y
-            row['aprioriZ'] = apriori_geom.z
-            adjusted_geom = loads(row['adjusted'], hex=True)
-            row['adjustedX'] = adjusted_geom.x
-            row['adjustedY'] = adjusted_geom.y
-            row['adjustedZ'] = adjusted_geom.z
-            df.iloc[i] = row
+            if row['type'] == 3 or row['type'] == 4:
+                apriori_geom = swkb.loads(row['apriori'], hex=True)
+                row['aprioriX'] = apriori_geom.x
+                row['aprioriY'] = apriori_geom.y
+                row['aprioriZ'] = apriori_geom.z
+                adjusted_geom = swkb.loads(row['adjusted'], hex=True)
+                row['adjustedX'] = adjusted_geom.x
+                row['adjustedY'] = adjusted_geom.y
+                row['adjustedZ'] = adjusted_geom.z
+                df.iloc[i] = row
 
         if flistpath is None:
             flistpath = os.path.splitext(path)[0] + '.lis'

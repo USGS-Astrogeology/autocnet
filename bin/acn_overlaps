@@ -38,7 +38,7 @@ def main(msg, config):
         res = session.query(Images).filter(Images.id == id).first()
         nodes.append(NetworkNode(node_id=id, image_path=res.path))
     session.close()
-    
+
     print('Placing points in overlap', id)
     points = place_points_in_overlap(nodes, overlap.geom, dem, msg["cam_type"],
                                      msg['iterative_phase_kwargs'],
@@ -46,12 +46,7 @@ def main(msg, config):
     session.add_all(points)
     session.commit()
     session.close()
-    
-    print('Placing points in overlap', id)
-    points = place_points_in_overlap(nodes, overlap.geom, dem, msg["cam_type"],
-                                     msg['iterative_phase_kwargs'],
-                                     msg['distribute_points_kwargs'])
-    
+
     print('Adding {} points to the database.'.format(len(points)))
     Points.bulkadd(points)
 
