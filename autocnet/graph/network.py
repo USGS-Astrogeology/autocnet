@@ -1630,11 +1630,11 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
                 tables = engine.table_names()
 
             for t in tables:
-            if t != 'spatial_ref_sys':
-                try:
-                    session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
-                except Exception as e:
-                    warnings.warn(f'Failed to truncate table {t}, {t} not modified')
+                if t != 'spatial_ref_sys':
+                    try:
+                        session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
+                    except Exception as e:
+                        warnings.warn(f'Failed to truncate table {t}, {t} not modified')
 
     def place_points_from_cnet(self, cnet):
         semi_major, semi_minor = config["spatial"]["semimajor_rad"], config["spatial"]["semiminor_rad"]
