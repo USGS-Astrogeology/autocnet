@@ -425,8 +425,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
                                                                 destination_node.geodata,
                                                                 **iterative_phase_kwargs)
         if new_phase_x == None:
-            active = False  # Unable to phase match
-            measure.active = active
+            measure.active = False # Unable to phase match
             continue
 
         new_template_x, new_template_y, template_metric = subpixel_template(source.sample,
@@ -437,13 +436,14 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
                                                                 destination_node.geodata,
                                                                 **subpixel_template_kwargs)
         if new_template_x == None:
-            active = False  # Unable to template match
+            measure.active = False # Unable to template match
+            continue
 
         dist = np.linalg.norm([new_phase_x-new_template_x, new_phase_y-new_template_y])
         cost = cost_func(dist, template_metric)
+        
         if cost <= threshold:
-            active = False  # Bad point
-            measure.active = active
+            measure.active = False # Threshold criteria not met
             continue
 
         # Update the measure
