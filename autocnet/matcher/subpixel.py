@@ -105,8 +105,8 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200):
         size_y = int(ay)
     
     # Read from the upper left origin
-    pixels=[ax-size_x, ay-size_y, size_x * 2, size_y * 2]
-    pixels=list(map(int, pixels))  # 
+    pixels = [ax-size_x, ay-size_y, size_x * 2, size_y * 2]
+    pixels = list(map(int, pixels))  # 
     if isinstance(img, np.ndarray):
         subarray = img[pixels[1]:pixels[1] + pixels[3] + 1, pixels[0]:pixels[0] + pixels[2] + 1]
     else:
@@ -241,7 +241,6 @@ def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_si
     dy += (y_offset + dyr)
     return dx, dy, strength
 
-
 def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, convergence_threshold=1.0, max_dist=50, **kwargs):
     """
     Iteratively apply a subpixel phase matcher to source (s_img) and destination (d_img)
@@ -333,3 +332,109 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
             break
     return dx, dy, metrics
 
+
+def subpixel_register_point(self, pointid, iterative_phase_kwargs={}, subpixel_template_kwargs={},
+                            cost_func=lambda x,y: 1/x**2 * y, threshold=0.005):
+
+    session = Session()
+    point = session.query(Points).filter(Points.id = pointid)
+    measures = point.measures
+    source = measures[0]
+    
+    sourceid = source.imageid
+    res = session.query(Images).filter(Images.id == sourceid).one()
+    source_node = NetworkNode(node_id=sourceid, image_path=res.path)
+
+    for measure in measures[1:]:
+        active = True
+        cost = None
+        destinationid = measure.imageid
+
+        res = session.query(Images).filter(Images.id == destinationid).one()
+        destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
+        
+        new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample, 
+                                                                source.line, 
+                                                                measure.sample, 
+                                                                measure.line,
+                                                                source_node.geodata, 
+                                                                destination_node.geodata,
+                                                                **iterative_phase_kwargs)
+        if new_phase_x == None:
+            active = False  # Unable to phase match
+
+        new_template_x, new_template_y, template_metric = subpixel_template(source.sample,
+                                                                source.line,
+                                                                new_phase_x,
+                                                                new_phase_y,
+                                                                source_node.geodata,
+                                                                destination_node.geodata,
+                                                                **iterative_template_kwargs)
+        if new_template_x == None:
+            active = False  # Unable to template match
+
+        dist = np.linalg.norm([new_phase_x-new_template_x, new_phase_y-new_template_y])
+        cost = cost_func(dist, template_metric)
+        if cost <= threshold:
+            active = False  # Bad point
+
+        # Update the measure
+        measure.active = active
+        if new_template_x:
+            measure.sample = new_template_x
+            measure.line = new_template_y
+            measure.weight = cost
+    session.commit()
+    session.close()
+
+def subpixel_register_points(self,
+                             iterative_phase_kwargs={'size': 71}, 
+                             subpixel_template_kwargs={'image_size':(121,121), 'func':cv2.TM_CCOEFF_NORMED},
+                             cost_func=lambda x,y: 1/x**2 * y,
+                             threshold=0.005):
+
+    session = Session()
+    pointids = [point.id for point in session.query(Points)]
+    sessoin.close()
+    for pointid in pointids:
+        subpixel_register_point(pointid, 
+                                iterative_phase_kwargs=iterative_phase_kwargs,
+                                subpixel_template_kwargs=subpixel_template_kwargs, 
+                                cost_func=cost_func)
+
+def cluster_subpixel_register_points(self,
+                                     iterative_phase_kwargs={'size': 71}, 
+                                     subpixel_template_kwargs={'image_size':(121,121), 'func':cv2.TM_CCOEFF_NORMED},
+                                     cost_func=lambda x,y: 1/x**2 * y,
+                                     threshold=0.005,
+                                     walltime:'00:10:00'):
+    
+    # Setup the redis queue
+    rqueue = StrictRedis(host=config['redis']['host'],
+                        port=config['redis']['port'],
+                        db=0)
+
+    # Push the job messages onto the queue
+    queuename = config['redis']['processing_queue']
+
+
+    session = Session()
+    for point in session.query(Points):
+        msg = {'id' : point.id,
+               'iterative_phase_kwargs' : iterative_phase_kwargs,
+               'subpixel_template_kwargs' : subpixel_template_kwargs,
+               'threshold'=threshold,
+               'walltime' : walltime}
+        rqueue.rpush(queuename, json.dumps(msg))
+    session.close()
+
+    job_counter = len([*overlaps]) + 1
+    
+    # Submit the jobs
+    submitter = Slurm('acn_subpixel',
+                 mem_per_cpu=config['cluster']['processing_memory'],
+                 time=walltime,
+                 partition=config['cluster']['queue'],
+                 output=config['cluster']['cluster_log_dir']+'/slurm-%A_%a.out')
+    submitter.submit(array='1-{}'.format(job_counter))
+    return job_counter

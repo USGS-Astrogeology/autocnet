@@ -370,6 +370,7 @@ class Measures(BaseMixin, Base):
     apriorisample = Column(Float)
     samplesigma = Column(Float)
     linesigma = Column(Float)
+    weight = Column(Float, default=1)
     rms = Column(Float)
 
     @hybrid_property

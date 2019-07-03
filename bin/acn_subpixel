@@ -1,0 +1,51 @@
+#!/usr/bin/env python
+
+import copy
+import os
+import json
+import sys
+
+from redis import StrictRedis
+import yaml
+
+from autocnet.io.db.redis_queue import pop_computetime_push, finalize
+from autocnet.io.db.model import Overlay, Images, Points
+from autocnet.matcher.subpixel import subpixel_register_point
+from autocnet.graph.node import NetworkNode
+from autocnet import Session, dem
+
+from plio.io.io_gdal import GeoDataset
+
+#Load the config file
+try:
+    with open(os.environ['autocnet_config'], 'r') as f:
+        config = yaml.safe_load(f)
+except:
+    print("The 'autocnet_config' environment variable is not set.")
+    sys.exit(1)
+
+def main(msg, config):
+session = Session()
+id = msg['id']
+point = session.query(Points).filter(Points.id == id).one()
+pointid = point.id
+session.close()
+if point is None:
+    print(f'Unable to find point {pointid}')
+
+print(f'Subpixel registering point {pointid}')
+subpixel_register_point(pointid,
+                        iterative_phase_kwargs=msg['iterative_phase_kwargs'],
+                        subpixel_template_kwargs=msg['subpixel_template_kwargs'],
+                        threshold=msg['threshold'])
+ print('Subpixel registration complete.')
+
+if __name__ == '__main__':
+    conf = config['redis']
+    queue = StrictRedis(host=conf['host'], port=conf['port'], db=0)
+
+    msg = pop_computetime_push(queue,
+                               conf['processing_queue'],
+                               conf['working_queue'])
+
+    main(msg, config)
