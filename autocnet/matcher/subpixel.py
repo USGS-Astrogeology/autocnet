@@ -53,7 +53,14 @@ def _prep_subpixel(nmatches, nstrengths=2):
 def check_image_size(imagesize):
     """
     Given an x,y tuple, ensure that the values
-    are odd.
+    are odd. Used by the subpixel template to also ensure
+    that the template size is the one requested and not 2x
+    the template size.
+
+    Parameters
+    ----------
+    imagesize : tuple
+                in the form (size_x, size_y)
     """
     x = imagesize[0] / 2
     y = imagesize[1] / 2
@@ -75,11 +82,15 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200):
           with a read_array method that takes a pixels
           argument in the form [xstart, ystart, xstop, ystop]
 
-    center : tuple
-             (x,y) coordinates to center the roi
+    center_x : Numeric
+               The x coordinate to the center of the roi
+
+    center_y : Numeric
+               The y coordinate to the center of the roi
 
     img_size : int
-               Total image size
+               1/2 of the total image size. This value is the
+               number of pixels grabbed from each side of the center
 
     Returns
     -------
@@ -105,7 +116,7 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200):
         size_y = int(ay)
     
     # Read from the upper left origin
-    pixels = [ax-size_x, ay-size_y, size_x * 2, size_y * 2]
+    pixels = [ax-size_x, ay-size_y, size_x*2, size_y*2]
     pixels = list(map(int, pixels))  # 
     if isinstance(img, np.ndarray):
         subarray = img[pixels[1]:pixels[1] + pixels[3] + 1, pixels[0]:pixels[0] + pixels[2] + 1]
@@ -155,12 +166,31 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), templ
 
     Parameters
     ----------
-    template : ndarray
-               Chip or template that is iterated over the image to identify
-               areas of high correlation
-    image : ndarray
-            The larger image within which the template searches for areas of 
-            high correlation
+    sx : Numeric
+         Source X coordinate
+
+    sy : Numeric
+         Source y coordinate
+
+    dx : Numeric
+         The desintation x coordinate
+
+    dy : Numeric
+         The destination y coordinate
+
+    s_img : GeoDataset
+            The source image GeoDataset
+
+    d_img : GeoDataset
+            The destination image GeoDataset
+
+    image_size : tuple
+                 (xsize, ysize) of the image that is searched within (this should be larger 
+                 than the template size)
+    
+    template_size : tuple
+                    (xsize, ysize) of the template to iterate over the image in order
+                    to identify the area(s) of highest correlation.
 
     Returns
     -------
@@ -172,6 +202,10 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), templ
 
     strength : float
                Strength of the correspondence in the range [-1, 1]
+
+    See Also
+    --------
+    autocnet.matcher.naive_template.pattern_match : for the kwargs that can be passed to the matcher
     """
 
     image_size = check_image_size(image_size)
@@ -332,12 +366,36 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
             break
     return dx, dy, metrics
 
-
-def subpixel_register_point(self, pointid, iterative_phase_kwargs={}, subpixel_template_kwargs={},
+def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_template_kwargs={},
                             cost_func=lambda x,y: 1/x**2 * y, threshold=0.005):
 
+    """
+    Given some point, subpixel register all of the measures in the point to the 
+    first measure.
+
+    Parameters
+    ----------
+    pointid : int
+              The identifier of the point in the DB
+
+    iterative_phase_kwargs : dict
+                             Any keyword arguments passed to the phase matcher
+
+    subpixel_template_kwargs : dict
+                               Ay keyword arguments passed to the template matcher
+
+    cost : func
+           A generic cost function accepting two arguments (x,y), where x is the 
+           distance that a point has shifted from the original, sensor identified 
+           intersection, and y is the correlation coefficient coming out of the 
+           template matcher.
+
+    threshold : numeric
+                measures with a cost <= the threshold are marked as active=False in
+                the database.
+    """
     session = Session()
-    point = session.query(Points).filter(Points.id = pointid)
+    point = session.query(Points).filter(Points.id == pointid)
     measures = point.measures
     source = measures[0]
     
@@ -350,10 +408,10 @@ def subpixel_register_point(self, pointid, iterative_phase_kwargs={}, subpixel_t
         cost = None
         destinationid = measure.imageid
 
-        res = session.query(Images).filter(Images.id == destinationid).one()
-        destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
-        
-        new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample, 
+        resself,  = session.query(Images).filter(Images.id == destinationid).one()
+        desself, tination_node = NetworkNode(node_id=destinationid, image_path=res.path)
+        self, 
+        newself, _phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample, 
                                                                 source.line, 
                                                                 measure.sample, 
                                                                 measure.line,
@@ -387,12 +445,34 @@ def subpixel_register_point(self, pointid, iterative_phase_kwargs={}, subpixel_t
     session.commit()
     session.close()
 
-def subpixel_register_points(self,
-                             iterative_phase_kwargs={'size': 71}, 
-                             subpixel_template_kwargs={'image_size':(121,121), 'func':cv2.TM_CCOEFF_NORMED},
+def subpixel_register_points(iterative_phase_kwargs={'size': 71}, 
+                             subpixel_template_kwargs={'image_size':(121,121)},
                              cost_func=lambda x,y: 1/x**2 * y,
                              threshold=0.005):
+    """
+    Serial subpixel registration of all of the points in a given DB table.
 
+    Parameters
+    ----------
+    pointid : int
+              The identifier of the point in the DB
+
+    iterative_phase_kwargs : dict
+                             Any keyword arguments passed to the phase matcher
+
+    subpixel_template_kwargs : dict
+                               Ay keyword arguments passed to the template matcher
+
+    cost : func
+           A generic cost function accepting two arguments (x,y), where x is the 
+           distance that a point has shifted from the original, sensor identified 
+           intersection, and y is the correlation coefficient coming out of the 
+           template matcher.
+
+    threshold : numeric
+                measures with a cost <= the threshold are marked as active=False in
+                the database.
+    """
     session = Session()
     pointids = [point.id for point in session.query(Points)]
     sessoin.close()
@@ -402,13 +482,36 @@ def subpixel_register_points(self,
                                 subpixel_template_kwargs=subpixel_template_kwargs, 
                                 cost_func=cost_func)
 
-def cluster_subpixel_register_points(self,
-                                     iterative_phase_kwargs={'size': 71}, 
-                                     subpixel_template_kwargs={'image_size':(121,121), 'func':cv2.TM_CCOEFF_NORMED},
+def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 71}, 
+                                     subpixel_template_kwargs={'image_size':(121,121)},
                                      cost_func=lambda x,y: 1/x**2 * y,
                                      threshold=0.005,
-                                     walltime:'00:10:00'):
-    
+                                     walltime='00:10:00'):
+    """
+    Distributed subpixel registration of all of the points in a given DB table.
+
+
+    Parameters
+    ----------
+    pointid : int
+              The identifier of the point in the DB
+
+    iterative_phase_kwargs : dict
+                             Any keyword arguments passed to the phase matcher
+
+    subpixel_template_kwargs : dict
+                               Ay keyword arguments passed to the template matcher
+
+    cost : func
+           A generic cost function accepting two arguments (x,y), where x is the 
+           distance that a point has shifted from the original, sensor identified 
+           intersection, and y is the correlation coefficient coming out of the 
+           template matcher.
+
+    threshold : numeric
+                measures with a cost <= the threshold are marked as active=False in
+                the database.
+    """    
     # Setup the redis queue
     rqueue = StrictRedis(host=config['redis']['host'],
                         port=config['redis']['port'],
@@ -423,7 +526,7 @@ def cluster_subpixel_register_points(self,
         msg = {'id' : point.id,
                'iterative_phase_kwargs' : iterative_phase_kwargs,
                'subpixel_template_kwargs' : subpixel_template_kwargs,
-               'threshold'=threshold,
+               'threshold':threshold,
                'walltime' : walltime}
         rqueue.rpush(queuename, json.dumps(msg))
     session.close()
