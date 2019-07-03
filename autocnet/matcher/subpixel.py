@@ -50,6 +50,19 @@ def _prep_subpixel(nmatches, nstrengths=2):
 
     return shifts_x, shifts_y, strengths, new_x, new_y
 
+def check_image_size(imagesize):
+    """
+    Given an x,y tuple, ensure that the values
+    are odd.
+    """
+    x = imagesize[0] / 2
+    y = imagesize[1] / 2
+    if x % 2 == 0:
+        x += 1
+    if y % 2 == 0:
+        y += 1
+    return x,y
+
 def clip_roi(img, center_x, center_y, size_x=200, size_y=200):
     """
     Given an input image, clip a square region of interest
@@ -135,31 +148,19 @@ def subpixel_phase(template, search, **kwargs):
     (y_shift, x_shift), error, diffphase = register_translation(search, template, **kwargs)
     return x_shift, y_shift, (error, diffphase)
 
-#def subpixel_template(sx, sy, dx, dy, s_img, d_img, search_size=251, template_size=51, **kwargs):
-def subpixel_template(template, search, **kwargs):
+def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), template_size=(51,51), **kwargs):
     """
     Uses a pattern-matcher on subsets of two images determined from the passed-in keypoints and optional sizes to
     compute an x and y offset from the search keypoint to the template keypoint and an associated strength.
 
     Parameters
     ----------
-    sx : numeric
-         The x position of the center of the template to be matched to
-    sy : numeric
-         The y position of the center of the template to be matched to
-    dx : numeric
-         The x position of the center of the search to be matched from
-    dy : numeric
-         The y position of the center of the search to be matched to
-    s_img : object
-            A plio geodata object from which the template is extracted
-    d_img : object
-            A plio geodata object from which the search is extracted
-    search_size : int
-                  An odd integer for the size of the search image
-    template_size : int
-                    A odd integer for the size of the template that is iterated
-                    over the search images
+    template : ndarray
+               Chip or template that is iterated over the image to identify
+               areas of high correlation
+    image : ndarray
+            The larger image within which the template searches for areas of 
+            high correlation
 
     Returns
     -------
@@ -173,17 +174,23 @@ def subpixel_template(template, search, **kwargs):
                Strength of the correspondence in the range [-1, 1]
     """
 
-    """template, _, _ = clip_roi(d_img, dx, dy,
-                              size_x=template_size, size_y=template_size)
-    search, dxr, dyr = clip_roi(s_img, sx, sy,
-                                size_x=search_size, size_y=search_size)
-    if template is None or search is None:
+    image_size = check_image_size(image_size)
+    template_size = check_image_size(template_size)
+
+    s_image, _, _ = clip_roi(s_img, sx, sy, size_x=image_size[0], size_y=image_size[1])
+    d_template, dxr, dyr = clip_roi(d_img, dx, dy, size_x=template_size[0], size_y=template_size[1])
+
+    if (s_image is None) or (d_template is None):
         return None, None, None
 
-    if template.shape >= search.shape:
-        return None, None, None"""
+    shift_x, shift_y, metrics = naive_template.pattern_match(d_template, s_image, **kwargs)
 
-    x_shift, y_shift, strength = naive_template.pattern_match(template, search, **kwargs)
+    dx = (dx - shift_x + dxr)
+    dy = (dy - shift_y + dyr)  
+    
+    return dx, dy, metrics
+
+    x_shift, y_shift, strength = naive_template.pattern_match(template, image, **kwargs)
     return x_shift, y_shift, strength
 
 def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_size=51, **kwargs):
@@ -233,71 +240,6 @@ def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_si
     dx += (x_offset + dxr)
     dy += (y_offset + dyr)
     return dx, dy, strength
-
-def check_image_size(imagesize):
-    """
-    Given an x,y tuple, ensure that the values
-    are odd.
-    """
-    x = imagesize[0] / 2
-    y = imagesize[1] / 2
-    if x % 2 == 0:
-        x += 1
-    if y % 2 == 0:
-        y += 1
-    return x,y
-
-def iterative_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), template_size=(51,51), reduction=11, convergence_threshold=1.0, max_dist=50, **kwargs):
-    """
-    Iterativel apply a subpixel template matcher to the source (s_img) and destination(d_img) images.
-    """
-    dsample = dx
-    dline = dy
-    while True:
-        print(dsample, dline)
-        # Phase multiplies shape by 2, need to divide by 2 here
-        image_size = check_image_size(image_size)
-        template_size = check_image_size(template_size)
-        
-        s_image, _, _ = clip_roi(s_img, sx, sy,
-                                size_x=image_size[0], size_y=image_size[1])
-        d_template, dxr, dyr = clip_roi(d_img, dx, dy,
-                                        size_x=template_size[0], size_y=template_size[1])
-        
-        if (s_image is None) or (d_template is None):
-            return None, None, None
-
-        if s_image.shape < d_template.shape:
-            return None, None, None
-
-        # Apply the template matcher. Args are image, template
-        #try:
-        shift_x, shift_y, metrics = subpixel_template(d_template, s_image, **kwargs)
-        
-        #except:
-        #    return None, None, None
-
-        # Apply the shift to d_search and compute the new correspondence location
-        dx += (shift_x + dxr)
-        dy += (shift_y + dyr)
-        print(dx, dy, shift_x, shift_y, metrics)
-        
-        # Adjust the image/template sizes
-        image_size = (image_size[0] - reduction, image_size[1] - reduction)
-        template_size = (template_size[0] - reduction, template_size[1] - reduction)
-
-        # Determine the total distance moved
-        dist = np.linalg.norm([dsample-dx, dline-dy])
-        
-        if abs(shift_x) <= convergence_threshold and\
-           abs(shift_y) <= convergence_threshold and\
-           abs(dist) <= max_dist:
-            break
-        print(image_size, template_size)
-        if min(image_size) < 1 or min(template_size) < 1:
-            return None, None, None
-    print('DX', dx, dy, metrics)     
-    return dx, dy, metrics        
 
 
 def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, convergence_threshold=1.0, max_dist=50, **kwargs):

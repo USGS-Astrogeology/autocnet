@@ -89,3 +89,11 @@ def test_iterative_phase(apollo_subsets, convergence_threshold, expected):
         if expected[2] is not None:
             for i in range(len(strength)):
                 assert pytest.approx(strength[i],6) == expected[2][i]
+
+@pytest.mark.parametrize("data, expected", [
+    ((21,21), (10.5, 10.5)),
+    ((20,20), (11,11)),
+    ((0,0), (1,1))
+])
+def test_check_image_size(data, expected):
+    assert sp.check_image_size(data) == expected
