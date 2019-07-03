@@ -75,7 +75,7 @@ def place_points_in_overlaps(nodes, size_threshold=0.0007,
 def cluster_place_points_in_overlaps(size_threshold=0.0007,
                                      iterative_phase_kwargs={'size':71},
                                      distribute_points_kwargs={},
-                                     Gwalltime='00:10:00', cam_type="csm"):
+                                     walltime='00:10:00', cam_type="csm"):
     """
     Place points in all of the overlap geometries by back-projecing using
     sensor models. This method uses the cluster to process all of the overlaps
