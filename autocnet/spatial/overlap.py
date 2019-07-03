@@ -70,13 +70,12 @@ def place_points_in_overlaps(nodes, size_threshold=0.0007,
         points.extend(place_points_in_overlap(overlapnodes, o.geom, dem=dem,
                                               iterative_phase_kwargs=iterative_phase_kwargs,
                                               distribute_points_kwargs=distribute_points_kwargs))
-
     Points.bulkadd(points)
 
 def cluster_place_points_in_overlaps(size_threshold=0.0007,
                                      iterative_phase_kwargs={'size':71},
                                      distribute_points_kwargs={},
-                                     walltime='00:10:00', cam_type="csm"):
+                                     Gwalltime='00:10:00', cam_type="csm"):
     """
     Place points in all of the overlap geometries by back-projecing using
     sensor models. This method uses the cluster to process all of the overlaps
@@ -167,7 +166,6 @@ def place_points_in_overlap(nodes, geom, dem=dem, cam_type="csm",
     semi_minor = config['spatial']['semiminor_rad']
     ecef = pyproj.Proj(proj='geocent', a=semi_major, b=semi_minor)
     lla = pyproj.Proj(proj='latlon', a=semi_major, b=semi_minor)
-
     valid = compgeom.distribute_points_in_geom(geom, **distribute_points_kwargs)
     if not valid:
         warnings.warn('Failed to distribute points in overlap')
@@ -192,7 +190,6 @@ def place_points_in_overlap(nodes, geom, dem=dem, cam_type="csm",
         point = Points(apriori=geom,
                        adjusted=geom,
                        pointtype=2) # Would be 3 or 4 for ground
-
         if cam_type == "csm":
             gnd = csmapi.EcefCoord(x, y, z)
             sic = source.camera.groundToImage(gnd)
