@@ -847,41 +847,40 @@ class NetworkEdge(Edge):
         # Get the query obj
         with session_scope() as session:
             q = session.query(Matches)
-        for idx, row in df.iterrows():
-            # Determine if this is an update or the addition of a new row
-            if hasattr(row, 'id'):
-                res = q.filter(Matches.id == row.id).first()
-                match_id = row.id
-            elif v.index.name == 'id':
-                res = q.filter(Matches.id == row.name).first()
-                match_id = row.name
-            else:
-                res = None
-            if res:
-                # update
-                mapping = {}
-                mapping['id'] = match_id
-                for index in row.index:
-                    row_val = row[index]
-                    if isinstance(row_val, (np.int,)):
-                        row_val = int(row_val)
-                    elif isinstance(row_val, (np.float,)):
-                        row_val = float(row_val)
-                    # This should be uncommented if the matches
-                    # df is refactored to be a geodataframe
-                    #elif isinstance(row_val, WKBElement):
-                    #    continue
-                    mapping[index] = row_val
-                to_db_update.append(mapping)
-            else:
-                match = Matches()
-                # Dynamically iterate over the columns and if the match has an
-                # attribute with the column name, set it.
-                for c in df.columns:
-                    if hasattr(match, c):
-                        setattr(match, c, row[c])
-                to_db_add.append(match)
-        with session_scope() as session:
+            for idx, row in df.iterrows():
+                # Determine if this is an update or the addition of a new row
+                if hasattr(row, 'id'):
+                    res = q.filter(Matches.id == row.id).first()
+                    match_id = row.id
+                elif v.index.name == 'id':
+                    res = q.filter(Matches.id == row.name).first()
+                    match_id = row.name
+                else:
+                    res = None
+                if res:
+                    # update
+                    mapping = {}
+                    mapping['id'] = match_id
+                    for index in row.index:
+                        row_val = row[index]
+                        if isinstance(row_val, (np.int,)):
+                            row_val = int(row_val)
+                        elif isinstance(row_val, (np.float,)):
+                            row_val = float(row_val)
+                        # This should be uncommented if the matches
+                        # df is refactored to be a geodataframe
+                        #elif isinstance(row_val, WKBElement):
+                        #    continue
+                        mapping[index] = row_val
+                    to_db_update.append(mapping)
+                else:
+                    match = Matches()
+                    # Dynamically iterate over the columns and if the match has an
+                    # attribute with the column name, set it.
+                    for c in df.columns:
+                        if hasattr(match, c):
+                            setattr(match, c, row[c])
+                    to_db_add.append(match)
             if to_db_add:
                 session.bulk_save_objects(to_db_add)
             if to_db_update:
@@ -1005,7 +1004,7 @@ class NetworkEdge(Edge):
                     sqlalchemy.or_(Measures.imageid==source,
                                     Measures.imageid==destin)).join(Measures)
 
-        df = pd.read_sql(q.statement, engine)
+            df = pd.read_sql(q.statement, engine)
         matches = []
         columns = ['point_id', 'source_measure_id', 'destin_measure_id', 'source', 'source_idx', 'destination', 'destination_idx',
                'lat', 'lon', 'geom', 'source_x', 'source_y', 'destination_x',
