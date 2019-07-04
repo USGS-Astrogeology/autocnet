@@ -1335,9 +1335,8 @@ class NetworkCandidateGraph(CandidateGraph):
         sql : str
               The SQL string to be passed to the DB engine and executed.
         """
-        conn = engine.connect()
-        conn.execute(sql)
-        conn.close()
+        with session_scope() as session:
+            session.execute(sql)
 
     def apply(self, function, on='edge', args=(), walltime='01:00:00', **kwargs):
         """

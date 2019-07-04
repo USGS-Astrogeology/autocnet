@@ -7,7 +7,7 @@ import shapely
 import sqlalchemy
 from plio.io.io_gdal import GeoDataset
 
-from autocnet import config, dem
+from autocnet import config, dem, session_scope
 from autocnet.cg import cg as compgeom
 from autocnet.io.db.model import Images, Measures, Overlay, Points
 from autocnet.spatial import isis
@@ -55,13 +55,16 @@ def place_points_in_overlaps(nodes, size_threshold=0.0007,
                      overlaps with area <= this threshold are ignored
     """
     points = []
-    for o in Overlay.overlapping_larger_than(size_threshold):
-        overlaps = o.intersections
+    with session_scope() as session:
+        overlays = [(overlap.id, overlap.overlaps) for overlap in session.Query(Overlay)]
+    
+    for overlapid, overlaps in overlays:
         if overlaps == None:
             continue
-
-        overlapnodes = [nodes[id]["data"] for id in overlaps]
-        points.extend(place_points_in_overlap(overlapnodes, o.geom, cam_type=cam_type,
+    
+        overlapnodes = [nodes[id]['data'] for id in overlaps]
+        points.extend(place_points_in_overlap(overlapnodes, o.geom, dem=dem, cam_type=cam_type,
+                                              iterative_phase_kwargs=iterative_phase_kwargs,
                                               distribute_points_kwargs=distribute_points_kwargs))
     Points.bulkadd(points)
 
@@ -85,8 +88,7 @@ def cluster_place_points_in_overlaps(size_threshold=0.0007,
                options: {"csm", "isis"}
                Pick what kind of camera model implementation to use
     """
-    # Get all of the overlaps over the size threshold
-    overlaps = Overlay.overlapping_larger_than(size_threshold)
+
 
     # Setup the redis queue
     rqueue = StrictRedis(host=config['redis']['host'],
@@ -95,13 +97,17 @@ def cluster_place_points_in_overlaps(size_threshold=0.0007,
 
     # Push the job messages onto the queue
     queuename = config['redis']['processing_queue']
-    for overlap in overlaps:
-        msg = {'id' : overlap.id,
-               'distribute_points_kwargs' : distribute_points_kwargs,
-               'walltime' : walltime,
-               'cam_type': cam_type}
+    with session_scope() as session:
+        ids = [overlays.id for overlay in session.query(Overlay)]
+    
+    for c, i in enumerate(ids):
+        msg = {'id' : i,
+                'iterative_phase_kwargs' : iterative_phase_kwargs,
+                'distribute_points_kwargs' : distribute_points_kwargs,
+                'walltime' : walltime,
+                'cam_type': cam_type}
         rqueue.rpush(queuename, json.dumps(msg))
-    job_counter = len([*overlaps]) + 1
+    job_counter = c + 1
 
     # Submit the jobs
     submitter = Slurm('acn_overlaps',
