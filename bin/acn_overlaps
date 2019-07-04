@@ -38,7 +38,7 @@ def main(msg, config):
             nodes.append(NetworkNode(node_id=id, image_path=res.path))
             
     print('Placing points in overlap', id)
-    points = place_points_in_overlap(nodes, overlap.geom, dem, msg["cam_type"],
+    points = place_points_in_overlap(nodes, geom, dem, msg["cam_type"],
                                      msg['iterative_phase_kwargs'],
                                      msg['distribute_points_kwargs'])
     
