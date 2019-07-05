@@ -1471,7 +1471,8 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         df.rename(columns={'imageid':'image_index','id':'point_id', 'pointtype' : 'type',
             'sample':'x', 'line':'y', 'serial': 'serialnumber'}, inplace=True)
 
-        #create columns in the dataframe
+        #create columns in the dataframe; zeros ensure plio (/protobuf) will
+        #ignore unless populated with alternate values
         df['aprioriX'] = 0
         df['aprioriY'] = 0
         df['aprioriZ'] = 0
@@ -1479,9 +1480,9 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         df['adjustedY'] = 0
         df['adjustedZ'] = 0
 
-        #populate the new columns, only for ground points. Otherwise, let isis
-        #recalculate the control point lat/lon from control measures "massaged"
-        #by the phase and template matcher.
+        #only populate the new columns for ground points. Otherwise, isis will
+        #recalculate the control point lat/lon from control measures which where
+        #"massaged" by the phase and template matcher.
         for i, row in df.iterrows():
             if row['type'] == 3 or row['type'] == 4:
                 apriori_geom = swkb.loads(row['apriori'], hex=True)
