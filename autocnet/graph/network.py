@@ -1409,6 +1409,7 @@ class NetworkCandidateGraph(CandidateGraph):
 
         # Submit the jobs
         submitter = Slurm('acn_submit',
+                     job_name=function,
                      mem_per_cpu=config['cluster']['processing_memory'],
                      time=walltime,
                      partition=config['cluster']['queue'],

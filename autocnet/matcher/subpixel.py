@@ -120,10 +120,10 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200):
         size_y =floor(raster_size[1] - center_y)
     if ay - size_y < 0:
         size_y = int(ay)
-    
+
     # Read from the upper left origin
     pixels = [ax-size_x, ay-size_y, size_x*2, size_y*2]
-    pixels = list(map(int, pixels))  # 
+    pixels = list(map(int, pixels))  #
     if isinstance(img, np.ndarray):
         subarray = img[pixels[1]:pixels[1] + pixels[3] + 1, pixels[0]:pixels[0] + pixels[2] + 1]
     else:
@@ -191,9 +191,9 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), templ
             The destination image GeoDataset
 
     image_size : tuple
-                 (xsize, ysize) of the image that is searched within (this should be larger 
+                 (xsize, ysize) of the image that is searched within (this should be larger
                  than the template size)
-    
+
     template_size : tuple
                     (xsize, ysize) of the template to iterate over the image in order
                     to identify the area(s) of highest correlation.
@@ -226,8 +226,8 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), templ
     shift_x, shift_y, metrics = naive_template.pattern_match(d_template, s_image, **kwargs)
 
     dx = (dx - shift_x + dxr)
-    dy = (dy - shift_y + dyr)  
-    
+    dy = (dy - shift_y + dyr)
+
     return dx, dy, metrics
 
     x_shift, y_shift, strength = naive_template.pattern_match(template, image, **kwargs)
@@ -275,7 +275,7 @@ def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_si
                                 size_x=search_size, size_y=search_size)
     if template is None or search is None:
         return None, None, None
-    
+
     x_offset, y_offset, strength = ciratefi.ciratefi(template, search, **kwargs)
     dx += (x_offset + dxr)
     dy += (y_offset + dyr)
@@ -376,7 +376,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
                             cost_func=lambda x,y: 1/x**2 * y, threshold=0.005):
 
     """
-    Given some point, subpixel register all of the measures in the point to the 
+    Given some point, subpixel register all of the measures in the point to the
     first measure.
 
     Parameters
@@ -391,9 +391,9 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
                                Ay keyword arguments passed to the template matcher
 
     cost : func
-           A generic cost function accepting two arguments (x,y), where x is the 
-           distance that a point has shifted from the original, sensor identified 
-           intersection, and y is the correlation coefficient coming out of the 
+           A generic cost function accepting two arguments (x,y), where x is the
+           distance that a point has shifted from the original, sensor identified
+           intersection, and y is the correlation coefficient coming out of the
            template matcher.
 
     threshold : numeric
@@ -404,7 +404,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
     point = session.query(Points).filter(Points.id == pointid).one()
     measures = point.measures
     source = measures[0]
-    
+
     sourceid = source.imageid
     res = session.query(Images).filter(Images.id == sourceid).one()
     source_node = NetworkNode(node_id=sourceid, image_path=res.path)
@@ -416,12 +416,12 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
 
         res = session.query(Images).filter(Images.id == destinationid).one()
         destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
-        
-        new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample, 
-                                                                source.line, 
-                                                                measure.sample, 
+
+        new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample,
+                                                                source.line,
+                                                                measure.sample,
                                                                 measure.line,
-                                                                source_node.geodata, 
+                                                                source_node.geodata,
                                                                 destination_node.geodata,
                                                                 **iterative_phase_kwargs)
         if new_phase_x == None:
@@ -441,7 +441,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
 
         dist = np.linalg.norm([new_phase_x-new_template_x, new_phase_y-new_template_y])
         cost = cost_func(dist, template_metric)
-        
+
         if cost <= threshold:
             measure.active = False # Threshold criteria not met
             continue
@@ -455,7 +455,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
     session.commit()
     session.close()
 
-def subpixel_register_points(iterative_phase_kwargs={'size': 71}, 
+def subpixel_register_points(iterative_phase_kwargs={'size': 71},
                              subpixel_template_kwargs={'image_size':(121,121)},
                              cost_func=lambda x,y: 1/x**2 * y,
                              threshold=0.005):
@@ -474,9 +474,9 @@ def subpixel_register_points(iterative_phase_kwargs={'size': 71},
                                Ay keyword arguments passed to the template matcher
 
     cost : func
-           A generic cost function accepting two arguments (x,y), where x is the 
-           distance that a point has shifted from the original, sensor identified 
-           intersection, and y is the correlation coefficient coming out of the 
+           A generic cost function accepting two arguments (x,y), where x is the
+           distance that a point has shifted from the original, sensor identified
+           intersection, and y is the correlation coefficient coming out of the
            template matcher.
 
     threshold : numeric
@@ -487,12 +487,12 @@ def subpixel_register_points(iterative_phase_kwargs={'size': 71},
     pointids = [point.id for point in session.query(Points)]
     sessoin.close()
     for pointid in pointids:
-        subpixel_register_point(pointid, 
+        subpixel_register_point(pointid,
                                 iterative_phase_kwargs=iterative_phase_kwargs,
-                                subpixel_template_kwargs=subpixel_template_kwargs, 
+                                subpixel_template_kwargs=subpixel_template_kwargs,
                                 cost_func=cost_func)
 
-def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 71}, 
+def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 71},
                                      subpixel_template_kwargs={'image_size':(121,121)},
                                      cost_func=lambda x,y: 1/x**2 * y,
                                      threshold=0.005,
@@ -514,15 +514,15 @@ def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 71},
                                Ay keyword arguments passed to the template matcher
 
     cost : func
-           A generic cost function accepting two arguments (x,y), where x is the 
-           distance that a point has shifted from the original, sensor identified 
-           intersection, and y is the correlation coefficient coming out of the 
+           A generic cost function accepting two arguments (x,y), where x is the
+           distance that a point has shifted from the original, sensor identified
+           intersection, and y is the correlation coefficient coming out of the
            template matcher.
 
     threshold : numeric
                 measures with a cost <= the threshold are marked as active=False in
                 the database.
-    """    
+    """
     # Setup the redis queue
     rqueue = StrictRedis(host=config['redis']['host'],
                         port=config['redis']['port'],
@@ -543,12 +543,13 @@ def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 71},
     session.close()
 
     job_counter = i + 1
-    
+
     # Submit the jobs
     submitter = Slurm('acn_subpixel',
+                 job_name='subpixel_register_points',
                  mem_per_cpu=config['cluster']['processing_memory'],
                  time=walltime,
                  partition=config['cluster']['queue'],
-                 output=config['cluster']['cluster_log_dir']+'/slurm-%A_%a.out')
+                 output=config['cluster']['cluster_log_dir']+f'/autocnet.subpixel_register-%j')
     submitter.submit(array='1-{}'.format(job_counter), chunksize=chunksize)
     return job_counter
