@@ -1739,3 +1739,8 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         networkobj = cls.from_filelist(filelist)
         networkobj.place_points_from_cnet(cnet)
         return networkobj
+
+    @property
+    def measures(self):
+        df = pd.read_sql_table('measures', con=engine)
+        return df
