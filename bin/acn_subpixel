@@ -10,9 +10,11 @@ import yaml
 
 from autocnet.io.db.redis_queue import pop_computetime_push, finalize
 from autocnet.io.db.model import Overlay, Images, Points
-from autocnet.spatial.overlap import place_points_in_overlap
+from autocnet.matcher.subpixel import subpixel_register_point
 from autocnet.graph.node import NetworkNode
-from autocnet import Session
+from autocnet import Session, dem
+
+from plio.io.io_gdal import GeoDataset
 
 #Load the config file
 try:
@@ -24,24 +26,19 @@ except:
 
 def main(msg, config):
     session = Session()
-    oid = msg['id']
-    overlap = session.query(Overlay).filter(Overlay.id == oid).one()
-    if overlap is None:
-        print('Could not find overlap with ID', id)
-        sys.exit(1)
-    geom = overlap.geom
-    nodes = []
-    for id in overlap.intersections:
-        res = session.query(Images).filter(Images.id == id).one()
-        nodes.append(NetworkNode(node_id=id, image_path=res.path))
+    id = msg['id']
+    point = session.query(Points).filter(Points.id == id).one()
+    pointid = point.id
     session.close()
-    
-    print('Placing points in overlap', oid)
-    points = place_points_in_overlap(nodes, geom, msg["cam_type"],
-                                     msg['distribute_points_kwargs'])
-    
-    print('Adding {} points to the database.'.format(len(points)))
-    Points.bulkadd(points)
+    if point is None:
+        print(f'Unable to find point {pointid}')
+
+    print(f'Subpixel registering point {pointid}')
+    subpixel_register_point(pointid,
+                            iterative_phase_kwargs=msg['iterative_phase_kwargs'],
+                            subpixel_template_kwargs=msg['subpixel_template_kwargs'],
+                            threshold=msg['threshold'])
+    print('Subpixel registration complete.')
 
 if __name__ == '__main__':
     conf = config['redis']

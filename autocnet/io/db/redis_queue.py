@@ -4,6 +4,7 @@ import time
 import numpy as np
 
 from plurmy import slurm_walltime_to_seconds
+from autocnet.utils.serializers import JsonEncoder, object_hook
 
 def pop_computetime_push(queue, inqueue, outqueue):
     """
@@ -27,11 +28,11 @@ def pop_computetime_push(queue, inqueue, outqueue):
           The message from the processing queue.
     """
     # Load the message out of the processing queue and add a max processing time key
-    msg = json.loads(queue.rpop(inqueue))
+    msg = json.loads(queue.rpop(inqueue), object_hook=object_hook)
     msg['max_time'] = time.time() + slurm_walltime_to_seconds(msg['walltime'])
 
     # Push the message to the processing queue with the updated max_time
-    queue.rpush(outqueue, json.dumps(msg))
+    queue.rpush(outqueue, json.dumps(msg, cls=JsonEncoder))
 
     return msg
 

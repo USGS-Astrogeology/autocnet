@@ -1,4 +1,4 @@
-from math import isclose
+from math import isclose, ceil
 import warnings
 
 import pandas as pd
@@ -344,8 +344,8 @@ def distribute_points(geom, nspts, ewpts):
     return valid
 
 def distribute_points_in_geom(geom,
-                              nspts_func=lambda x: int(round(x,1)*10),
-                              ewpts_func=lambda x: int(round(x,1)*5)):
+                              nspts_func=lambda x: ceil(round(x,1)*10),
+                              ewpts_func=lambda x: ceil(round(x,1)*5)):
     """
     Given a geometry, attempt a basic classification of the shape.
     RIght now, this simply attempts to determine if the bounding box
@@ -381,7 +381,7 @@ def distribute_points_in_geom(geom,
     """
     coords = list(zip(*geom.envelope.exterior.xy))
     short = np.inf
-    lng = -np.inf
+    long = -np.inf
     shortid = 0
     longid = 0
     for i, p in enumerate(coords[:-1]):
@@ -389,10 +389,10 @@ def distribute_points_in_geom(geom,
         if d < short:
             short = d
             shortid = i
-        if d > lng:
-            lng = d
+        if d > long:
+            long = d
             longid = i
-    ratio = short/lng
+    ratio = short/long
     ns = False
     ew = False
     valid = []
@@ -403,16 +403,17 @@ def distribute_points_in_geom(geom,
         ns = True
     elif longid % 2 == 0:
         ew = True
+    
     # Decision Tree
     if ratio < 0.16 and geom.area < 0.01:
         # Class: Slivers - ignore.
-        return
+        return []
     elif geom.area <= 0.004 and ratio >= 0.25:
         # Single point at the centroid
         valid = single_centroid(geom)
     elif ns==True:
         # Class, north/south poly, multi-point
-        nspts = nspts_func(lng)
+        nspts = nspts_func(long)
         ewpts = ewpts_func(short)
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
@@ -421,10 +422,11 @@ def distribute_points_in_geom(geom,
     elif ew == True:
         # Since this is an LS, we should place these diagonally from the 'lower left' to the 'upper right'
         nspts = ewpts_func(short)
-        ewpts = nspts_func(lng)
+        ewpts = nspts_func(long)
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
             valid = distribute_points(geom, nspts, ewpts)
-
+    else:
+        print('WTF Willy')
     return valid

@@ -2,7 +2,7 @@ import cv2
 from scipy.ndimage.interpolation import zoom
 
 
-def pattern_match(template, image, upsampling=16, func=cv2.TM_CCOEFF_NORMED, error_check=False):
+def pattern_match(template, image, upsampling=16, func=cv2.TM_CCORR_NORMED, error_check=False):
     """
     Call an arbitrary pattern matcher
 
@@ -40,23 +40,21 @@ def pattern_match(template, image, upsampling=16, func=cv2.TM_CCOEFF_NORMED, err
                The strength of the correlation in the range [-1, 1].
     """
 
-    different = {cv2.TM_SQDIFF_NORMED: cv2.TM_CCOEFF_NORMED,
-                 cv2.TM_CCORR_NORMED: cv2.TM_SQDIFF_NORMED,
-                 cv2.TM_CCOEFF_NORMED: cv2.TM_SQDIFF_NORMED}
-
     if upsampling < 1:
         raise ValueError
 
+    # Fit a 3rd order polynomial to upsample the images
     u_template = zoom(template, upsampling, order=3)
     u_image = zoom(image, upsampling, order=3)
 
     result = cv2.matchTemplate(u_image, u_template, method=func)
-    min_corr, max_corr, min_loc, max_loc = cv2.minMaxLoc(result)
+    _, max_corr, min_loc, max_loc = cv2.minMaxLoc(result)
+    
     if func == cv2.TM_SQDIFF or func == cv2.TM_SQDIFF_NORMED:
         x, y = (min_loc[0], min_loc[1])
     else:
         x, y = (max_loc[0], max_loc[1])
-
+    
     # Compute the idealized shift (image center)
     ideal_y = u_image.shape[0] / 2
     ideal_x = u_image.shape[1] / 2

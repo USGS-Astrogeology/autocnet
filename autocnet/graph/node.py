@@ -499,7 +499,7 @@ class NetworkNode(Node):
         super(NetworkNode, self).__init__(*args, **kwargs)
         # If this is the first time that the image is seen, add it to the DB
         if parent is None:
-            self.parent = Parent(config)
+            self.parent = Parent(config['database'])
         else:
             self.parent = parent
 

@@ -24,11 +24,11 @@ database:
     # Password used to log in to the database
     password: 'sample'
     # Host machine name (or localhost) where the database is running
-    host: 'smalls'
+    host: 'autocnet.wr.usgs.gov'
     # Port that the database is exposed on
-    port: 8085
+    port: 5432
     # Port where a proxy that manages database connections is running
-    pgbouncer_port: 8083
+    pgbouncer_port: 6543
     # The name of the database to connect to.  Tables will be created inside this DB.
     name: 'jelysiumtest' # This needs to be all lowercase for PostGreSQL!
     # The number of seconds to wait while attemping to connect to the DB.
@@ -37,7 +37,7 @@ database:
 ### Pfeffernusse / CSM Configuration ###
 pfeffernusse:
     # URL to the service that serves CSM compliant ISDs
-    url: 'http://smalls:8081/v1/pds'
+    url: 'http://pfeffer.wr.usgs.gov/v1/pds'
 
 ### Redis Configuration ###
 redis:
@@ -45,9 +45,9 @@ redis:
     # of the same redis queue.
     basename: 'elysium'
     # Hostname (or localhost) where the redis server is running
-    host: 'smalls'
+    host: 'autocnet.wr.usgs.gov'
     # Port that redis is accepting connections on
-    port: '8084'
+    port: '6379'
     # The name of the queue that successful job messages are pushed. This
     # name should be unique to avoid collision with other users.
     completed_queue: 'jely:done'

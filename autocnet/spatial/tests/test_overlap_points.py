@@ -6,9 +6,8 @@ from autocnet.graph.node import Node
 import csmapi
 
 
-@patch('autocnet.spatial.overlap.iterative_phase', return_value=(0, 1, 2))
 @patch('autocnet.cg.cg.distribute_points_in_geom', return_value=[(0, 0), (5, 5), (10, 10)])
-def test_place_points_in_overlap(point_distributer, phase_matcher):
+def test_place_points_in_overlap(point_distributer):
     # Mock setup
     first_node = MagicMock()
     first_node.camera = MagicMock()
@@ -30,13 +29,10 @@ def test_place_points_in_overlap(point_distributer, phase_matcher):
     fourth_node.camera.groundToImage.return_value = csmapi.ImageCoord(0.0, 0.0)
     fourth_node.isis_serial = '4'
     fourth_node.__getitem__.return_value = 4
-    dem = MagicMock()
-    dem.latlon_to_pixel.return_value = (1.0, 1.0)
-    dem.read_array.return_value = [[0.0]]
 
     # Actual function being tested
     points = place_points_in_overlap([first_node, second_node, third_node, fourth_node],
-                                      Polygon([(0, 0), (0, 10), (10, 10), (10, 0)]), dem)
+                                      Polygon([(0, 0), (0, 10), (10, 10), (10, 0)]))
 
     # Check the function output
     assert len(points) == 3
@@ -48,18 +44,10 @@ def test_place_points_in_overlap(point_distributer, phase_matcher):
 
     # Check the mocks
     point_distributer.assert_called_with(Polygon([(0, 0), (0, 10), (10, 10), (10, 0)]))
-    dem.latlon_to_pixel.assert_called()
-    dem.read_array.assert_called()
     first_node.camera.groundToImage.assert_called()
     second_node.camera.groundToImage.assert_called()
     third_node.camera.groundToImage.assert_called()
     fourth_node.camera.groundToImage.assert_called()
-    phase_matcher.assert_any_call(0.0, 1.0, 1.0, 1.0,
-                                  first_node.geodata, second_node.geodata, size=71)
-    phase_matcher.assert_any_call(0.0, 1.0, 1.0, 0.0,
-                                  first_node.geodata, third_node.geodata, size=71)
-    phase_matcher.assert_any_call(0.0, 1.0, 0.0, 0.0,
-                                  first_node.geodata, fourth_node.geodata, size=71)
 
 class MockOverlap():
     intersections = [0,1]
@@ -68,18 +56,15 @@ class MockOverlap():
 
 
 @patch('autocnet.io.db.model.Overlay.overlapping_larger_than', return_value=[MockOverlap()]*3)
-@patch('autocnet.dem', return_value=None)
 @patch('autocnet.io.db.model.Points.bulkadd')
-@pytest.mark.parametrize("iterativekwargs, distributekwargs",[
-    ({'iterative_phase_kwargs':{'size':15}},
-     {'distribute_points_kwargs':{'ewpts_func':lambda:True}})
+@pytest.mark.parametrize("distributekwargs",[
+    ({'distribute_points_kwargs':{'ewpts_func':lambda:True}})
 ])
-def test_place_points_in_overlaps(overlapper, dem, adder,iterativekwargs, distributekwargs):
+def test_place_points_in_overlaps(overlapper, adder, distributekwargs):
     nodes = [{"id": 0, "data": Node()}, {"id": 1, "data": Node()}]
     with patch('autocnet.spatial.overlap.place_points_in_overlap', return_value=[1,2,3]) as ppio:
-        place_points_in_overlaps(nodes, iterative_phase_kwargs=iterativekwargs,distribute_points_kwargs=distributekwargs)
+        place_points_in_overlaps(nodes,distribute_points_kwargs=distributekwargs)
         ppio.assert_called_with([Node(), Node()],
                                 Polygon([(0,0),(0,5),(5,5),(5,0),(0,0)]),
-                                dem=None,
-                                iterative_phase_kwargs=iterativekwargs,
-                                distribute_points_kwargs=distributekwargs)
+                                distribute_points_kwargs=distributekwargs,
+                                cam_type='csm')

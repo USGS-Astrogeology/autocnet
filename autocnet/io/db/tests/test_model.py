@@ -150,22 +150,6 @@ def test_update_point_geom(session, data, new_adjusted, expected):
 def test_measures_exists(tables):
     assert model.Measures.__tablename__ in tables
 
-@pytest.mark.parametrize("data, serialized", [
-    ({'foo':np.arange(5)}, {"foo": [0, 1, 2, 3, 4]}),
-    ({'foo':np.int64(1)}, {"foo": 1}),
-    ({'foo':b'bar'}, {"foo": "bar"}),
-    ({'foo':set(['a', 'b', 'c'])}, {"foo": ["a", "b", "c"]}),
-    ({'foo':Point(0,0)}, {"foo": 'POINT (0 0)'}),
-    ({'foo':datetime(1982, 9, 8)}, {"foo": '1982-09-08 00:00:00'})
-
-])
-def test_json_encoder(data, serialized):
-    res = json.dumps(data, cls=model.JsonEncoder)
-    res = json.loads(res)
-    if isinstance(res['foo'], list):
-        res['foo'] = sorted(res['foo'])
-    assert res == serialized
-
 @pytest.mark.parametrize("measure_data, point_data, image_data", [({'id': 1, 'pointid': 1, 'imageid': 1, 'serial': 'ISISSERIAL', 'measuretype': 3, 'sample': 0, 'line': 0},
                                                                    {'id':1, 'pointtype':2},
                                                                    {'id':1, 'serial': 'ISISSERIAL'})])

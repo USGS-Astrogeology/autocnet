@@ -3,6 +3,7 @@ import itertools
 import json
 import math
 import os
+from shutil import copyfile
 from time import gmtime, strftime, time
 import warnings
 
@@ -15,7 +16,9 @@ from redis import StrictRedis
 import shapely.affinity
 import shapely.geometry
 import shapely.wkt as swkt
+import shapely.wkb as swkb
 import shapely.ops
+
 
 import pyproj
 
@@ -35,7 +38,7 @@ from autocnet.graph.edge import Edge, NetworkEdge
 from autocnet.graph.node import Node, NetworkNode
 from autocnet.io import network as io_network
 from autocnet.io.db.model import (Images, Keypoints, Matches, Cameras, Points,
-                                  Base, Overlay, Edges, Costs, Measures)
+                                  Base, Overlay, Edges, Costs, Measures, JsonEncoder)
 from autocnet.io.db.connection import new_connection, Parent
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
@@ -1133,11 +1136,6 @@ class CandidateGraph(nx.Graph):
             self, self.controlnetwork, **kwargs)
         return cc
 
-    def to_isis(self, outname, *args, **kwargs):
-        serials = self.serials()
-        files = self.files()
-        self.controlnetwork.to_isis(outname, serials, files, *args, **kwargs)
-
     def nodes_iter(self, data=False):
         for i, n in self.nodes.data('data'):
             if data:
@@ -1254,6 +1252,7 @@ class CandidateGraph(nx.Graph):
         """
         return self.controlnetwork.groupby('point_id').apply(lambda g: g if len(g) > 1 else None)
 
+
     def to_isis(self, outname, serials, olist, *args, **kwargs):  # pragma: no cover
         """
         Write the control network out to the ISIS3 control network format.
@@ -1352,7 +1351,7 @@ class NetworkCandidateGraph(CandidateGraph):
         Parameters
         ----------
 
-        function : obj
+        function : string
                    The function to apply
 
         on : str
@@ -1382,6 +1381,9 @@ class NetworkCandidateGraph(CandidateGraph):
 
         res = []
 
+        if not isinstance(function, (str, bytes)):
+            raise TypeError('Function argument must be a string or bytes object.')
+
         for job_counter, elem in enumerate(onobj.data('data')):
             # Determine if we are working with an edge or a node
             if len(elem) > 2:
@@ -1401,13 +1403,14 @@ class NetworkCandidateGraph(CandidateGraph):
                     'image_path':image_path,
                     'param_step':1}
 
-            self.redis_queue.rpush(self.processing_queue, json.dumps(msg))
+            self.redis_queue.rpush(self.processing_queue, json.dumps(msg, cls=JsonEncoder))
 
         # SLURM is 1 based, while enumerate is 0 based
         job_counter += 1
 
         # Submit the jobs
         submitter = Slurm('acn_submit',
+                     job_name=function,
                      mem_per_cpu=config['cluster']['processing_memory'],
                      time=walltime,
                      partition=config['cluster']['queue'],
@@ -1445,8 +1448,8 @@ class NetworkCandidateGraph(CandidateGraph):
             n.generate_vrt(**kwargs)
 
     def to_isis(self, path, flistpath=None,sql = """
-SELECT points.id, measures.serial, points.pointtype, measures.sample, measures.line, measures.measuretype,
-measures.imageid
+SELECT points.id, measures.serial, points.pointtype, points.apriori, points.adjusted,
+measures.sample, measures.line, measures.measuretype, measures.imageid
 FROM measures INNER JOIN points ON measures.pointid = points.id
 WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE;
 """):
@@ -1472,6 +1475,31 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         df = pd.read_sql(sql, engine)
         df.rename(columns={'imageid':'image_index','id':'point_id', 'pointtype' : 'type',
             'sample':'x', 'line':'y', 'serial': 'serialnumber'}, inplace=True)
+
+        #create columns in the dataframe; zeros ensure plio (/protobuf) will
+        #ignore unless populated with alternate values
+        df['aprioriX'] = 0
+        df['aprioriY'] = 0
+        df['aprioriZ'] = 0
+        df['adjustedX'] = 0
+        df['adjustedY'] = 0
+        df['adjustedZ'] = 0
+
+        #only populate the new columns for ground points. Otherwise, isis will
+        #recalculate the control point lat/lon from control measures which where
+        #"massaged" by the phase and template matcher.
+        for i, row in df.iterrows():
+            if row['type'] == 3 or row['type'] == 4:
+                apriori_geom = swkb.loads(row['apriori'], hex=True)
+                row['aprioriX'] = apriori_geom.x
+                row['aprioriY'] = apriori_geom.y
+                row['aprioriZ'] = apriori_geom.z
+                adjusted_geom = swkb.loads(row['adjusted'], hex=True)
+                row['adjustedX'] = adjusted_geom.x
+                row['adjustedY'] = adjusted_geom.y
+                row['adjustedZ'] = adjusted_geom.z
+                df.iloc[i] = row
+
         if flistpath is None:
             flistpath = os.path.splitext(path)[0] + '.lis'
         target = config['spatial'].get('target', None)
@@ -1514,7 +1542,7 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         session.commit()
 
     @classmethod
-    def from_filelist(cls, filelist):
+    def from_filelist(cls, filelist, clear_db=False):
         """
         Parse a filelist to add nodes to the database. Using the
         information in the database, then instantiate a complete,
@@ -1539,6 +1567,9 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         else:
             warnings.warn('Unable to parse the passed filelist')
 
+        if clear_db:
+            cls.clear_db()
+
         for f in filelist:
             # Create the nodes in the graph. Really, this is creating the
             # images in the DB
@@ -1549,6 +1580,109 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         # Execute the computation to compute overlapping geometries
         obj._execute_sql(compute_overlaps_sql)
 
+        return obj
+
+    def copy_images(self, newdir):
+        """
+        Copy images from a given directory into a new directory and
+        update the 'path' column in the Images table.
+
+        Parameters
+        ----------
+        newdir : str
+                 The full output PATH where the images are to be copied to.
+        """
+        if not os.path.exists(newdir):
+            os.makedirs(newdir)
+
+        session = Session()
+        images = session.query(Images).all()
+        oldnew = []
+        for obj in images:
+            oldpath = obj.path
+            filename = os.path.basename(oldpath)
+            obj.path = os.path.join(newdir, filename)
+            oldnew.append((oldpath, obj.path))
+        session.commit()
+        session.close()
+        
+        # Copy the files
+        [copyfile(old, new) for old, new in oldnew]
+
+    @classmethod
+    def from_remote_database(cls, source_db_config, path,  query_string='SELECT * FROM public.images LIMIT 10'):
+        """
+        This is a constructor that takes an existing database containing images and sensors, 
+        copies the selected rows into the project specified in the autocnet_config variable, 
+        and instantiates a new NetworkCandidateGraph object. This method is
+        similar to the `from_database` method. The main difference is that this
+        method assumes that the image and sensor rows are prepopulated in an external db
+        and simply copies those entires into the currently speficied project.
+
+        Currently, this method does NOT check for duplicate serial numbers during the 
+        bulk add. Therefore multiple runs of this method on the same database will fail.
+
+        Parameters
+        ----------
+        source_db_config : dict
+                           In the form: {'username':'somename',
+                                         'password':'somepassword',
+                                         'host':'somehost',
+                                         'pgbouncer_port':6543,
+                                         'name':'somename'}
+        
+        path : str
+               The PATH to which images in the database specified in the config
+               will be copied to. This method duplicates the data and copies it
+               to a user defined PATH to avoid issues with updating image ephemeris
+               across projects.
+
+        query_string : str
+                       An optional string to select a subset of the images in the 
+                       database specified in the config. 
+
+        Returns
+        -------
+        obj : obj
+              A network candidate graph.
+
+        Example
+        -------
+        >>> source_db_config = {'username':'jay',
+        'password':'abcde',
+        'host':'autocnet.wr.usgs.gov',
+        'pgbouncer_port':5432,
+        'name':'ctx'}
+        >>> geom = 'LINESTRING(145 10, 145 11, 146 11, 146 10, 145 10)'
+        >>> srid = 949900
+        >>> outpath = '/scratch/jlaura/fromdb'
+        >>> query = f"SELECT * FROM Images WHERE ST_INTERSECTS(footprint_latlon, ST_Polygon(ST_GeomFromText('{geom}'), {srid})) = TRUE"
+        >>> ncg = NetworkCandidateGraph.from_remote_database(source_db_config, outpath, query_string=query)
+        """
+
+        sourceSession, _ = new_connection(source_db_config)
+        sourcesession = sourceSession()
+        
+        sourceimages = sourcesession.execute(query_string).fetchall()
+        
+        destinationsession = Session()
+        destinationsession.execute(Images.__table__.insert(), sourceimages)
+
+        # Get the camera objects to manually join. Keeps the caller from
+        # having to remember to bring cameras as well.
+        ids = [i[0] for i in sourceimages]
+        cameras = sourcesession.query(Cameras).filter(Cameras.image_id.in_(ids)).all()
+        for c in cameras:
+            destinationsession.merge(c)
+
+        destinationsession.commit()
+        destinationsession.close()
+        sourcesession.close()
+
+        # Create the graph, copy the images, and compute the overlaps
+        obj = cls.from_database()
+        obj.copy_images(path)
+        obj._execute_sql(compute_overlaps_sql)
         return obj
 
     @classmethod
@@ -1609,7 +1743,8 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
 
         return obj
 
-    def clear_db(self, tables=None):
+    @staticmethod
+    def clear_db(tables=None):
         """
         Truncate all of the database tables and reset any
         autoincrement columns to start with 1.
@@ -1708,3 +1843,8 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         networkobj = cls.from_filelist(filelist)
         networkobj.place_points_from_cnet(cnet)
         return networkobj
+
+    @property
+    def measures(self):
+        df = pd.read_sql_table('measures', con=engine)
+        return df

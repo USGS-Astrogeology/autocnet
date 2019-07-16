@@ -1,8 +1,5 @@
-import datetime
 import enum
 import json
-
-import numpy as np
 
 import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
@@ -23,6 +20,7 @@ import shapely
 from shapely.geometry import Point
 from autocnet import engine, Session, config
 from autocnet.transformation.spatial import reproject
+from autocnet.utils.serializers import JsonEncoder
 
 Base = declarative_base()
 
@@ -45,22 +43,6 @@ class BaseMixin(object):
         session.add_all(iterable)
         session.commit()
         session.close()
-
-class JsonEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        if isinstance(obj, np.int64):
-            return int(obj)
-        if isinstance(obj, datetime.datetime):
-            return obj.__str__()
-        if isinstance(obj, bytes):
-            return obj.decode("utf-8")
-        if isinstance(obj, set):
-            return list(obj)
-        if isinstance(obj,  shapely.geometry.base.BaseGeometry):
-            return obj.wkt
-        return json.JSONEncoder.default(self, obj)
 
 class IntEnum(TypeDecorator):
     """
@@ -378,6 +360,7 @@ class Measures(BaseMixin, Base):
     apriorisample = Column(Float)
     samplesigma = Column(Float)
     linesigma = Column(Float)
+    weight = Column(Float, default=1)
     rms = Column(Float)
 
     @hybrid_property
@@ -390,8 +373,9 @@ class Measures(BaseMixin, Base):
             v = MeasureType(v)
         self._measuretype = v
 
-if Session:
+if isinstance(Session, sqlalchemy.orm.sessionmaker):
     from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, update_point_function, valid_geom_function, valid_geom_trigger
+
     # Create the database
     if not database_exists(engine.url):
         create_database(engine.url, template='template_postgis')  # This is a hardcode to the local template

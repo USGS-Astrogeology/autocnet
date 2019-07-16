@@ -25,7 +25,7 @@ def test_prep_subpixel(nmatches, nstrengths):
     arrs = sp._prep_subpixel(nmatches, nstrengths=nstrengths)
     assert len(arrs) == 5
     assert arrs[2].shape == (nmatches, nstrengths)
-    assert np.isnan(arrs[0][0])
+    assert arrs[0][0] == 0
 
 @pytest.mark.parametrize("center_x, center_y, size, expected", [(4, 4, 9, 404),
                                                           (55.4, 63.1, 27, 6355)])
@@ -66,8 +66,8 @@ def test_subpixel_template(apollo_subsets):
                                                 a, b, upsampling=16)
     
     assert strength >= 0.99
-    assert nx == 50.5625 
-    assert ny == 52.5625 
+    assert nx == 50.9375
+    assert ny == 48.9375
 
 @pytest.mark.parametrize("convergence_threshold, expected", [(1.0, (None, None, None)),
                                                              (2.0, (50.49, 52.44, (0.039507, -9.5e-20)))])
@@ -89,3 +89,11 @@ def test_iterative_phase(apollo_subsets, convergence_threshold, expected):
         if expected[2] is not None:
             for i in range(len(strength)):
                 assert pytest.approx(strength[i],6) == expected[2][i]
+
+@pytest.mark.parametrize("data, expected", [
+    ((21,21), (10.5, 10.5)),
+    ((20,20), (11,11)),
+    ((0,0), (1,1))
+])
+def test_check_image_size(data, expected):
+    assert sp.check_image_size(data) == expected

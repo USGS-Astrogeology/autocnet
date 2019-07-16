@@ -1,0 +1,126 @@
+#!/usr/bin/env python
+
+import json
+import os
+os.environ['PROJ_LIB'] = '/home/jlaura/anaconda3/envs/autocnet/share/proj'
+import sys
+import time
+import warnings
+
+import csmapi
+from knoten.csm import generate_latlon_footprint, generate_boundary
+from plio.io.io_gdal import GeoDataset
+from plio.io.isis_serial_number import generate_serial_number
+import pvl
+from redis import StrictRedis
+import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+import shapely
+import yaml
+
+from autocnet.io.db.redis_queue import pop_computetime_push
+from autocnet.io.db.model import Images, Cameras
+from autocnet.utils import utils
+from autocnet import Session
+
+def requests_retry_session(
+    retries=3,
+    backoff_factor=0.3,
+    status_forcelist=(500, 502, 504),
+    session=None,
+):
+    session = session or requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+    )
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount('http://', adapter)
+    session.mount('https://', adapter)
+    return session
+
+#Load the config file
+try:
+    print('Using config: ', os.environ['autocnet_config'])
+    with open(os.environ['autocnet_config'], 'r') as f:
+        config = yaml.safe_load(f)
+except:
+    print("The 'autocnet_config' environment variable is not set.")
+    sys.exit(1)
+
+def create_footprint(config, geodata, camera):
+    boundary = generate_boundary(geodata.raster_size[::-1])  # yx to xy
+    dem = GeoDataset(config['spatial']['dem'])
+    footprint_latlon = generate_latlon_footprint(camera, boundary, dem=dem)
+    footprint_latlon.FlattenTo2D()
+    return footprint_latlon
+
+def create_camera(config, geodata, imagepath):
+    # Create the camera entry
+    label = pvl.dumps(geodata.metadata).decode()
+    url = config['pfeffernusse']['url']
+    response = requests_retry_session().post(url, json={'label':label})
+    response = response.json()
+    model_name = response.get('name_model', None)
+    if model_name is None:
+        return (None, None)
+    isdpath = os.path.splitext(imagepath)[0] + '.json'
+    with open(isdpath, 'w') as f:
+        json.dump(response, f)
+    isd = csmapi.Isd(imagepath)
+    plugin = csmapi.Plugin.findPlugin('UsgsAstroPluginCSM')
+    camera = plugin.constructModelFromISD(isd, model_name)
+    serialized_camera = camera.getModelState()
+
+    cam = Cameras(camera=serialized_camera)
+    return cam, camera
+
+def main(msg, config):
+    session = Session()
+    serials = [s[0] for s in session.query(Images.serial).all()]
+    session.close()
+
+    images = [] 
+    for path in msg['imagepaths']:
+        try:
+            serial = generate_serial_number(path)
+        except:
+            warnings.warn(f'Unable to generate serial for {path}')
+            continue
+        if serial in serials:
+            print(f'Image {path} already in database.')
+            continue
+        print(f'Processing: {path}')
+        try:
+            geodata = GeoDataset(path)
+            dbcam, cam = create_camera(config, geodata, path)
+            if dbcam is None:
+                warnings.warn(f'Failed to add {path}')
+                continue
+            fp = create_footprint(config, geodata, cam)
+            if isinstance(fp, shapely.geometry.Polygon):
+                fp = shapely.geometry.MultiPolygon([fp])
+            serial = generate_serial_number(path)
+            i = Images(name=geodata.file_name,
+                    path=path,
+                    footprint_latlon=fp,
+                    cameras=dbcam,
+                    serial=serial)
+            images.append(i)
+        except:
+            warnings.warn(f'Failed to add {path}.')
+            
+    Images.bulkadd(images)
+
+if __name__ == '__main__':
+    conf = config['redis']
+    queue = StrictRedis(host=conf['host'], port=conf['port'], db=0)
+    
+    msg = pop_computetime_push(queue,
+                               conf['processing_queue'],
+                               conf['working_queue'])
+    main(msg, config)

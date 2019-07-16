@@ -61,8 +61,11 @@ CREATE TRIGGER active_measure_changes
 EXECUTE PROCEDURE validate_points();
 """)
 
-latitudinal_srid = config['spatial']['latitudinal_srid']
-
+try:
+  latitudinal_srid = config['spatial']['latitudinal_srid']
+except:
+  latitudinal_srid = None
+  
 update_point_function = DDL("""
 CREATE OR REPLACE FUNCTION update_points()
   RETURNS trigger AS
