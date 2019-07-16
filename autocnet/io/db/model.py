@@ -20,7 +20,9 @@ from geoalchemy2.shape import from_shape, to_shape
 
 import osgeo
 import shapely
+from shapely.geometry import Point
 from autocnet import engine, Session, config
+from autocnet.transformation.spatial import reproject
 
 Base = declarative_base()
 
@@ -331,8 +333,14 @@ class Points(BaseMixin, Base):
     def adjusted(self, adjusted):
         if adjusted:
             self._adjusted = from_shape(adjusted, srid=rectangular_srid)
+            lat, lon, _ = reproject([adjusted.x, adjusted.y, adjusted.z],
+                                    spatial['semimajor_rad'], spatial['semiminor_rad'],
+                                    'geocent', 'latlon')
+            self._geom = from_shape(Point(lat, lon), latitudinal_srid)
+
         else:
             self._adjusted = adjusted
+            self._geom = None
 
     @hybrid_property
     def pointtype(self):
@@ -383,7 +391,7 @@ class Measures(BaseMixin, Base):
         self._measuretype = v
 
 if Session:
-    from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, update_point_function, update_point_trigger, valid_geom_function, valid_geom_trigger
+    from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, update_point_function, valid_geom_function, valid_geom_trigger
     # Create the database
     if not database_exists(engine.url):
         create_database(engine.url, template='template_postgis')  # This is a hardcode to the local template
@@ -393,8 +401,6 @@ if Session:
     if not engine.dialect.has_table(engine, "points"):
         event.listen(Base.metadata, 'before_create', valid_point_function)
         event.listen(Measures.__table__, 'after_create', valid_point_trigger)
-        event.listen(Base.metadata, 'before_create', update_point_function)
-        event.listen(Points.__table__, 'after_create', update_point_trigger)
         event.listen(Base.metadata, 'before_create', valid_geom_function)
         event.listen(Images.__table__, 'after_create', valid_geom_trigger)
 

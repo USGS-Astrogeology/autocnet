@@ -11,159 +11,183 @@ import numpy as np
 import pandas as pd
 import scipy
 from matplotlib import pyplot as plt
-from skimage.transform import resize
+from scipy.misc import imresize
 from sqlalchemy import (Boolean, Column, Float, ForeignKey, Integer,
                         LargeBinary, String, UniqueConstraint, create_engine,
                         event, orm, pool)
 from sqlalchemy.ext.declarative import declarative_base
 
-import geoalchemy2
 import geopandas as gpd
 import plio
 import pvl
 import pyproj
 import pysis
-from autocnet import config
-from autocnet.graph.network import NetworkCandidateGraph
-from autocnet.matcher.subpixel import iterative_phase
-from autocnet import engine
+
 from gdal import ogr
+
+import geoalchemy2
 from geoalchemy2 import Geometry, WKTElement
 from geoalchemy2.shape import to_shape
+from geoalchemy2 import functions
+
 from knoten import csm
+
 from plio.io.io_controlnetwork import from_isis, to_isis
 from plio.io.io_gdal import GeoDataset
+
 from pysis.exceptions import ProcessError
 from pysis.isis import campt
+
 from shapely import wkt
 from shapely.geometry.multipolygon import MultiPolygon
+from shapely.geometry import Point
 
-from autocnet import engine
+from autocnet import config, engine, Session
+from autocnet.io.db.model import Images, Points, Measures
+from autocnet.graph.network import NetworkCandidateGraph
+from autocnet.matcher.subpixel import iterative_phase
+from autocnet.cg.cg import distribute_points_in_geom
+from autocnet.io.db.connection import new_connection
+from autocnet.spatial import isis
+
+import warnings
 
 ctypes.CDLL(find_library('usgscsm'))
 
+def generate_ground_points(ground_database, nspts_func=lambda x: int(round(x,1)*1), ewpts_func=lambda x: int(round(x,1)*4)):
+    ground_session, ground_engine = new_connection(ground_database)
 
-def themis_ground_to_ctx_matcher(cnet):
+    session = Session()
+    ground_poly = wkt.loads(session.query(functions.ST_AsText(functions.ST_Union(Images.footprint_latlon))).one()[0])
+    session.close()
+
+    image_fp_bounds = list(ground_poly.bounds)
+
+    # just hard code queries to the mars database as it exists for now
+    ground_image_query = f'select * from themisdayir where geom && ST_MakeEnvelope({image_fp_bounds[0]}, {image_fp_bounds[1]}, {image_fp_bounds[2]}, {image_fp_bounds[3]}, {config["spatial"]["latitudinal_srid"]})'
+    themis_images = gpd.GeoDataFrame.from_postgis(ground_image_query,
+                                                  ground_engine, geom_col="geom")
+
+    coords = distribute_points_in_geom(ground_poly, nspts_func=nspts_func, ewpts_func=ewpts_func)
+    coords = np.asarray(coords)
+
+    sql = """
+    SELECT * FROM themisdayir as i WHERE ST_Contains(i.geom, ST_setsrid(ST_Point({}, {}), 949900))
     """
-    Hardcoded to be named exactly what it does, if we get meaningful results should
-    be simple to generalize to a cross instrument CNET matcher type thing.
+
+    records = []
+    coord_list = []
+    coord_id = []
+
+    # throw out points not intersecting the ground reference images
+    for i, coord in enumerate(coords):
+        formated_sql = sql.format(coord[0], coord[1])
+        res = ground_session.execute(formated_sql)
+        for record in res:
+            records.append(record)
+            coord_list.append(Point(*coord))
+
+    ground_session.close()
+
+    # start building the cnet
+    ground_cnet = pd.DataFrame(data = records, columns = ['pointid', 'path', 'footprint', 'serial', 'name'])
+    ground_cnet["point"] = coord_list
+    ground_cnet['line'] = None
+    ground_cnet['sample'] = None
+    ground_cnet['resolution'] = None
+
+    # generate lines and samples from ground points
+    groups = ground_cnet.groupby('path')
+
+    # group by images so campt can do multiple at a time
+    for group_id, group in groups:
+        row = group.iloc[0]
+        lons = [p.x for p in group['point']]
+        lats = [p.y for p in group['point']]
+
+        point_list = isis.point_info(row['path'], lons, lats, 'ground')
+        lines = []
+        samples = []
+        resolutions = []
+        indices = []
+        for i, res in enumerate(point_list):
+            if res[1].get('Error') is not None:
+                print('Bad intersection')
+                lines.append(None)
+                samples.append(None)
+                resolutions.append(None)
+            else:
+                lines.append(res[1].get('Line'))
+                samples.append(res[1].get('Sample'))
+                resolutions.append(res[1].get('LineResolution').value)
+        index = group.index.__array__()
+        ground_cnet.loc[index, 'line'] = lines
+        ground_cnet.loc[index, 'sample'] = samples
+        ground_cnet.loc[index, 'resolution'] = resolutions
+
+    ground_cnet = gpd.GeoDataFrame(ground_cnet, geometry='point')
+    return ground_cnet
+
+
+def propagate_control_network(base_cnet):
     """
 
-    # Get neccessary tables from DB,
-    # later this should probably be done through SQL comamnds and joins rather than in DataFrames
-
-    # Get ground images from database, in this case THEMIS
-    # hardcoded for now until we can finalize our databases
-    db_uri = '{}://{}:{}@{}:{}/{}'.format('postgresql',
-                                          'jay',
-                                          'abcde',
-                                          'smalls',
-                                          '8083',
-                                          'mars')
-    themis_engine = create_engine(db_uri, poolclass=pool.NullPool,
-                           isolation_level="AUTOCOMMIT")
-
-    themis_images = gpd.GeoDataFrame.from_postgis("select * from themis_ir", themis_engine, geom_col="footprint_latlon")
-
-    # useful for masking out paths, sometimes data is split between shared directories and
-    # scratch causing errors when working anywhere besides the custer
-    themis_images["valid_path"] = [os.path.isfile(p) for p in themis_images["path"]]
-    themis_images = themis_images[themis_images["valid_path"]]
-
-    # We need to join the CNET dataframe on serial numbers
-    themis_images["serial"] = [plio.io.isis_serial_number.generate_serial_number(d) if d else None for d in themis_images["path"]]
-
-    ctx_images = gpd.GeoDataFrame.from_postgis("select * from images", engine, geom_col="footprint_latlon")
-
-    themis_cnet = from_isis(cnet)
-    # we need image path information for each measure
-    themis_cnet = themis_cnet.merge(themis_images, how='left', left_on="serialnumber", right_on="serial")
-
-    # this doesn't need to be serial
-    lats = []
-    lons = []
-    resolutions = []
-
-    # Get lats, lons and pixel resolution through campt
-    for i,r in themis_cnet.iterrows():
-        try:
-            res = pvl.loads(campt(from_=r["path"],
-                                  line=r["line"], sample=r["sample"],
-                                  type="image"))
-        except ProcessError as e:
-            # should probably do something here...
-            print("STDOUT:", e.stdout)
-            print("STDERR:", e.stderr)
-
-        lats.append(res["GroundPoint"]["PlanetocentricLatitude"].value)
-        lons.append(res["GroundPoint"]["PositiveEast360Longitude"].value)
-
-        # We can assume line/sample resolution to be equal?
-        resolutions.append(res["GroundPoint"]["LineResolution"].value)
-
-    themis_cnet["resolution"] = resolutions
-    themis_cnet = gpd.GeoDataFrame(themis_cnet, geometry=gpd.points_from_xy(lons, lats))
-
-    spatial_index = ctx_images.sindex
-
-    # We are going to iterate on points
-    groups = themis_cnet.groupby("id_x").groups
-
-
+    """
+    dest_images = gpd.GeoDataFrame.from_postgis("select * from images", engine, geom_col="footprint_latlon")
+    spatial_index = dest_images.sindex
+    groups = base_cnet.groupby('pointid').groups
     # append to list if images, mostly used for working with the network in python
     # after this step, is this uncecceary outside of debugging? Maybe actually should return
     # more info of where everything was sourced in the original DataFrames?
     images = []
 
     # append CNET info into structured Python list
-    ctx_constrained_net = []
+    constrained_net = []
+    dbpoints = []
+    dbmeasures = []
 
     # easily parrallelized on the cpoint level, dummy serial for now
     for cpoint, indices in groups.items():
-        measures = themis_cnet.loc[indices]
+        measures = base_cnet.loc[indices]
         measure = measures.iloc[0]
-        p = measure.geometry
-        possible_matches_index = list(spatial_index.intersection(p.bounds))
-        possible_matches = ctx_images.iloc[possible_matches_index]
-        precise_matches = possible_matches[possible_matches.intersects(p)]
 
-        if precise_matches.empty:
-            continue
+        p = measure.point
+        # get image in he destination that overlap
+        matches = dest_images[dest_images.intersects(p)]
 
         # lazily iterate for now
-        for i,row in precise_matches.iterrows():
+        for i,row in matches.iterrows():
+            res = isis.point_info(row["path"], p.x, p.y, point_type="ground", allow_outside=False)
+            dest_line, dest_sample = res["GroundPoint"]["Line"], res["GroundPoint"]["Sample"]
+
             try:
-                res = pvl.loads(campt(from_=row["path"],
-                                      longitude=p.x,latitude=p.y,
-                                      type="ground", allowoutside=False))
-            except ProcessError as e:
+                dest_resolution = res["GroundPoint"]["LineResolution"].value
+            except:
+                warnings.warn(f'Failed to generate ground point info on image {row["path"]} at lat={p.y} lon={p.x}')
                 continue
 
-            ctx_line, ctx_sample = res["GroundPoint"]["Line"], res["GroundPoint"]["Sample"]
-            ctx_resolution = res["GroundPoint"]["LineResolution"].value
-
-            ctx_data = GeoDataset(row["path"])
-            ctx_arr = ctx_data.read_array()
+            dest_data = GeoDataset(row["path"])
+            dest_arr = dest_data.read_array()
 
             # dynamically set scale based on point resolution
-            ctx_to_themis_scale = ctx_resolution/measure["resolution"]
+            dest_to_base_scale = dest_resolution/measure["resolution"]
 
-            scaled_ctx_line = (ctx_arr.shape[0]-ctx_line)*ctx_to_themis_scale
-            scaled_ctx_sample = ctx_sample*ctx_to_themis_scale
+            scaled_dest_line = (dest_arr.shape[0]-dest_line)*dest_to_base_scale
+            scaled_dest_sample = dest_sample*dest_to_base_scale
 
-            ctx_arr = resize(ctx_arr, ctx_to_themis_scale)[::-1]
+            dest_arr = imresize(dest_arr, dest_to_base_scale)[::-1]
 
             # list of matching results in the format:
             # [measure_index, x_offset, y_offset, offset_magnitude]
             match_results = []
             for k,m in measures.iterrows():
-                themis_arr = GeoDataset(m["path"]).read_array()
+                base_arr = GeoDataset(m["path"]).read_array()
 
                 sx, sy = m["sample"], m["line"]
-                dx, dy = scaled_ctx_sample, scaled_ctx_line
+                dx, dy = scaled_dest_sample, scaled_dest_line
                 try:
                     # not sure what the best parameters are here
-                    ret = iterative_phase(sx, sy, dx, dy, themis_arr, ctx_arr, size=20, reduction=1, max_dist=2, convergence_threshold=2)
+                    ret = iterative_phase(sx, sy, dx, dy, base_arr, dest_arr, size=10, reduction=1, max_dist=1, convergence_threshold=1)
                 except Exception as ex:
                     match_results.append(ex)
                     continue
@@ -192,56 +216,49 @@ def themis_ground_to_ctx_matcher(cnet):
             measure = measures.loc[match_results[0]]
 
             # apply offsets
-            sample = (match_results[1]/ctx_to_themis_scale) + ctx_sample
-            line = (match_results[2]/ctx_to_themis_scale) + ctx_line
+            sample = (match_results[1]/dest_to_base_scale) + dest_sample
+            line = (match_results[2]/dest_to_base_scale) + dest_line
+
+            pointpvl = isis.point_info(row["path"], sample, line, point_type="image")
+            groundx, groundy, groundz = pointpvl["GroundPoint"]["BodyFixedCoordinate"].value
+            groundx, groundy, groundz = groundx*1000, groundy*1000, groundz*1000
 
             images.append(row["path"])
-            ctx_constrained_net.append([cpoint,                # point id
-                                       4,                      # point type
-                                       "autocnet",             # choosername
-                                       measure["datetime"].iloc[1],    # datetime
-                                       False,                  # EditLock
-                                       False,                  # ignore
-                                       False,                  # jigsawRejected
-                                       6,                      # reference Index
-                                       0,                      # aprioriSurfPointSource, 3 for reference?
-                                       measure["path"],        # aprioriSurfPointSourceFile
-                                       measure["aprioriRadiusSource"], # aprioriRadiusSource
-                                       measure["aprioriSurfPointSourceFile"], # aprioriRadiusSourceFile
-                                       True,                   # latitudeConstrained
-                                       True,                   # longitudeConstrained
-                                       True,                   # radiusConstrained
-                                       measure["aprioriX"],    # aprioriX
-                                       measure["aprioriY"],    # aprioriY
-                                       measure["aprioriZ"],    # aprioriZ
-                                       measure["aprioriCovar"], # aprioriCovar
-                                       measure["adjustedX"],   # adjustedX
-                                       measure["adjustedY"],   # adjustedY
-                                       measure["adjustedZ"],   # adjustedZ
-                                       plio.io.isis_serial_number.generate_serial_number(row["path"]), #serial number
-                                       0,                      # diameter
-                                       sample,                 # sample
-                                       line,                   # line
-                                       0,                      # sample residual
-                                       0,                      # line residual
-                                       ctx_sample,             # apriorisample
-                                       ctx_line,               # aprioriline
-                                       0,                      # sample sigma
-                                       0                       # line sigma
-                                       ])
+            constrained_net.append({
+                    'pointid' : cpoint,
+                    'imageid' : row['id'],
+                    'serial' : row.serial,
+                    'line' : line,
+                    'sample' : sample,
+                    'point_latlon' : p,
+                    'point_ground' : Point(groundx, groundy, groundz)
+                })
 
+    ground = gpd.GeoDataFrame.from_dict(constrained_net).set_geometry('point_latlon')
+    groundpoints = ground.groupby('pointid').groups
 
-    # These should be defined somewhere in Autocnet/plio, if so it should be imported
-    columns = ['point_id', 'type', 'chooserName', 'datetime', 'editLock', 'ignore',
-           'jigsawRejected', 'referenceIndex', 'AprioriSource',
-           'aprioriSurfPointSourceFile', 'RadiusSource',
-           'aprioriRadiusSourceFile', 'latitudeConstrained',
-           'longitudeConstrained', 'radiusConstrained', 'aprioriX', 'aprioriY',
-           'aprioriZ', 'aprioriCovar', 'adjustedX', 'adjustedY', 'adjustedZ',
-            'serialnumber', 'diameter', 'x', 'y',
-           'sampleResidual', 'lineResidual', 'apriorisample', 'aprioriline',
-           'samplesigma', 'linesigma']
+    points = []
 
+    # upload new points
+    for p,indices in groundpoints.items():
+        point = ground.loc[indices].iloc[0]
+        p = Points()
+        p.pointtype = 3
+        p.apriori = point['point_ground']
+        p.adjusted = point['point_ground']
 
-    new_cnet = pd.DataFrame(data=ctx_constrained_net, columns=columns)
-    return new_cnet, images
+        for i in indices:
+            m = ground.loc[i]
+            p.measures.append(Measures(line=float(m['line']),
+                                       sample = float(m['sample']),
+                                       imageid = int(m['imageid']),
+                                       serial = m['serial'],
+                                       measuretype=3))
+        points.append(p)
+
+    session = Session()
+    session.add_all(points)
+    session.commit()
+
+    return ground
+

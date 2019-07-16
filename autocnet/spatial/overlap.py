@@ -119,7 +119,7 @@ def cluster_place_points_in_overlaps(size_threshold=0.0007,
     job_counter = len([*overlaps]) + 1
 
     # Submit the jobs
-    submitter = Slurm('acn_overlaps',
+    submitter = Slurm('/home/krodriguez/.conda/envs/autocnetdev/bin/acn_overlaps',
                  mem_per_cpu=config['cluster']['processing_memory'],
                  time=walltime,
                  partition=config['cluster']['queue'],
@@ -198,7 +198,7 @@ def place_points_in_overlap(nodes, geom, dem=dem, cam_type="csm",
             sic = source.camera.groundToImage(gnd)
             ssample, sline = sic.samp, sic.line
         if cam_type == "isis":
-            sline, ssample = isis.ground_to_image(source["image_path"], lat ,lon)
+            sline, ssample = isis.ground_to_image(source["image_path"], lon ,lat)
 
         point.measures.append(Measures(sample=ssample,
                                        line=sline,
@@ -212,7 +212,7 @@ def place_points_in_overlap(nodes, geom, dem=dem, cam_type="csm",
                 dic = dest.camera.groundToImage(gnd)
                 dline, dsample = dic.line, dic.samp
             if cam_type == "isis":
-                dline, dsample = isis.ground_to_image(dest["image_path"], lat, lon)
+                dline, dsample = isis.ground_to_image(dest["image_path"], lon, lat)
 
             dx, dy, _ = iterative_phase(ssample, sline, dsample, dline,
                                         source.geodata, dest.geodata,

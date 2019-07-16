@@ -81,10 +81,11 @@ LANGUAGE plpgsql VOLATILE -- Says the function is implemented in the plpgsql lan
 COST 100; -- Estimated execution cost of the function.
 """.format(latitudinal_srid))
 
-update_point_trigger = DDL("""
-CREATE TRIGGER point_inserted
-  BEFORE INSERT OR UPDATE
-  ON points
-  FOR EACH ROW
-EXECUTE PROCEDURE update_points();
-""")
+
+#update_point_trigger = DDL("""
+#CREATE TRIGGER point_inserted
+#  BEFORE INSERT OR UPDATE
+#  ON points
+#  FOR EACH ROW
+#EXECUTE PROCEDURE update_points();
+#""")
