@@ -319,7 +319,6 @@ class Points(BaseMixin, Base):
                                     spatial['semimajor_rad'], spatial['semiminor_rad'],
                                     'geocent', 'latlon')
             self._geom = from_shape(Point(lat, lon), latitudinal_srid)
-
         else:
             self._adjusted = adjusted
             self._geom = None
@@ -374,7 +373,7 @@ class Measures(BaseMixin, Base):
         self._measuretype = v
 
 if isinstance(Session, sqlalchemy.orm.sessionmaker):
-    from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, update_point_function, valid_geom_function, valid_geom_trigger
+    from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, valid_geom_function, valid_geom_trigger
 
     # Create the database
     if not database_exists(engine.url):

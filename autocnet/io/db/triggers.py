@@ -66,21 +66,4 @@ try:
 except:
   latitudinal_srid = None
 
-update_point_function = DDL("""
-CREATE OR REPLACE FUNCTION update_points()
-  RETURNS trigger AS
-$BODY$
-BEGIN
-    NEW.geom = ST_Force_2D(ST_Transform(NEW.adjusted, {}));
-    RETURN NEW;
-  EXCEPTION WHEN OTHERS THEN
-    raise notice 'FAILED TO PROJECT POINT';
-    NEW.geom = Null;
-    RETURN NEW;
-END;
-$BODY$
-
-LANGUAGE plpgsql VOLATILE -- Says the function is implemented in the plpgsql language; VOLATILE says the function has side effects.
-COST 100; -- Estimated execution cost of the function.
-""".format(latitudinal_srid))
 
