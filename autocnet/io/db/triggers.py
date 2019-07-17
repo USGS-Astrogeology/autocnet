@@ -65,7 +65,7 @@ try:
   latitudinal_srid = config['spatial']['latitudinal_srid']
 except:
   latitudinal_srid = None
-  
+
 update_point_function = DDL("""
 CREATE OR REPLACE FUNCTION update_points()
   RETURNS trigger AS
@@ -84,11 +84,3 @@ LANGUAGE plpgsql VOLATILE -- Says the function is implemented in the plpgsql lan
 COST 100; -- Estimated execution cost of the function.
 """.format(latitudinal_srid))
 
-
-#update_point_trigger = DDL("""
-#CREATE TRIGGER point_inserted
-#  BEFORE INSERT OR UPDATE
-#  ON points
-#  FOR EACH ROW
-#EXECUTE PROCEDURE update_points();
-#""")
