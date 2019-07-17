@@ -25,12 +25,12 @@ dependencies:
   - plio >= 1.1.0
   - plurmy
   - psycopg2
-  - pyproj=1.2.1
+  - pyproj
   - pytest
   - pytest-cov
   - pysis
   - scikit-image
-  - scipy
+  - scipy<=1.2.1
   - shapely
   - sqlalchemy
   - sqlalchemy-utils
