@@ -12,8 +12,8 @@ cluster:
     tmp_scratch_dir: '/scratch/jlaura'
 
     # The amount of RAM (in MB) to request for jobs
-    extractor_memory: 1000
-    processing_memory: 1000
+    extractor_memory: 1024
+    processing_memory: 1024
 
 ### Database Configuration ###
 database:
