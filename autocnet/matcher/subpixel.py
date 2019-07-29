@@ -165,7 +165,7 @@ def subpixel_phase(template, search, **kwargs):
     (y_shift, x_shift), error, diffphase = register_translation(search, template, **kwargs)
     return x_shift, y_shift, (error, diffphase)
 
-def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 215), template_size=(51,51), **kwargs):
+def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), template_size=(51,51), **kwargs):
     """
     Uses a pattern-matcher on subsets of two images determined from the passed-in keypoints and optional sizes to
     compute an x and y offset from the search keypoint to the template keypoint and an associated strength.
@@ -456,7 +456,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
     session.close()
 
 def subpixel_register_points(iterative_phase_kwargs={'size': 251},
-                             subpixel_template_kwargs={'image_size':(121,121)},
+                             subpixel_template_kwargs={'image_size':(251,251)},
                              cost_func=lambda x,y: 1/x**2 * y,
                              threshold=0.005):
     """
@@ -493,7 +493,7 @@ def subpixel_register_points(iterative_phase_kwargs={'size': 251},
                                 cost_func=cost_func)
 
 def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 251},
-                                     subpixel_template_kwargs={'image_size':(121,121)},
+                                     subpixel_template_kwargs={'image_size':(251,251)},
                                      cost_func=lambda x,y: 1/x**2 * y,
                                      threshold=0.005,
                                      walltime='00:10:00',
