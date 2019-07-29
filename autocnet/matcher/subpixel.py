@@ -455,7 +455,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
     session.commit()
     session.close()
 
-def subpixel_register_points(iterative_phase_kwargs={'size': 71},
+def subpixel_register_points(iterative_phase_kwargs={'size': 251},
                              subpixel_template_kwargs={'image_size':(121,121)},
                              cost_func=lambda x,y: 1/x**2 * y,
                              threshold=0.005):
@@ -492,7 +492,7 @@ def subpixel_register_points(iterative_phase_kwargs={'size': 71},
                                 subpixel_template_kwargs=subpixel_template_kwargs,
                                 cost_func=cost_func)
 
-def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 71},
+def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 251},
                                      subpixel_template_kwargs={'image_size':(121,121)},
                                      cost_func=lambda x,y: 1/x**2 * y,
                                      threshold=0.005,
