@@ -32,8 +32,8 @@ def new_connection(dbconfig):
                                                   dbconfig['password'],
                                                   dbconfig['host'],
                                                   dbconfig['pgbouncer_port'],
-                                                  dbconfig['name'])    
+                                                  dbconfig['name'])
     engine = sqlalchemy.create_engine(db_uri,
                                       poolclass=sqlalchemy.pool.NullPool)
-    Session = sqlalchemy.orm.sessionmaker(bind=engine, autocommit=True)
+    Session = orm.sessionmaker(bind=engine, autocommit=True)
     return Session, engine

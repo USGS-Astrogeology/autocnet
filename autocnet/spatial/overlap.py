@@ -180,7 +180,7 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
                 image_coord = node.camera.groundToImage(gnd)
                 sample, line = image_coord.samp, image_coord.line
             if cam_type == "isis":
-                line, sample = isis.ground_to_image(node["image_path"], lat ,lon)
+                line, sample = isis.ground_to_image(node["image_path"], lon ,lat)
 
             point.measures.append(Measures(sample=sample,
                                            line=line,

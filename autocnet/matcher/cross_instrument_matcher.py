@@ -55,7 +55,8 @@ import warnings
 ctypes.CDLL(find_library('usgscsm'))
 
 def generate_ground_points(ground_database, nspts_func=lambda x: int(round(x,1)*1), ewpts_func=lambda x: int(round(x,1)*4)):
-    ground_session, ground_engine = new_connection(ground_database)
+    Ground_Session, ground_engine = new_connection(ground_database)
+    ground_session = Ground_Session()
 
     session = Session()
     ground_poly = wkt.loads(session.query(functions.ST_AsText(functions.ST_Union(Images.footprint_latlon))).one()[0])
@@ -90,22 +91,19 @@ def generate_ground_points(ground_database, nspts_func=lambda x: int(round(x,1)*
     ground_session.close()
 
     # start building the cnet
-    ground_cnet = pd.DataFrame(data = records, columns = ['pointid', 'path', 'footprint', 'serial', 'name'])
+    ground_cnet = pd.DataFrame(data = records, columns = ['pointid', 'name', 'path', 'footprint', 'serial'])
     ground_cnet["point"] = coord_list
     ground_cnet['line'] = None
     ground_cnet['sample'] = None
     ground_cnet['resolution'] = None
-
     # generate lines and samples from ground points
     groups = ground_cnet.groupby('path')
-
     # group by images so campt can do multiple at a time
     for group_id, group in groups:
-        row = group.iloc[0]
         lons = [p.x for p in group['point']]
         lats = [p.y for p in group['point']]
 
-        point_list = isis.point_info(row['path'], lons, lats, 'ground')
+        point_list = isis.point_info(group_id, lons, lats, 'ground')
         lines = []
         samples = []
         resolutions = []
@@ -261,4 +259,3 @@ def propagate_control_network(base_cnet):
     session.commit()
 
     return ground
-
