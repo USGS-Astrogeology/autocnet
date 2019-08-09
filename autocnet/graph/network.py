@@ -1474,7 +1474,7 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         """
         df = pd.read_sql(sql, engine)
         df.rename(columns={'imageid':'image_index','id':'point_id', 'pointtype' : 'type',
-            'sample':'x', 'line':'y', 'serial': 'serialnumber'}, inplace=True)
+            'sample':'x', 'line':'y', 'serial': 'serialnumber', 'measuretype':'measure_type'}, inplace=True)
 
         #create columns in the dataframe; zeros ensure plio (/protobuf) will
         #ignore unless populated with alternate values
