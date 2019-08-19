@@ -1448,10 +1448,28 @@ class NetworkCandidateGraph(CandidateGraph):
             n.generate_vrt(**kwargs)
 
     def to_isis(self, path, flistpath=None,sql = """
-SELECT points.id, measures.serial, points.pointtype, points.apriori, points.adjusted,
-measures.sample, measures.line, measures.measuretype, measures.imageid
-FROM measures INNER JOIN points ON measures.pointid = points.id
-WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE;
+SELECT points.id,
+        measures.serial,
+        points.pointtype, 
+        points.apriori, 
+        points.adjusted,
+        measures.sample, 
+        measures.line, 
+        measures.measuretype,
+        measures.imageid
+FROM measures 
+INNER JOIN points ON measures.pointid = points.id
+WHERE 
+    points.active = True AND 
+    measures.active=TRUE AND 
+    measures.jigreject=FALSE AND 
+    measures.imageid NOT IN
+        (SELECT measures.imageid
+        FROM measures 
+        INNER JOIN points ON measures.pointid = points.id
+        WHERE measures.active = true and measures.jigreject = false AND points.active = True
+        GROUP BY measures.imageid
+        HAVING COUNT(DISTINCT measures.pointid)  < 3);
 """):
         """
         Given a set of points/measures in an autocnet database, generate an ISIS
@@ -1504,8 +1522,14 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
             flistpath = os.path.splitext(path)[0] + '.lis'
         target = config['spatial'].get('target', None)
 
+        ids = df['image_index'].unique()
+        fpaths = [self.nodes[i]['data']['image_path'] for i in ids]
+        for f in self.files:
+            if f not in fpaths:
+                warnings.warn(f'{f} in candidate graph but not in output network.')
+
         cnet.to_isis(df, path, targetname=target)
-        cnet.write_filelist(self.files, path=flistpath)
+        cnet.write_filelist(fpaths, path=flistpath)
 
     @staticmethod
     def update_from_jigsaw(session, path):
