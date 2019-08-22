@@ -69,6 +69,7 @@ def cluster_place_points_in_overlaps(size_threshold=0.0007,
                                      distribute_points_kwargs={},
                                      walltime='00:10:00',
                                      chunksize=1000,
+                                     exclude=None,
                                      cam_type="csm",
                                      query_string='SELECT overlay.id FROM overlay LEFT JOIN points ON ST_INTERSECTS(overlay.geom, points.geom) WHERE points.id IS NULL;'):
     """
@@ -115,7 +116,7 @@ def cluster_place_points_in_overlaps(size_threshold=0.0007,
                  partition=config['cluster']['queue'],
                  output=config['cluster']['cluster_log_dir']+'/autocnet.place_points-%j')
     job_counter = i+1
-    submitter.submit(array='1-{}'.format(job_counter), chunksize=chunksize)
+    submitter.submit(array='1-{}'.format(job_counter), chunksize=chunksize, exclude=exclude)
     return job_counter
 
 def place_points_in_overlap(nodes, geom, cam_type="csm",

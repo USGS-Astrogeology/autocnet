@@ -495,7 +495,8 @@ def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 251},
                                      cost_func=lambda x,y: 1/x**2 * y,
                                      threshold=0.005,
                                      walltime='00:10:00',
-                                     chunksize=1000):
+                                     chunksize=1000,
+                                     exclude=None):
     """
     Distributed subpixel registration of all of the points in a given DB table.
 
@@ -549,5 +550,5 @@ def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 251},
                  time=walltime,
                  partition=config['cluster']['queue'],
                  output=config['cluster']['cluster_log_dir']+f'/autocnet.subpixel_register-%j')
-    submitter.submit(array='1-{}'.format(job_counter), chunksize=chunksize)
+    submitter.submit(array='1-{}'.format(job_counter), chunksize=chunksize, exclude=exclude)
     return job_counter
