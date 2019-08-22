@@ -521,6 +521,10 @@ def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 251},
     threshold : numeric
                 measures with a cost <= the threshold are marked as active=False in
                 the database.
+
+    exclude : str
+              string containing the name(s) of any slurm nodes to exclude when
+              completing a cluster job. (e.g.: 'gpu1' or 'gpu1,neb12')
     """
     # Setup the redis queue
     rqueue = StrictRedis(host=config['redis']['host'],

@@ -89,7 +89,11 @@ def cluster_place_points_in_overlaps(size_threshold=0.0007,
                options: {"csm", "isis"}
                Pick what kind of camera model implementation to use
 
-    query
+    query : str
+
+    exclude : str
+              string containing the name(s) of any slurm nodes to exclude when
+              completing a cluster job. (e.g.: 'gpu1' or 'gpu1,neb12')
     """
     # Setup the redis queue
     rqueue = StrictRedis(host=config['redis']['host'],
