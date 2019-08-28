@@ -1863,15 +1863,25 @@ WHERE
         return df
 
     @property
-    def queue_llen(self):
+    def queue_length(self):
+        """
+        Returns the length of the processing queue. Jobs are left on the
+        queue if a cluster job is cancelled. Those cancelled jobs are then
+        called on next cluster job launch, causing failures. This method provides
+        a quick check for left over jobs.
+        """
         conf = config['redis']
         queue = StrictRedis(host=conf['host'],
                             port=conf['port'])
         llen = queue.llen(conf['processing_queue'])
         return llen
 
-    @classmethod
+    @staticmethod
     def queue_flushdb(self):
+        """
+        Clear the processing queue of any left over jobs from a previous cluster
+        job cancellation or hanging jobs.
+        """
         conf = config['redis']
         queue = StrictRedis(host=conf['host'],
                             port=conf['port'])
