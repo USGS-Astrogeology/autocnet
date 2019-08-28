@@ -1861,3 +1861,18 @@ WHERE
     def measures(self):
         df = pd.read_sql_table('measures', con=engine)
         return df
+
+    @property
+    def queue_llen(self):
+        conf = config['redis']
+        queue = StrictRedis(host=conf['host'],
+                            port=conf['port'])
+        llen = queue.llen(conf['processing_queue'])
+        return llen
+
+    @classmethod
+    def queue_flushdb(self):
+        conf = config['redis']
+        queue = StrictRedis(host=conf['host'],
+                            port=conf['port'])
+        queue.flushdb()
