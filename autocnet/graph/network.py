@@ -1877,7 +1877,7 @@ WHERE
         return llen
 
     @staticmethod
-    def queue_flushdb(self):
+    def queue_flushdb():
         """
         Clear the processing queue of any left over jobs from a previous cluster
         job cancellation or hanging jobs.
