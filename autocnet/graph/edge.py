@@ -404,7 +404,7 @@ class Edge(dict, MutableMapping):
         s_keypoints = self.source.get_keypoint_coordinates(index=matches['source_idx'])
         d_keypoints = self.destination.get_keypoint_coordinates(index=matches['destination_idx'])
 
-        self['homography'], hmask = hm.compute_homography(s_keypoints.values, d_keypoints.values)
+        self['homography'], hmask = hm.compute_homography(s_keypoints.values, d_keypoints.values, method=method)
 
         # Convert the truncated RANSAC mask back into a full length mask
         mask[mask] = hmask
