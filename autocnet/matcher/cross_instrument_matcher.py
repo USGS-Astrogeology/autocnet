@@ -95,6 +95,8 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
                        describes distribution of points along the east-west
                        edge of an overlap.
     """
+    warnings.warn('This function is not well tested. No tests currently exists \
+    in the test suite for this version of the function.')
 
     Ground_Session, ground_engine = new_connection(ground_db_config)
     ground_session = Ground_Session()
@@ -173,6 +175,8 @@ def propagate_control_network(base_cnet):
     """
 
     """
+    warnings.warn('This function is not well tested. No tests currently exists \
+    in the test suite for this version of the function.')
     dest_images = gpd.GeoDataFrame.from_postgis("select * from images", engine, geom_col="geom")
     spatial_index = dest_images.sindex
     groups = base_cnet.groupby('index').groups
