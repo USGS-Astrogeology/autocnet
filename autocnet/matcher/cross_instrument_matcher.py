@@ -54,8 +54,49 @@ import warnings
 
 ctypes.CDLL(find_library('usgscsm'))
 
-def generate_ground_points(ground_database, nspts_func=lambda x: int(round(x,1)*1), ewpts_func=lambda x: int(round(x,1)*4)):
-    Ground_Session, ground_engine = new_connection(ground_database)
+def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)*1), ewpts_func=lambda x: int(round(x,1)*4)):
+    """
+    Provided a config file which points to a database containing ground image path and geom information,
+    generates ground points on these images within the range of a source database's images. For example,
+    if creating a CTX mosaic which is grounded using themis data, the config files would look like:
+        CTX_config -> located in config/[config_name].yml
+        database:
+            type: 'postgresql'
+            username: 'jay'
+            password: 'abcde'
+            host: '130.118.160.193'
+            port: 8085
+            pgbouncer_port: 8083
+            name: 'somename'
+            timeout: 500
+
+        Themis_config -> passed in to this function as ground_db_config
+        ground_db_config = {'username':'jay',
+                            'password':'abcde',
+                            'host':'autocnet.wr.usgs.gov',
+                            'pgbouncer_port':5432,
+                            'name':'mars'}
+
+    THIS FUNCTION IS CURRENTLY HARD CODED FOR themisdayir TABLE QUERY
+
+    Parameters
+    ----------
+    ground_db_config : dict
+                       In the form: {'username':'somename',
+                                     'password':'somepassword',
+                                     'host':'somehost',
+                                     'pgbouncer_port':6543,
+                                     'name':'somename'}
+    nspts_func       : func
+                       describes distribution of points along the north-south
+                       edge of an overlap.
+
+    ewpts_func       : func
+                       describes distribution of points along the east-west
+                       edge of an overlap.
+    """
+
+    Ground_Session, ground_engine = new_connection(ground_db_config)
     ground_session = Ground_Session()
 
     session = Session()
@@ -65,7 +106,8 @@ def generate_ground_points(ground_database, nspts_func=lambda x: int(round(x,1)*
     image_fp_bounds = list(ground_poly.bounds)
 
     # just hard code queries to the mars database as it exists for now
-    ground_image_query = f'select * from themisdayir where geom && ST_MakeEnvelope({image_fp_bounds[0]}, {image_fp_bounds[1]}, {image_fp_bounds[2]}, {image_fp_bounds[3]}, {config["spatial"]["latitudinal_srid"]})'
+    # ground_image_query = f'select * from themisdayir where geom && ST_MakeEnvelope({image_fp_bounds[0]}, {image_fp_bounds[1]}, {image_fp_bounds[2]}, {image_fp_bounds[3]}, {config["spatial"]["latitudinal_srid"]})'
+    ground_image_query = f'select * from themisdayir where ST_INTERSECTS(geom, ST_MakeEnvelope({image_fp_bounds[0]}, {image_fp_bounds[1]}, {image_fp_bounds[2]}, {image_fp_bounds[3]}, {config["spatial"]["latitudinal_srid"]}))'
     themis_images = gpd.GeoDataFrame.from_postgis(ground_image_query,
                                                   ground_engine, geom_col="geom")
 
@@ -91,7 +133,7 @@ def generate_ground_points(ground_database, nspts_func=lambda x: int(round(x,1)*
     ground_session.close()
 
     # start building the cnet
-    ground_cnet = pd.DataFrame(data = records, columns = ['pointid', 'name', 'path', 'footprint', 'serial'])
+    ground_cnet = pd.DataFrame(data = records, columns = ['index', 'path', 'geom', 'serial', 'name'])
     ground_cnet["point"] = coord_list
     ground_cnet['line'] = None
     ground_cnet['sample'] = None
@@ -133,7 +175,7 @@ def propagate_control_network(base_cnet):
     """
     dest_images = gpd.GeoDataFrame.from_postgis("select * from images", engine, geom_col="geom")
     spatial_index = dest_images.sindex
-    groups = base_cnet.groupby('pointid').groups
+    groups = base_cnet.groupby('index').groups
     # append to list if images, mostly used for working with the network in python
     # after this step, is this uncecceary outside of debugging? Maybe actually should return
     # more info of where everything was sourced in the original DataFrames?
@@ -150,7 +192,7 @@ def propagate_control_network(base_cnet):
         measure = measures.iloc[0]
 
         p = measure.point
-        # get image in he destination that overlap
+        # get image in the destination that overlap
         matches = dest_images[dest_images.intersects(p)]
 
         # lazily iterate for now
