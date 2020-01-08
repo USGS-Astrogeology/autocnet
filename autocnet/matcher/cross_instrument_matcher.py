@@ -102,18 +102,17 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
     ground_session = Ground_Session()
 
     session = Session()
-    ground_poly = wkt.loads(session.query(functions.ST_AsText(functions.ST_Union(Images.geom))).one()[0])
+    fp_poly = wkt.loads(session.query(functions.ST_AsText(functions.ST_Union(Images.geom))).one()[0])
     session.close()
 
-    image_fp_bounds = list(ground_poly.bounds)
+    fp_poly_bounds = list(fp_poly.bounds)
 
     # just hard code queries to the mars database as it exists for now
-    # ground_image_query = f'select * from themisdayir where geom && ST_MakeEnvelope({image_fp_bounds[0]}, {image_fp_bounds[1]}, {image_fp_bounds[2]}, {image_fp_bounds[3]}, {config["spatial"]["latitudinal_srid"]})'
-    ground_image_query = f'select * from themisdayir where ST_INTERSECTS(geom, ST_MakeEnvelope({image_fp_bounds[0]}, {image_fp_bounds[1]}, {image_fp_bounds[2]}, {image_fp_bounds[3]}, {config["spatial"]["latitudinal_srid"]}))'
-    themis_images = gpd.GeoDataFrame.from_postgis(ground_image_query,
-                                                  ground_engine, geom_col="geom")
+    # ground_image_query = f'select * from themisdayir where ST_INTERSECTS(geom, ST_MakeEnvelope({fp_poly_bounds[0]}, {fp_poly_bounds[1]}, {fp_poly_bounds[2]}, {fp_poly_bounds[3]}, {config["spatial"]["latitudinal_srid"]}))'
+    # ground_geoms = gpd.GeoDataFrame.from_postgis(ground_image_query,
+    #                                               ground_engine, geom_col="geom")
 
-    coords = distribute_points_in_geom(ground_poly, nspts_func=nspts_func, ewpts_func=ewpts_func)
+    coords = distribute_points_in_geom(fp_poly, nspts_func=nspts_func, ewpts_func=ewpts_func)
     coords = np.asarray(coords)
 
     sql = """
@@ -122,7 +121,6 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
 
     records = []
     coord_list = []
-    coord_id = []
 
     # throw out points not intersecting the ground reference images
     for i, coord in enumerate(coords):
@@ -151,7 +149,6 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
         lines = []
         samples = []
         resolutions = []
-        indices = []
         for i, res in enumerate(point_list):
             if res[1].get('Error') is not None:
                 print('Bad intersection')
@@ -295,6 +292,8 @@ def propagate_control_network(base_cnet):
             m = ground.loc[i]
             p.measures.append(Measures(line=float(m['line']),
                                        sample = float(m['sample']),
+                                       aprioriline = float(m['line']),
+                                       apriorisample = float(m['sample']),
                                        imageid = int(m['imageid']),
                                        serial = m['serial'],
                                        measuretype=3))
