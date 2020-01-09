@@ -199,9 +199,12 @@ def propagate_control_network(base_cnet):
     constrained_net = []
     dbpoints = []
     dbmeasures = []
-
+    i = 0
+    ngroups = len(groups)
     # easily parrallelized on the cpoint level, dummy serial for now
     for cpoint, indices in groups.items():
+        i+=1
+        print(f"{i}/{ngroups}")
         measures = base_cnet.loc[indices]
         measure = measures.iloc[0]
 
@@ -242,7 +245,7 @@ def propagate_control_network(base_cnet):
                 dx, dy = scaled_dest_sample, scaled_dest_line
                 try:
                     # not sure what the best parameters are here
-                    ret = iterative_phase(sx, sy, dx, dy, base_arr, dest_arr, size=25, reduction=1, max_dist=5, convergence_threshold=2)
+                    ret = iterative_phase(sx, sy, dx, dy, base_arr, dest_arr, size=10, reduction=1, max_dist=2, convergence_threshold=1)
                 except Exception as ex:
                     match_results.append(ex)
                     continue
