@@ -112,13 +112,14 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
     ground_image_query = f'select * from themisdayir where ST_INTERSECTS(geom, ST_MakeEnvelope({image_fp_bounds[0]}, {image_fp_bounds[1]}, {image_fp_bounds[2]}, {image_fp_bounds[3]}, {config["spatial"]["latitudinal_srid"]}))'
     themis_images = gpd.GeoDataFrame.from_postgis(ground_image_query,
                                                   ground_engine, geom_col="geom")
+    spatial_index = themis_images.sindex
 
     coords = distribute_points_in_geom(ground_poly, nspts_func=nspts_func, ewpts_func=ewpts_func)
     coords = np.asarray(coords)
 
-    sql = """
-    SELECT * FROM themisdayir as i WHERE ST_Contains(i.geom, ST_setsrid(ST_Point({}, {}), 949900))
-    """
+    # sql = """
+    # SELECT * FROM themisdayir as i WHERE ST_Contains(i.geom, ST_setsrid(ST_Point({}, {}), 949900))
+    # """
 
     records = []
     coord_list = []
@@ -126,20 +127,28 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
 
     # throw out points not intersecting the ground reference images
     for i, coord in enumerate(coords):
-        formated_sql = sql.format(coord[0], coord[1])
-        res = ground_session.execute(formated_sql)
-        for record in res:
+        # formated_sql = sql.format(coord[0], coord[1])
+
+        # res = ground_session.execute(formated_sql)
+        p = Point(*coord)
+        # possible_matches_index = list(spatial_index.intersection(coord))
+        #possible_matches = themis_images.iloc[possible_matches_index]
+        res = themis_images[themis_images.intersects(p)]
+
+        for k, record in res.iterrows():
+            record["pointid"] = i
             records.append(record)
-            coord_list.append(Point(*coord))
+            coord_list.append(p)
 
     ground_session.close()
 
     # start building the cnet
-    ground_cnet = pd.DataFrame(data = records, columns = ['index', 'path', 'geom', 'serial', 'name'])
+    ground_cnet = pd.DataFrame.from_records(records)
     ground_cnet["point"] = coord_list
     ground_cnet['line'] = None
     ground_cnet['sample'] = None
     ground_cnet['resolution'] = None
+
     # generate lines and samples from ground points
     groups = ground_cnet.groupby('path')
     # group by images so campt can do multiple at a time
@@ -154,7 +163,7 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
         indices = []
         for i, res in enumerate(point_list):
             if res[1].get('Error') is not None:
-                print('Bad intersection')
+                print('Bad intersection: ', res[1].get("Error"))
                 lines.append(None)
                 samples.append(None)
                 resolutions.append(None)
@@ -168,7 +177,7 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
         ground_cnet.loc[index, 'resolution'] = resolutions
 
     ground_cnet = gpd.GeoDataFrame(ground_cnet, geometry='point')
-    return ground_cnet
+    return ground_cnet, ground_poly, coords
 
 
 def propagate_control_network(base_cnet):
@@ -179,7 +188,8 @@ def propagate_control_network(base_cnet):
     in the test suite for this version of the function.')
     dest_images = gpd.GeoDataFrame.from_postgis("select * from images", engine, geom_col="geom")
     spatial_index = dest_images.sindex
-    groups = base_cnet.groupby('index').groups
+    groups = base_cnet.groupby('pointid').groups
+
     # append to list if images, mostly used for working with the network in python
     # after this step, is this uncecceary outside of debugging? Maybe actually should return
     # more info of where everything was sourced in the original DataFrames?
@@ -196,6 +206,7 @@ def propagate_control_network(base_cnet):
         measure = measures.iloc[0]
 
         p = measure.point
+
         # get image in the destination that overlap
         matches = dest_images[dest_images.intersects(p)]
 
@@ -231,7 +242,7 @@ def propagate_control_network(base_cnet):
                 dx, dy = scaled_dest_sample, scaled_dest_line
                 try:
                     # not sure what the best parameters are here
-                    ret = iterative_phase(sx, sy, dx, dy, base_arr, dest_arr, size=10, reduction=1, max_dist=1, convergence_threshold=1)
+                    ret = iterative_phase(sx, sy, dx, dy, base_arr, dest_arr, size=25, reduction=1, max_dist=5, convergence_threshold=2)
                 except Exception as ex:
                     match_results.append(ex)
                     continue
@@ -250,7 +261,9 @@ def propagate_control_network(base_cnet):
             match_results = np.asarray([res for res in match_results if isinstance(res, list)])
             if match_results.shape[0] == 0:
                 # no matches
+                print("No Mathces")
                 continue
+
             match_results = match_results[np.argwhere(match_results[:,3] == match_results[:,3].min())][0][0]
 
             if match_results[3] > 2:
