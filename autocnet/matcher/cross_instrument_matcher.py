@@ -108,9 +108,9 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
     fp_poly_bounds = list(fp_poly.bounds)
 
     # just hard code queries to the mars database as it exists for now
-    ground_image_query = f'select * from themisdayir where ST_INTERSECTS(geom, ST_MakeEnvelope({fp_poly_bounds[0]}, {fp_poly_bounds[1]}, {fp_poly_bounds[2]}, {fp_poly_bounds[3]}, {config["spatial"]["latitudinal_srid"]}))'
-    themis_images = gpd.GeoDataFrame.from_postgis(ground_image_query,
-                                                   ground_engine, geom_col="geom")
+    # ground_image_query = f'select * from themisdayir where ST_INTERSECTS(geom, ST_MakeEnvelope({fp_poly_bounds[0]}, {fp_poly_bounds[1]}, {fp_poly_bounds[2]}, {fp_poly_bounds[3]}, {config["spatial"]["latitudinal_srid"]}))'
+    # ground_geoms = gpd.GeoDataFrame.from_postgis(ground_image_query,
+    #                                               ground_engine, geom_col="geom")
 
     coords = distribute_points_in_geom(fp_poly, nspts_func=nspts_func, ewpts_func=ewpts_func)
     coords = np.asarray(coords)
@@ -165,7 +165,7 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
         ground_cnet.loc[index, 'resolution'] = resolutions
 
     ground_cnet = gpd.GeoDataFrame(ground_cnet, geometry='point')
-    return ground_cnet, ground_poly, coords
+    return ground_cnet
 
 
 def propagate_control_network(base_cnet):
