@@ -288,7 +288,7 @@ def cluster_propagate_control_network(base_cnet, walltime='00:20:00', chunksize=
         lon, lat = measures["point"].iloc[0].xy
         msg = {'lon' : lon[0],
                'lat' : lat[0],
-               'cpoint' : cpoint,
+               'pointid' : cpoint,
                'paths' : measures['path'].tolist(),
                'lines' : measures['line'].tolist(),
                'samples' : measures['sample'].tolist(),

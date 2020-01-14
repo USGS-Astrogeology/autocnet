@@ -27,6 +27,7 @@ def main(msg, config):
     print(json.dumps(msg, indent=2))
     
     msg.pop('walltime', None)
+    msg.pop('max_time', None)
     point_measures = cim.propagate_point(**msg)
 
     print("Point Measures:")
@@ -48,7 +49,7 @@ def main(msg, config):
                                    measuretype=3))
 
     print('Adding {} measures to the database.'.format(len(point_measures)))
-    Points.add(point)
+    Points.bulkadd([p])
 
 if __name__ == '__main__':
     conf = config['redis']
