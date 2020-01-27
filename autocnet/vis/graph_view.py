@@ -9,8 +9,7 @@ from skimage.transform import resize
 def downsample(array, amount):
     return resize(array,
                       (int(array.shape[0] / amount),
-                      int(array.shape[1] / amount)),
-                      interp='lanczos')
+                      int(array.shape[1] / amount)))
 
 def plot_graph(graph, ax=None, cmap='Spectral', labels=False, font_size=12, clusters=None, **kwargs):
     """
@@ -297,7 +296,7 @@ def plot_edge(edge, ax=None, clean_keys=[], image_space=100, downsampling=1,
 
         for l in zip(s_kps, d_kps):
             ax.plot((l[0][0], l[1][0]), (l[0][1], l[1][1]), color=color, **line_kwargs)
-            
+
     ax.imshow(composite, cmap=image_cmap)
 
     return ax

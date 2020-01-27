@@ -22,7 +22,7 @@ import shapely.ops
 
 import pyproj
 
-from plio.io.io_controlnetwork import from_isis
+from plio.io.io_controlnetwork import to_isis, from_isis
 from plio.io import io_hdf, io_json
 from plio.utils import utils as io_utils
 from plio.io.io_gdal import GeoDataset
@@ -1253,7 +1253,7 @@ class CandidateGraph(nx.Graph):
         return self.controlnetwork.groupby('point_id').apply(lambda g: g if len(g) > 1 else None)
 
 
-    def to_isis(self, outname, serials, olist, *args, **kwargs):  # pragma: no cover
+    def to_isis(self, outname, flistpath=None):  # pragma: no cover
         """
         Write the control network out to the ISIS3 control network format.
         """
@@ -1263,17 +1263,43 @@ class CandidateGraph(nx.Graph):
                 'Control Network is not ISIS3 compliant.  Please run the validate_points method on the control network.')
             return
 
-        # Apply the subpixel shift
-        self.controlnetwork.x += self.controlnetwork.x_off
-        self.controlnetwork.y += self.controlnetwork.y_off
+        df = self.controlnetwork
 
-        to_isis(outname + '.net', self.controlnetwork.query('valid == True'),
-                serials, *args, **kwargs)
-        write_filelist(olist, outname + '.lis')
+        df = df.rename(columns={'imageid':'image_index','id':'point_id', 'pointtype' : 'type',
+            'sample':'x', 'line':'y', 'serial': 'serialnumber'})
 
-        # Back out the subpixel shift
-        self.controlnetwork.x -= self.controlnetwork.x_off
-        self.controlnetwork.y -= self.controlnetwork.y_off
+        serials = [generate_serial_number(self.nodes[id_]["data"]["image_path"]) for id_ in df["image_index"]]
+
+        #create columns in the dataframe; zeros ensure plio (/protobuf) will
+        #ignore unless populated with alternate values
+        df['aprioriX'] = 0
+        df['aprioriY'] = 0
+        df['aprioriZ'] = 0
+        df['adjustedX'] = 0
+        df['adjustedY'] = 0
+        df['adjustedZ'] = 0
+        df['type'] = 3
+        df['measuretype'] = 2
+
+        df["serialnumber"] = serials
+
+        #only populate the new columns for ground points. Otherwise, isis will
+        #recalculate the control point lat/lon from control measures which where
+        #"massaged" by the phase and template matcher.
+        for i, group in df.groupby('point_id'):
+            zero_group = group.iloc[0]
+            apriori_geom = np.array(point_info(self.nodes[zero_group.image_index]['data'].geodata.file_name, zero_group.x, zero_group.y, 'image')['GroundPoint']['BodyFixedCoordinate'].value) * 1000
+            for j, row in group.iterrows():
+                row['aprioriX'] = apriori_geom[0]
+                row['aprioriY'] = apriori_geom[1]
+                row['aprioriZ'] = apriori_geom[2]
+                df.iloc[row.name] = row
+
+        if flistpath is None:
+            flistpath = os.path.splitext(outname)[0] + '.lis'
+
+        cnet.to_isis(df, outname, targetname='Mars')
+        cnet.write_filelist(self.files, path=flistpath)
 
     def to_bal(self):
         """
@@ -1699,9 +1725,9 @@ WHERE
         # Get the camera objects to manually join. Keeps the caller from
         # having to remember to bring cameras as well.
         ids = [i[0] for i in sourceimages]
-        cameras = sourcesession.query(Cameras).filter(Cameras.image_id.in_(ids)).all()
-        for c in cameras:
-            destinationsession.merge(c)
+        #cameras = sourcesession.query(Cameras).filter(Cameras.image_id.in_(ids)).all()
+        #for c in cameras:
+        #    destinationsession.merge(c)
 
         destinationsession.commit()
         destinationsession.close()
