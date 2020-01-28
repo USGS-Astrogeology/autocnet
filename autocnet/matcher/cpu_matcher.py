@@ -87,25 +87,13 @@ def match(edge, k=2, **kwargs):
     # swapped
     mono_matches(edge.destination, edge.source, aidx=bidx, bidx=aidx)
 
-    source_x_array = []
-    source_y_array = []
-    destination_x_array = []
-    destination_y_array = []
+    source_keypoints = edge.source.keypoints[['x', 'y']]
+    source_keypoints.rename(columns={'x': 'source_x', 'y': 'source_y'}, inplace=True)
+    edge.matches = edge.matches.join(source_keypoints, 'source_idx')
 
-    for row in cg[1][2]['data'].matches.iterrows():
-        row = row[1]
-        source_x, source_y = edge.source.keypoints.loc[row.source_idx][['x', 'y']]
-        source_x_array.append(source_x)
-        source_y_array.append(source_y)
-        destination_x, destination_y = edge.destination.keypoints.loc[row.destination_idx][['x', 'y']]
-        destination_x_array.append(destination_x)
-        destination_y_array.append(destination_y)
-
-    edge.matches['source_x'] = source_x_array
-    edge.matches['source_y'] = source_y_array
-    edge.matches['destination_x'] = destination_x_array
-    edge.matches['destination_y'] = destination_y_array
-
+    destination_keypoints = edge.destination.keypoints[['x', 'y']]
+    destination_keypoints.rename(columns={'x': 'destination_x', 'y': 'destination_y'}, inplace=True)
+    edge.matches = edge.matches.join(destination_keypoints, 'destination_idx')
     edge.matches.sort_values(by=['distance'])
 
 

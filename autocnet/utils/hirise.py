@@ -15,7 +15,8 @@ import numpy as np
 import pvl
 from shapely.geometry import Point, MultiPolygon
 
-def segment_hirise(dirctory, offset=300):
+def segment_hirise(directory, offset=300):
+    images = glob(os.path.join(directory, "*RED*.stitched.norm.cub"))
     for image in images:
         label = pvl.loads(isis.catlab(from_=image))
 
@@ -38,11 +39,15 @@ def segment_hirise(dirctory, offset=300):
             isis.crop(from_=image, to=output, line=start, nlines=stop-start, sample=1, nsamples=nsamples)
             isis.footprintinit(from_=output)
 
-        images = glob(os.path.join(directory, "*RED*.*_*.cub"))
-        objs = [GeoDataset(image) for image in images]
-        footprints = [o.footprint for o in objs]
-        footprints = [wkt.loads(f.ExportToWkt()) for f in footprints]
-        return gpd.GeoDataFrame(data=np.asarray([images, objs, footprints]).T, columns=["path", "image", "footprint"], geometry="footprint")
+    return load_segments(directory)
+
+def load_segments(directory):
+    images = glob(os.path.join(directory, "*RED*.*_*.cub"))
+    objs = [GeoDataset(image) for image in images]
+    footprints = [o.footprint for o in objs]
+    footprints = [wkt.loads(f.ExportToWkt()) for f in footprints]
+    return gpd.GeoDataFrame(data=np.asarray([images, objs, footprints]).T, columns=["path", "image", "footprint"], geometry="footprint")
+
 
 
 def ingest_hirise(directory):
