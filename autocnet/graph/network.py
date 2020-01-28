@@ -145,7 +145,7 @@ class CandidateGraph(nx.Graph):
         if sorted(self.nodes()) != sorted(other.nodes()):
             return False
         for node in self.nodes:
-            if not self.node[node] == other.node[node]:
+            if not self.nodes[node] == other.nodes[node]:
                 return False
         if sorted(self.edges()) != sorted(other.edges()):
             return False
@@ -294,7 +294,7 @@ class CandidateGraph(nx.Graph):
 
 
         """
-        return self.node[node_index]['data']['image_name']
+        return self.nodes[node_index]['data']['image_name']
 
     def get_matches(self, clean_keys=[]):
         matches = []
@@ -385,7 +385,7 @@ class CandidateGraph(nx.Graph):
             # Grab node ids & create edge obj
             s_id = self.graph["node_name_map"][u]
             d_id = self.graph["node_name_map"][v]
-            new_edge = Edge(self.node[s_id]["data"], self.node[d_id]["data"])
+            new_edge = Edge(self.nodes[s_id]["data"], self.nodes[d_id]["data"])
             # Prepare data for networkx
             u = s_id
             v = d_id

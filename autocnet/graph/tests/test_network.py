@@ -88,9 +88,9 @@ def candidategraph(node_a, node_b, node_c):
     cg.get_matches = MagicMock(return_value=matches)
 
     # Mock in the node objects onto the candidate graph
-    cg.node[0]['data'] = node_a
-    cg.node[1]['data'] = node_b
-    cg.node[2]['data'] = node_c
+    cg.nodes[0]['data'] = node_a
+    cg.nodes[1]['data'] = node_b
+    cg.nodes[2]['data'] = node_c
 
     return cg
 
@@ -142,7 +142,7 @@ def test_add_node(reduced_geo):
                                     image_path=os.path.join(basepath, c),
                                     node_id=3))
     assert len(reduced_geo.nodes) == 3
-    assert reduced_geo.node[3]["data"]["image_name"] == c
+    assert reduced_geo.nodes[3]["data"]["image_name"] == c
 
 def test_add_node_by_name(reduced_geo):
     # Test with "image_name" (cg method)
@@ -150,8 +150,8 @@ def test_add_node_by_name(reduced_geo):
     basepath = get_path('Apollo15')
     reduced_geo.add_node(image_name=c, basepath=basepath)
     assert len(reduced_geo.nodes) == 3
-    assert reduced_geo.node[3]["data"]["image_name"] == c
-    assert reduced_geo.node[1].keys() == reduced_geo.node[2].keys() == reduced_geo.node[3].keys()
+    assert reduced_geo.nodes[3]["data"]["image_name"] == c
+    assert reduced_geo.nodes[1].keys() == reduced_geo.nodes[2].keys() == reduced_geo.nodes[3].keys()
 
 def test_add_node_nonexistent(geo_graph):
     # Test when "image_name" not found
@@ -170,12 +170,12 @@ def test_add_edge():
     g.add_node(image_name=c, basepath=basepath, adjacency=c_adj)
 
     assert len(g.edges) == 3
-    assert g.edges[1, 2]["data"].source == g.node[1]["data"]
-    assert g.edges[1, 2]["data"].destination == g.node[2]["data"]
-    assert g.edges[1, 3]["data"].source == g.node[1]["data"]
-    assert g.edges[1, 3]["data"].destination == g.node[3]["data"]
-    assert g.edges[2, 3]["data"].source == g.node[2]["data"]
-    assert g.edges[2, 3]["data"].destination == g.node[3]["data"]
+    assert g.edges[1, 2]["data"].source == g.nodes[1]["data"]
+    assert g.edges[1, 2]["data"].destination == g.nodes[2]["data"]
+    assert g.edges[1, 3]["data"].source == g.nodes[1]["data"]
+    assert g.edges[1, 3]["data"].destination == g.nodes[3]["data"]
+    assert g.edges[2, 3]["data"].source == g.nodes[2]["data"]
+    assert g.edges[2, 3]["data"].destination == g.nodes[3]["data"]
     assert g.edges[1, 2].keys() == g.edges[1, 3].keys() == g.edges[2, 3].keys()
 
 def test_add_edge_missing_img(reduced_geo):
@@ -197,7 +197,7 @@ def test_equal(candidategraph):
     assert candidategraph != cg
 
     cg = copy.deepcopy(candidategraph)
-    cg.node[0]['image_name'] = 'foo'
+    cg.nodes[0]['image_name'] = 'foo'
     assert candidategraph != cg
 
     cg = copy.deepcopy(candidategraph)
@@ -329,7 +329,7 @@ def test_apply_func_to_edges(graph):
 def test_generate_control_network(candidategraph):
     candidategraph.generate_control_network()
     cn = candidategraph.controlnetwork
-    
+
     # Confirm that points are being created with measures.
     for i, g in cn.groupby('point_id'):
         assert len(g) == 2

@@ -138,8 +138,8 @@ def load(projectname):
             d = e['target']
             if s > d:
                 s,d = d,s
-            source = cg.node[s]['data']
-            destination = cg.node[d]['data']
+            source = cg.nodes[s]['data']
+            destination = cg.nodes[d]['data']
             edge = Edge(source, destination)
             # Backwards compatible with nx 1.x proj files (64_apollo in examples)
             if 'data' in e.keys():
@@ -154,8 +154,8 @@ def load(projectname):
             try:
                 nzf = np.load(BytesIO(pzip.read('{}_{}.npz'.format(s,d))))
                 for j in ['_matches', '_masks', '_costs']:
-                    setattr(edge, j, pd.DataFrame(nzf[j], 
-                                                  index=nzf['{}_idx'.format(j)], 
+                    setattr(edge, j, pd.DataFrame(nzf[j],
+                                                  index=nzf['{}_idx'.format(j)],
                                                   columns=nzf['{}_columns'.format(j)]))
             except:
                 pass
