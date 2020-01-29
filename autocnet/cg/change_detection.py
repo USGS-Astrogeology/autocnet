@@ -18,7 +18,7 @@ def image_diff(arr1, arr2):
     return bdiff
 
 
-def okubo_bogar_detector(image1, image2, nbins=50, extractor_method="orb", extractor_kwargs={"nfeatures": 2000, "scaleFactor": 1.1, "nlevels": 1}, image_func=image_diff):
+def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", extractor_kwargs={"nfeatures": 2000, "scaleFactor": 1.1, "nlevels": 1}, image_func=image_diff):
     arr1 = image1.read_array()
     arr2 = image2.read_array()
     arr1[arr1 == arr1.min()] = np.nan

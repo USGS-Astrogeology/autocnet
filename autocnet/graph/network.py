@@ -43,6 +43,7 @@ from autocnet.io.db.connection import new_connection, Parent
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
 from autocnet.spatial.overlap import compute_overlaps_sql
+from autocnet.spatial.isis import point_info
 
 #np.warnings.filterwarnings('ignore')
 
@@ -1253,20 +1254,11 @@ class CandidateGraph(nx.Graph):
         return self.controlnetwork.groupby('point_id').apply(lambda g: g if len(g) > 1 else None)
 
 
-    def to_isis(self, outname, flistpath=None):  # pragma: no cover
+    def to_isis(self, outname, flistpath=None, target="Mars"):  # pragma: no cover
         """
         Write the control network out to the ISIS3 control network format.
         """
-
-        if self.validate_points().any() == True:
-            warnings.warn(
-                'Control Network is not ISIS3 compliant.  Please run the validate_points method on the control network.')
-            return
-
         df = self.controlnetwork
-
-        df = df.rename(columns={'imageid':'image_index','id':'point_id', 'pointtype' : 'type',
-            'sample':'x', 'line':'y', 'serial': 'serialnumber'})
 
         serials = [generate_serial_number(self.nodes[id_]["data"]["image_path"]) for id_ in df["image_index"]]
 
@@ -1279,7 +1271,7 @@ class CandidateGraph(nx.Graph):
         df['adjustedY'] = 0
         df['adjustedZ'] = 0
         df['type'] = 3
-        df['measuretype'] = 2
+        df['measureType'] = 2
 
         df["serialnumber"] = serials
 
@@ -1298,7 +1290,9 @@ class CandidateGraph(nx.Graph):
         if flistpath is None:
             flistpath = os.path.splitext(outname)[0] + '.lis'
 
-        cnet.to_isis(df, outname, targetname='Mars')
+        df = df.rename(columns={'image_index':'image_id','point_id':'id', 'type' : 'pointType',
+             'x':'sample', 'y':'line'})
+        cnet.to_isis(df, outname, targetname=target)
         cnet.write_filelist(self.files, path=flistpath)
 
     def to_bal(self):

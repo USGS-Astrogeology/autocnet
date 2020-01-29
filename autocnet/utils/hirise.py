@@ -2,8 +2,6 @@ import os
 from glob import glob
 import geopandas as gpd
 
-os.environ["ISISROOT"] = "/usgs/cpkgs/anaconda3_linux/envs/isis3.9.0"
-
 from pysis import isis
 from pysis.exceptions import ProcessError
 
@@ -41,13 +39,13 @@ def segment_hirise(directory, offset=300):
 
     return load_segments(directory)
 
+
 def load_segments(directory):
     images = glob(os.path.join(directory, "*RED*.*_*.cub"))
     objs = [GeoDataset(image) for image in images]
     footprints = [o.footprint for o in objs]
     footprints = [wkt.loads(f.ExportToWkt()) for f in footprints]
     return gpd.GeoDataFrame(data=np.asarray([images, objs, footprints]).T, columns=["path", "image", "footprint"], geometry="footprint")
-
 
 
 def ingest_hirise(directory):
