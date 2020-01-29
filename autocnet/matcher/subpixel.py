@@ -149,7 +149,7 @@ def subpixel_phase(template, search, **kwargs):
     search : ndarray
              The search image
 
-    Returnsslurm-2235260_89.out.2235260_89.out
+    Returns
     -------
     x_offset : float
                Shift in the x-dimension
@@ -213,13 +213,11 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), templ
     --------
     autocnet.matcher.naive_template.pattern_match : for the kwargs that can be passed to the matcher
     """
-
     image_size = check_image_size(image_size)
     template_size = check_image_size(template_size)
 
     s_image, _, _ = clip_roi(s_img, sx, sy, size_x=image_size[0], size_y=image_size[1])
     d_template, dxr, dyr = clip_roi(d_img, dx, dy, size_x=template_size[0], size_y=template_size[1])
-
     if (s_image is None) or (d_template is None):
         return None, None, None
 
@@ -360,12 +358,11 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
         except:
             return None, None, None
         # Apply the shift to d_search and compute the new correspondence location
-        dx += (shift_x + dxr)
-        dy += (shift_y + dyr)
+        dx += shift_x # matcher already accounts for the dxr, dyr shifts
+        dy += shift_y
 
         # Break if the solution has converged
         size = (size[0] - reduction, size[1] - reduction)
-
         dist = np.linalg.norm([dsample-dx, dline-dy])
         if min(size) < 1:
             return None, None, None
@@ -418,6 +415,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
         res = session.query(Images).filter(Images.id == destinationid).one()
         destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
 
+        """
         new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample,
                                                                 source.line,
                                                                 measure.sample,
@@ -439,7 +437,34 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
         if new_template_x == None:
             measure.ignore = True # Unable to template match
             continue
+        """
 
+
+        new_template_x, new_template_y, template_metric = subpixel_template(source.sample,
+                                                                source.line,
+                                                                measure.sample,
+                                                                measure.line,
+                                                                source_node.geodata,
+                                                                destination_node.geodata,
+                                                                **subpixel_template_kwargs)
+
+        if new_template_x == None:
+            measure.ignore = True 
+            continue
+
+        new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample,
+                                                                source.line,
+                                                                new_template_x,
+                                                                new_template_y,
+                                                                source_node.geodata,
+                                                                destination_node.geodata,
+                                                                **iterative_phase_kwargs)
+
+        if new_phase_x == None:
+            measure.ignore = True
+            continue
+
+        """
         dist = np.linalg.norm([new_phase_x-new_template_x, new_phase_y-new_template_y])
         cost = cost_func(dist, template_metric)
 
@@ -452,7 +477,20 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
             measure.sample = new_template_x
             measure.line = new_template_y
             measure.weight = cost
+        """
+ 
 
+        dist = np.linalg.norm([new_phase_x-measure.sample, new_phase_y-measure.line])
+        cost = cost_func(dist, template_metric)
+        if cost <= threshold:
+            measure.ignore = True # Threshold criteria not met
+            continue
+
+        # Update the measure
+        if new_template_x:
+            measure.sample = new_phase_x
+            measure.line = new_phase_y
+            measure.weight = cost
         # In case this is a second run, set the ignore to False if this
         # measures passed. Also, set the source measure back to ignore=False
         measure.ignore = False
