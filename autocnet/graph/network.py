@@ -22,7 +22,7 @@ import shapely.ops
 
 import pyproj
 
-from plio.io.io_controlnetwork import from_isis
+from plio.io.io_controlnetwork import to_isis, from_isis
 from plio.io import io_hdf, io_json
 from plio.utils import utils as io_utils
 from plio.io.io_gdal import GeoDataset
@@ -43,6 +43,7 @@ from autocnet.io.db.connection import new_connection, Parent
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
 from autocnet.spatial.overlap import compute_overlaps_sql
+from autocnet.spatial.isis import point_info
 
 #np.warnings.filterwarnings('ignore')
 
@@ -145,7 +146,7 @@ class CandidateGraph(nx.Graph):
         if sorted(self.nodes()) != sorted(other.nodes()):
             return False
         for node in self.nodes:
-            if not self.node[node] == other.node[node]:
+            if not self.nodes[node] == other.nodes[node]:
                 return False
         if sorted(self.edges()) != sorted(other.edges()):
             return False
@@ -294,7 +295,7 @@ class CandidateGraph(nx.Graph):
 
 
         """
-        return self.node[node_index]['data']['image_name']
+        return self.nodes[node_index]['data']['image_name']
 
     def get_matches(self, clean_keys=[]):
         matches = []
@@ -385,7 +386,7 @@ class CandidateGraph(nx.Graph):
             # Grab node ids & create edge obj
             s_id = self.graph["node_name_map"][u]
             d_id = self.graph["node_name_map"][v]
-            new_edge = Edge(self.node[s_id]["data"], self.node[d_id]["data"])
+            new_edge = Edge(self.nodes[s_id]["data"], self.nodes[d_id]["data"])
             # Prepare data for networkx
             u = s_id
             v = d_id
@@ -1253,27 +1254,46 @@ class CandidateGraph(nx.Graph):
         return self.controlnetwork.groupby('point_id').apply(lambda g: g if len(g) > 1 else None)
 
 
-    def to_isis(self, outname, serials, olist, *args, **kwargs):  # pragma: no cover
+    def to_isis(self, outname, flistpath=None, target="Mars"):  # pragma: no cover
         """
         Write the control network out to the ISIS3 control network format.
         """
+        df = self.controlnetwork
 
-        if self.validate_points().any() == True:
-            warnings.warn(
-                'Control Network is not ISIS3 compliant.  Please run the validate_points method on the control network.')
-            return
+        serials = [generate_serial_number(self.nodes[id_]["data"]["image_path"]) for id_ in df["image_index"]]
 
-        # Apply the subpixel shift
-        self.controlnetwork.x += self.controlnetwork.x_off
-        self.controlnetwork.y += self.controlnetwork.y_off
+        #create columns in the dataframe; zeros ensure plio (/protobuf) will
+        #ignore unless populated with alternate values
+        df['aprioriX'] = 0
+        df['aprioriY'] = 0
+        df['aprioriZ'] = 0
+        df['adjustedX'] = 0
+        df['adjustedY'] = 0
+        df['adjustedZ'] = 0
+        df['type'] = 3
+        df['measureType'] = 2
 
-        to_isis(outname + '.net', self.controlnetwork.query('valid == True'),
-                serials, *args, **kwargs)
-        write_filelist(olist, outname + '.lis')
+        df["serialnumber"] = serials
 
-        # Back out the subpixel shift
-        self.controlnetwork.x -= self.controlnetwork.x_off
-        self.controlnetwork.y -= self.controlnetwork.y_off
+        #only populate the new columns for ground points. Otherwise, isis will
+        #recalculate the control point lat/lon from control measures which where
+        #"massaged" by the phase and template matcher.
+        for i, group in df.groupby('point_id'):
+            zero_group = group.iloc[0]
+            apriori_geom = np.array(point_info(self.nodes[zero_group.image_index]['data'].geodata.file_name, zero_group.x, zero_group.y, 'image')['GroundPoint']['BodyFixedCoordinate'].value) * 1000
+            for j, row in group.iterrows():
+                row['aprioriX'] = apriori_geom[0]
+                row['aprioriY'] = apriori_geom[1]
+                row['aprioriZ'] = apriori_geom[2]
+                df.iloc[row.name] = row
+
+        if flistpath is None:
+            flistpath = os.path.splitext(outname)[0] + '.lis'
+
+        df = df.rename(columns={'image_index':'image_id','point_id':'id', 'type' : 'pointType',
+             'x':'sample', 'y':'line'})
+        cnet.to_isis(df, outname, targetname=target)
+        cnet.write_filelist(self.files, path=flistpath)
 
     def to_bal(self):
         """
@@ -1699,9 +1719,9 @@ WHERE
         # Get the camera objects to manually join. Keeps the caller from
         # having to remember to bring cameras as well.
         ids = [i[0] for i in sourceimages]
-        cameras = sourcesession.query(Cameras).filter(Cameras.image_id.in_(ids)).all()
-        for c in cameras:
-            destinationsession.merge(c)
+        #cameras = sourcesession.query(Cameras).filter(Cameras.image_id.in_(ids)).all()
+        #for c in cameras:
+        #    destinationsession.merge(c)
 
         destinationsession.commit()
         destinationsession.close()

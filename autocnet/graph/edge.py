@@ -859,9 +859,7 @@ class NetworkEdge(Edge):
         df.index.name = 'id'
         # Explicit close to get the session cleaned up
         session.close()
-        return DbDataFrame(df,
-                           parent=self,
-                           name='matches')
+        return DbDataFrame(df,  parent=self, name='matches')
 
     @matches.setter
     def matches(self, v):
@@ -919,7 +917,6 @@ class NetworkEdge(Edge):
         session.query(Matches).filter(Matches.source == self.source['node_id'], Matches.destination == self.destination['node_id']).delete()
         session.commit()
         session.close()
-        return
 
     @property
     def ring(self):
