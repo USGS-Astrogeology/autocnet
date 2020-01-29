@@ -43,6 +43,7 @@ requirements:
     - geopandas
     - imageio
     - pysis
+    - dill
 test:
   imports:
     - autocnet

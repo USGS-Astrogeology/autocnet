@@ -4,6 +4,7 @@ import copy
 import os
 import json
 import sys
+import warnings
 
 from redis import StrictRedis
 import yaml
@@ -21,9 +22,9 @@ except:
     sys.exit()
 
 def main(msg, config):
-    
+
     # This should be the minimal amount of data necessary to create
-    # a NetworkNode or NetworkEdge object. The id in the message is 
+    # a NetworkNode or NetworkEdge object. The id in the message is
     # used to determine if this is a node (the id is then an int, float or str),
     # or if this is an edge that requires 2 keys
     id = msg['id']
@@ -57,16 +58,18 @@ if __name__ == '__main__':
     msg = pop_computetime_push(queue,
                                conf['processing_queue'],
                                conf['working_queue'])
-
+    if msg is None:
+        warnings.warn('Expected to process a cluster job, but the message queue is empty.')
+        sys.exit()
     # In order to pop an entry off the queue, we need the exact contents
     #remove_key = copy.deepcopy(msg)
-    
+
     # Pseudo-mock graph parent; used for the DB session only
-    
+
     # Apply the algorithm
     response = main(msg, config)
 
     # Alert the caller on failure to relaunch with next parameter set
-    #finalize(response, remove_key, queue, 
+    #finalize(response, remove_key, queue,
     #         config['redis']['completed_queue'],
     #         config['redis']['working_queue'])
