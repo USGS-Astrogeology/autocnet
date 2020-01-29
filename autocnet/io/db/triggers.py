@@ -7,10 +7,10 @@ CREATE OR REPLACE FUNCTION validate_geom()
   RETURNS trigger AS
 $BODY$
   BEGIN
-      NEW.footprint_latlon = ST_MAKEVALID(NEW.footprint_latlon);
+      NEW.geom = ST_MAKEVALID(NEW.geom);
       RETURN NEW;
     EXCEPTION WHEN OTHERS THEN
-      NEW.active = false;
+      NEW.ignore = true;
       RETURN NEW;
 END;
 $BODY$
@@ -34,14 +34,14 @@ $BODY$
 BEGIN
  IF (SELECT COUNT(*)
 	 FROM MEASURES
-	 WHERE pointid = NEW.pointid AND active = True) < 2
+	 WHERE pointid = NEW.pointid AND "measureIgnore" = False) < 2
  THEN
    UPDATE points
-     SET active = False
+     SET "pointIgnore" = True
 	 WHERE points.id = NEW.pointid;
  ELSE
    UPDATE points
-   SET active = True
+   SET "pointIgnore" = False
    WHERE points.id = NEW.pointid;
  END IF;
 
@@ -61,30 +61,7 @@ CREATE TRIGGER active_measure_changes
 EXECUTE PROCEDURE validate_points();
 """)
 
-latitudinal_srid = config['spatial']['latitudinal_srid']
-
-update_point_function = DDL("""
-CREATE OR REPLACE FUNCTION update_points()
-  RETURNS trigger AS
-$BODY$
-BEGIN
-    NEW.geom = ST_Force_2D(ST_Transform(NEW.adjusted, {}));
-    RETURN NEW;
-  EXCEPTION WHEN OTHERS THEN
-    raise notice 'FAILED TO PROJECT POINT';
-    NEW.geom = Null;
-    RETURN NEW;
-END;
-$BODY$
-
-LANGUAGE plpgsql VOLATILE -- Says the function is implemented in the plpgsql language; VOLATILE says the function has side effects.
-COST 100; -- Estimated execution cost of the function.
-""".format(latitudinal_srid))
-
-update_point_trigger = DDL("""
-CREATE TRIGGER point_inserted
-  BEFORE INSERT OR UPDATE
-  ON points
-  FOR EACH ROW
-EXECUTE PROCEDURE update_points();
-""")
+try:
+  latitudinal_srid = config['spatial']['latitudinal_srid']
+except:
+  latitudinal_srid = None

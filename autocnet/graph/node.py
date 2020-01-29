@@ -499,7 +499,7 @@ class NetworkNode(Node):
         super(NetworkNode, self).__init__(*args, **kwargs)
         # If this is the first time that the image is seen, add it to the DB
         if parent is None:
-            self.parent = Parent(config)
+            self.parent = Parent(config['database'])
         else:
             self.parent = parent
 
@@ -516,17 +516,19 @@ class NetworkNode(Node):
             kps = Keypoints(path=kpspath, nkeypoints=0)
             cam = self.create_camera()
             try:
-                fp = self.footprint
+                fp, cam_type = self.footprint
+
             except Exception as e:
                 warnings.warn('Unable to generate image footprint.\n{}'.format(e))
                 fp = None
             # Create the image
             i = Images(name=kwargs['image_name'],
                        path=kwargs['image_path'],
-                       footprint_latlon=fp,
+                       geom=fp,
                        keypoints=kps,
                        cameras=cam,
-                       serial=self.isis_serial)
+                       serial=self.isis_serial,
+                       cam_type=cam_type)
             session = Session()
             session.add(i)
             session.commit()
@@ -601,8 +603,7 @@ class NetworkNode(Node):
         Get the number of keypoints from the database
         """
         res = self._from_db(Keypoints)
-        nkps = res.nkeypoints
-        return nkps
+        return res.nkeypoints if res is not None else 0
 
     def create_camera(self):
         # Create the camera entry
@@ -657,7 +658,10 @@ class NetworkNode(Node):
             # get ISIS footprint if possible
             if utils.find_in_dict(self.geodata.metadata, "Polygon"):
                 footprint_latlon =  shapely.wkt.loads(self.geodata.footprint.ExportToWkt())
-                return footprint_latlon
+                if isinstance(footprint_latlon, shapely.geometry.Polygon):
+                    footprint_latlon = shapely.geometry.MultiPolygon(list(footprint_latlon))
+                cam_type = 'isis'
+                return footprint_latlon, cam_type
             # Get CSM footprint
             else:
                 boundary = generate_boundary(self.geodata.raster_size[::-1])  # yx to xy
@@ -669,7 +673,8 @@ class NetworkNode(Node):
 
                 footprint_latlon = generate_latlon_footprint(self.camera, boundary, dem=geodata)
                 footprint_latlon.FlattenTo2D()
-                return footprint_latlon
+                cam_type = 'csm'
+                return footprint_latlon, cam_type
         else:
             # in database, return footprint
             footprint_latlon = res.footprint_latlon

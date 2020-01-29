@@ -12,12 +12,12 @@ from unittest.mock import patch, PropertyMock, MagicMock
 def cnet():
     return pd.DataFrame.from_dict({
             'id' : [1],
-            'pointtype' : 2,
+            'pointType' : 2,
             'serialnumber' : ['BRUH'],
-            'jigsawRejected' : [False],
+            'measureJigsawRejected': [False],
             'sampleResidual' : [0.1],
-            'pointingore' : [False],
-            'pointjigsawRejected': [False],
+            'pointIgnore' : [False],
+            'pointJigsawRejected': [False],
             'lineResidual' : [0.1],
             'linesigma' : [0],
             'samplesigma': [0],
@@ -26,14 +26,14 @@ def cnet():
             'aprioriline' : [0],
             'line' : [1],
             'sample' : [2],
-            'ignore': [False],
+            'measureIgnore': [False],
             'adjustedX' : [0],
             'adjustedY' : [0],
             'adjustedZ' : [0],
             'aprioriX' : [0],
             'aprioriY' : [0],
             'aprioriZ' : [0],
-            'measuretype' : [1]
+            'measureType' : [1]
             })
 
 def test_creation():
@@ -50,5 +50,3 @@ def test_place_points_from_cnet(session, cnet, image_data, expected_npoints):
     resp = session.query(model.Points)
     assert len(resp.all()) == expected_npoints
     assert len(resp.all()) == cnet.shape[0]
-
-

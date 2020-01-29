@@ -859,9 +859,7 @@ class NetworkEdge(Edge):
         df.index.name = 'id'
         # Explicit close to get the session cleaned up
         session.close()
-        return DbDataFrame(df,
-                           parent=self,
-                           name='matches')
+        return DbDataFrame(df,  parent=self, name='matches')
 
     @matches.setter
     def matches(self, v):
@@ -919,7 +917,6 @@ class NetworkEdge(Edge):
         session.query(Matches).filter(Matches.source == self.source['node_id'], Matches.destination == self.destination['node_id']).delete()
         session.commit()
         session.close()
-        return
 
     @property
     def ring(self):
@@ -996,20 +993,20 @@ class NetworkEdge(Edge):
         session.close()
         return res
 
-    def network_to_matches(self, active_point=True, active_measure=True, rejected_jigsaw=False):
+    def network_to_matches(self, ignore_point=False, ignore_measure=False, rejected_jigsaw=False):
         """
         For the edge, take any points/measures that are in the database and
         convert them into matches on the associated edge.
 
         Parameters
         ----------
-        active_point : bool
-                       If True (default) only select the points that are
-                       currently set to active.
+        ignore_point : bool
+                       If False (default) only select the points that are
+                       not ignored (currently active).
 
-        active_measure : bool
-                         If True (default) only add the measures that are
-                         currently active
+        ignore_measure : bool
+                         If False (default) only add the measures that are
+                         not ignored (currently active).
 
         rejected_jigsaw : bool
                           If False (default) add any points that are not
@@ -1030,8 +1027,8 @@ class NetworkEdge(Edge):
                   Measures.line,
                   Measures.measuretype,
                   Measures.imageid).\
-            filter(Points.active==active_point,
-                   Measures.active==active_measure,
+            filter(Points.ignore==ignore_point,
+                   Measures.ignore==ignore_measure,
                    Measures.jigreject==rejected_jigsaw,
                    sqlalchemy.or_(Measures.imageid==source,
                                   Measures.imageid==destin)).join(Measures)

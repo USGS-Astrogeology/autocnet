@@ -1,8 +1,5 @@
-import datetime
 import enum
 import json
-
-import numpy as np
 
 import sqlalchemy
 from sqlalchemy.ext.declarative import declarative_base
@@ -20,7 +17,10 @@ from geoalchemy2.shape import from_shape, to_shape
 
 import osgeo
 import shapely
+from shapely.geometry import Point
 from autocnet import engine, Session, config
+from autocnet.transformation.spatial import reproject
+from autocnet.utils.serializers import JsonEncoder
 
 Base = declarative_base()
 
@@ -43,22 +43,6 @@ class BaseMixin(object):
         session.add_all(iterable)
         session.commit()
         session.close()
-
-class JsonEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, np.ndarray):
-            return obj.tolist()
-        if isinstance(obj, np.int64):
-            return int(obj)
-        if isinstance(obj, datetime.datetime):
-            return obj.__str__()
-        if isinstance(obj, bytes):
-            return obj.decode("utf-8")
-        if isinstance(obj, set):
-            return list(obj)
-        if isinstance(obj,  shapely.geometry.base.BaseGeometry):
-            return obj.wkt
-        return json.JSONEncoder.default(self, obj)
 
 class IntEnum(TypeDecorator):
     """
@@ -147,7 +131,7 @@ class Edges(BaseMixin, Base):
     destination = Column(Integer)
     ring = Column(ArrayType())
     fundamental = Column(ArrayType())
-    active = Column(Boolean)
+    ignore = Column(Boolean)
     masks = Column(Json())
 
 class Costs(BaseMixin, Base):
@@ -194,6 +178,7 @@ class Cameras(BaseMixin, Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     image_id = Column(Integer, ForeignKey("images.id", ondelete="CASCADE"), unique=True)
     camera = Column(Json())
+    camtype = Column(String)
 
 class Images(BaseMixin, Base):
     __tablename__ = 'images'
@@ -202,9 +187,10 @@ class Images(BaseMixin, Base):
     name = Column(String)
     path = Column(String)
     serial = Column(String, unique=True)
-    active = Column(Boolean, default=True)
-    _footprint_latlon = Column("footprint_latlon", Geometry('MultiPolygon', srid=latitudinal_srid, dimension=2, spatial_index=True))
+    ignore = Column(Boolean, default=False)
+    _geom = Column("geom", Geometry('MultiPolygon', srid=latitudinal_srid, dimension=2, spatial_index=True))
     footprint_bodyfixed = Column(Geometry('MULTIPOLYGON', dimension=2))
+    cam_type = Column(String)
     #footprint_bodyfixed = Column(Geometry('POLYGON',dimension=3))
 
     # Relationships
@@ -214,31 +200,31 @@ class Images(BaseMixin, Base):
 
     def __repr__(self):
         try:
-            footprint = to_shape(self.footprint_latlon).__geo_interface__
+            footprint = to_shape(self.geom).__geo_interface__
         except:
             footprint = None
         return json.dumps({'id':self.id,
                 'name':self.name,
                 'path':self.path,
-                'footprint_latlon':footprint,
+                'geom':footprint,
                 'footprint_bodyfixed':self.footprint_bodyfixed})
 
     @hybrid_property
-    def footprint_latlon(self):
+    def geom(self):
         try:
-            return to_shape(self._footprint_latlon)
+            return to_shape(self._geom)
         except:
-            return self._footprint_latlon
+            return self._geom
 
-    @footprint_latlon.setter
-    def footprint_latlon(self, geom):
-        if isinstance(geom, osgeo.ogr.Geometry):
+    @geom.setter
+    def geom(self, newgeom):
+        if isinstance(newgeom, osgeo.ogr.Geometry):
             # If an OGR geom, convert to shapely
-            geom = shapely.wkt.loads(geom.ExportToWkt())
-        if geom is None:
-            self._footprint_latlon = None
+            newgeom = shapely.wkt.loads(newgeom.ExportToWkt())
+        if newgeom is None:
+            self._geom = None
         else:
-            self._footprint_latlon = from_shape(geom, srid=latitudinal_srid)
+            self._geom = from_shape(newgeom, srid=latitudinal_srid)
 
 class Overlay(BaseMixin, Base):
     __tablename__ = 'overlay'
@@ -286,10 +272,11 @@ class PointType(enum.IntEnum):
 class Points(BaseMixin, Base):
     __tablename__ = 'points'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    _pointtype = Column("pointtype", IntEnum(PointType), nullable=False)  # 2, 3, 4 - Could be an enum in the future, map str to int in a decorator
+    _pointtype = Column("pointType", IntEnum(PointType), nullable=False)  # 2, 3, 4 - Could be an enum in the future, map str to int in a decorator
     identifier = Column(String, unique=True)
     _geom = Column("geom", Geometry('POINT', srid=latitudinal_srid, dimension=2, spatial_index=True))
-    active = Column(Boolean, default=True)
+    cam_type = Column(String)
+    ignore = Column("pointIgnore", Boolean, default=False)
     _apriori = Column("apriori", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
     _adjusted = Column("adjusted", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
     measures = relationship('Measures')
@@ -331,8 +318,13 @@ class Points(BaseMixin, Base):
     def adjusted(self, adjusted):
         if adjusted:
             self._adjusted = from_shape(adjusted, srid=rectangular_srid)
+            lat, lon, _ = reproject([adjusted.x, adjusted.y, adjusted.z],
+                                    spatial['semimajor_rad'], spatial['semiminor_rad'],
+                                    'geocent', 'latlon')
+            self._geom = from_shape(Point(lat, lon), latitudinal_srid)
         else:
             self._adjusted = adjusted
+            self._geom = None
 
     @hybrid_property
     def pointtype(self):
@@ -358,18 +350,19 @@ class Measures(BaseMixin, Base):
     id = Column(Integer,primary_key=True, autoincrement=True)
     pointid = Column(Integer, ForeignKey('points.id'), nullable=False)
     imageid = Column(Integer, ForeignKey('images.id'))
-    serial = Column(String, nullable=False)
-    _measuretype = Column("measuretype", IntEnum(MeasureType), nullable=False)  # [0,3]  # Enum as above
+    serial = Column("serialnumber", String, nullable=False)
+    _measuretype = Column("measureType", IntEnum(MeasureType), nullable=False)  # [0,3]  # Enum as above
     sample = Column(Float, nullable=False)
     line = Column(Float, nullable=False)
     sampler = Column(Float)  # Sample Residual
     liner = Column(Float)  # Line Residual
-    active = Column(Boolean, default=True)
-    jigreject = Column(Boolean, default=False)  # jigsaw rejected
+    ignore = Column("measureIgnore", Boolean, default=False)
+    jigreject = Column("measureJigsawRejected", Boolean, default=False)  # jigsaw rejected
     aprioriline = Column(Float)
     apriorisample = Column(Float)
     samplesigma = Column(Float)
     linesigma = Column(Float)
+    weight = Column(Float, default=1)
     rms = Column(Float)
 
     @hybrid_property
@@ -382,8 +375,9 @@ class Measures(BaseMixin, Base):
             v = MeasureType(v)
         self._measuretype = v
 
-if Session:
-    from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, update_point_function, update_point_trigger, valid_geom_function, valid_geom_trigger
+if isinstance(Session, sqlalchemy.orm.sessionmaker):
+    from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, valid_geom_function, valid_geom_trigger
+
     # Create the database
     if not database_exists(engine.url):
         create_database(engine.url, template='template_postgis')  # This is a hardcode to the local template
@@ -393,8 +387,6 @@ if Session:
     if not engine.dialect.has_table(engine, "points"):
         event.listen(Base.metadata, 'before_create', valid_point_function)
         event.listen(Measures.__table__, 'after_create', valid_point_trigger)
-        event.listen(Base.metadata, 'before_create', update_point_function)
-        event.listen(Points.__table__, 'after_create', update_point_trigger)
         event.listen(Base.metadata, 'before_create', valid_geom_function)
         event.listen(Images.__table__, 'after_create', valid_geom_trigger)
 

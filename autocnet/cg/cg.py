@@ -12,9 +12,38 @@ from scipy.spatial import Voronoi
 import shapely.geometry
 from shapely.geometry import Polygon, Point
 from shapely.affinity import scale
+from shapely import wkt
 
 from autocnet.utils import utils
+from autocnet import Session
 
+
+
+def two_point_extrapolate(x, xs, ys):
+    """
+
+    Parameters
+    ----------
+    x : float
+             point where you want corresponding y value
+
+    xs : ndarray
+             (1, 2) array of point x coordinates
+
+    ys : ndarray
+             (1, 2) array of point x coordinates
+
+    Returns
+    -------
+    y : float
+            extrapolated value associated with x
+
+    """
+
+    m = (ys[1]-ys[0])/(xs[1]-xs[0])
+    y = ys[0] + m*(x-xs[0])
+
+    return x, y
 
 def convex_hull_ratio(points, ideal_area):
     """
@@ -238,6 +267,57 @@ def nearest(pt, search):
     """
     return np.argmin(np.sum((search - pt)**2, axis=1))
 
+def find_side(side):
+    """
+    Parameters
+    ----------
+    side: str
+            describes which extrema you cube you want; can equal 'east' or 'west'
+
+    Returns
+    -------
+    lon : float
+            longitude
+
+    lat : float
+            latitude
+
+    """
+
+    side = side.lower()
+
+    func = {'east': 'st_xmax', 'west': 'st_xmin'}
+    func = func[side]
+    order = {'east': 'desc', 'west': 'asc'}
+    order = order[side]
+    query = f"""
+    select ST_AsText(geom) from images
+    order by {func}(geom) {order}
+    limit 1 """
+
+    session = Session()
+    geom = session.execute(query).first()
+    geom = wkt.loads(geom[0])
+    session.close()
+
+    #find eastern/wertern most side of east_geom/west_geom
+    fp = geom.minimum_rotated_rectangle
+    coords = np.column_stack(fp.exterior.xy)
+    fp_lon, fp_lat = zip(*coords)
+
+    # always a counter clockwise motion so find minimum/maximum lon index
+    # and use i and i+1 lat lons points as return value
+    if side == 'east':
+        i = np.argmax(fp_lon)
+        lon = fp_lon[i:i+2]
+        lat = fp_lat[i:i+2]
+    elif side == 'west':
+        i = np.argmin(fp_lon)
+        lon = fp_lon[i:i+2]
+        lat = fp_lat[i:i+2]
+
+    return np.array(lon), np.array(lat)
+
 def create_points_along_line(p1, p2, npts):
     """
     Compute a set of nodes equally spaced between
@@ -261,7 +341,7 @@ def create_points_along_line(p1, p2, npts):
     """
     # npts +2 since the endpoints are included in linspace
     # but this func clips them
-    return np.linspace(p1, p2, npts+2)[1:-1]
+    return np.linspace(p1, p2, npts+2)
 
 def xy_in_polygon(x,y, geom):
     """
@@ -317,15 +397,19 @@ def distribute_points(geom, nspts, ewpts):
     ur = coords[2]
     ul = coords[3]
 
-    # Find the points nearest the ul and ur
-    ul_actual = geom_coords[nearest(ul, geom_coords)]
-    ur_actual = geom_coords[nearest(ur, geom_coords)]
-    newtop = create_points_along_line(ul_actual, ur_actual, ewpts)
+    # Find the points nearest the ur and ll aligned // with eastern side of ground_poly
+    elon, elat = find_side('east')
+    ur_actual = np.array(two_point_extrapolate(ur[1], elat, elon))[::-1]
+    lr_actual = np.array(two_point_extrapolate(lr[1],elat, elon))[::-1]
 
-    # Find the points nearest the ll and lr
-    ll_actual = geom_coords[nearest(ll, geom_coords)]
-    lr_actual = geom_coords[nearest(lr, geom_coords)]
-    newbot = create_points_along_line(ll_actual, lr_actual, ewpts)
+    wlon, wlat = find_side('west')
+    ul_actual = np.array(two_point_extrapolate(ul[1], wlat, wlon))[::-1]
+    ll_actual = np.array(two_point_extrapolate(ll[1], wlat, wlon))[::-1]
+
+    dt = (ur_actual-ul_actual)*0.025 #some offset to make sure endpoints are within geom
+    db = (lr_actual-ll_actual)*0.025
+    newtop = create_points_along_line(ul_actual+dt, ur_actual-dt, ewpts)
+    newbot = create_points_along_line(ll_actual+db, lr_actual-db, ewpts)
 
     points = []
     for i in range(len(newtop)):

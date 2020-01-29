@@ -1,0 +1,65 @@
+#!/usr/bin/env python
+
+import copy
+import os
+import json
+import sys
+import warnings
+
+from redis import StrictRedis
+import yaml
+
+from autocnet.io.db.redis_queue import pop_computetime_push, finalize
+from autocnet.matcher import cross_instrument_matcher as cim
+from autocnet.io.db.model import Points, Measures
+from autocnet import Session
+
+#Load the config file
+try:
+    with open(os.environ['autocnet_config'], 'r') as f:
+        config = yaml.safe_load(f)
+except:
+    print("The 'autocnet_config' environment variable is not set.")
+    sys.exit(1)
+
+def main(msg, config):
+    print("Adding points using params:")
+    print(json.dumps(msg, indent=2))
+    
+    msg.pop('walltime', None)
+    msg.pop('max_time', None)
+    point_measures = cim.propagate_point(**msg)
+
+    print("Point Measures:")
+    print(point_measures)
+
+    point_record = point_measures[0]
+    p = Points()
+    p.pointtype = 3
+    p.apriori = point_record["point_ground"]
+    p.adjusted = point_record["point_ground"]
+
+    for m in point_measures:
+        p.measures.append(Measures(line=float(m['line']),
+                                   sample = float(m['sample']),
+                                   aprioriline = float(m['line']),
+                                   apriorisample = float(m['sample']),
+                                   imageid = int(m['imageid']),
+                                   serial = m['serial'],
+                                   measuretype=3))
+
+    print('Adding {} measures to the database.'.format(len(point_measures)))
+    Points.bulkadd([p])
+
+if __name__ == '__main__':
+    conf = config['redis']
+    queue = StrictRedis(host=conf['host'], port=conf['port'], db=0)
+
+    msg = pop_computetime_push(queue,
+                               conf['processing_queue'],
+                               conf['working_queue'])
+    if msg is None:
+        warnings.warn('Expected to process a cluster job, but the message queue is empty.')
+        sys.exit()
+
+    main(msg, config)

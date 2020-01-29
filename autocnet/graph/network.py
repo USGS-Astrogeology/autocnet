@@ -3,6 +3,7 @@ import itertools
 import json
 import math
 import os
+from shutil import copyfile
 from time import gmtime, strftime, time
 import warnings
 
@@ -15,11 +16,13 @@ from redis import StrictRedis
 import shapely.affinity
 import shapely.geometry
 import shapely.wkt as swkt
+import shapely.wkb as swkb
 import shapely.ops
+
 
 import pyproj
 
-from plio.io.io_controlnetwork import from_isis
+from plio.io.io_controlnetwork import to_isis, from_isis
 from plio.io import io_hdf, io_json
 from plio.utils import utils as io_utils
 from plio.io.io_gdal import GeoDataset
@@ -35,11 +38,12 @@ from autocnet.graph.edge import Edge, NetworkEdge
 from autocnet.graph.node import Node, NetworkNode
 from autocnet.io import network as io_network
 from autocnet.io.db.model import (Images, Keypoints, Matches, Cameras, Points,
-                                  Base, Overlay, Edges, Costs, Measures)
+                                  Base, Overlay, Edges, Costs, Measures, JsonEncoder)
 from autocnet.io.db.connection import new_connection, Parent
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
 from autocnet.spatial.overlap import compute_overlaps_sql
+from autocnet.spatial.isis import point_info
 
 #np.warnings.filterwarnings('ignore')
 
@@ -142,7 +146,7 @@ class CandidateGraph(nx.Graph):
         if sorted(self.nodes()) != sorted(other.nodes()):
             return False
         for node in self.nodes:
-            if not self.node[node] == other.node[node]:
+            if not self.nodes[node] == other.nodes[node]:
                 return False
         if sorted(self.edges()) != sorted(other.edges()):
             return False
@@ -291,7 +295,7 @@ class CandidateGraph(nx.Graph):
 
 
         """
-        return self.node[node_index]['data']['image_name']
+        return self.nodes[node_index]['data']['image_name']
 
     def get_matches(self, clean_keys=[]):
         matches = []
@@ -382,7 +386,7 @@ class CandidateGraph(nx.Graph):
             # Grab node ids & create edge obj
             s_id = self.graph["node_name_map"][u]
             d_id = self.graph["node_name_map"][v]
-            new_edge = Edge(self.node[s_id]["data"], self.node[d_id]["data"])
+            new_edge = Edge(self.nodes[s_id]["data"], self.nodes[d_id]["data"])
             # Prepare data for networkx
             u = s_id
             v = d_id
@@ -1133,11 +1137,6 @@ class CandidateGraph(nx.Graph):
             self, self.controlnetwork, **kwargs)
         return cc
 
-    def to_isis(self, outname, *args, **kwargs):
-        serials = self.serials()
-        files = self.files()
-        self.controlnetwork.to_isis(outname, serials, files, *args, **kwargs)
-
     def nodes_iter(self, data=False):
         for i, n in self.nodes.data('data'):
             if data:
@@ -1254,27 +1253,47 @@ class CandidateGraph(nx.Graph):
         """
         return self.controlnetwork.groupby('point_id').apply(lambda g: g if len(g) > 1 else None)
 
-    def to_isis(self, outname, serials, olist, *args, **kwargs):  # pragma: no cover
+
+    def to_isis(self, outname, flistpath=None, target="Mars"):  # pragma: no cover
         """
         Write the control network out to the ISIS3 control network format.
         """
+        df = self.controlnetwork
 
-        if self.validate_points().any() == True:
-            warnings.warn(
-                'Control Network is not ISIS3 compliant.  Please run the validate_points method on the control network.')
-            return
+        serials = [generate_serial_number(self.nodes[id_]["data"]["image_path"]) for id_ in df["image_index"]]
 
-        # Apply the subpixel shift
-        self.controlnetwork.x += self.controlnetwork.x_off
-        self.controlnetwork.y += self.controlnetwork.y_off
+        #create columns in the dataframe; zeros ensure plio (/protobuf) will
+        #ignore unless populated with alternate values
+        df['aprioriX'] = 0
+        df['aprioriY'] = 0
+        df['aprioriZ'] = 0
+        df['adjustedX'] = 0
+        df['adjustedY'] = 0
+        df['adjustedZ'] = 0
+        df['type'] = 3
+        df['measureType'] = 2
 
-        to_isis(outname + '.net', self.controlnetwork.query('valid == True'),
-                serials, *args, **kwargs)
-        write_filelist(olist, outname + '.lis')
+        df["serialnumber"] = serials
 
-        # Back out the subpixel shift
-        self.controlnetwork.x -= self.controlnetwork.x_off
-        self.controlnetwork.y -= self.controlnetwork.y_off
+        #only populate the new columns for ground points. Otherwise, isis will
+        #recalculate the control point lat/lon from control measures which where
+        #"massaged" by the phase and template matcher.
+        for i, group in df.groupby('point_id'):
+            zero_group = group.iloc[0]
+            apriori_geom = np.array(point_info(self.nodes[zero_group.image_index]['data'].geodata.file_name, zero_group.x, zero_group.y, 'image')['GroundPoint']['BodyFixedCoordinate'].value) * 1000
+            for j, row in group.iterrows():
+                row['aprioriX'] = apriori_geom[0]
+                row['aprioriY'] = apriori_geom[1]
+                row['aprioriZ'] = apriori_geom[2]
+                df.iloc[row.name] = row
+
+        if flistpath is None:
+            flistpath = os.path.splitext(outname)[0] + '.lis'
+
+        df = df.rename(columns={'image_index':'image_id','point_id':'id', 'type' : 'pointType',
+             'x':'sample', 'y':'line'})
+        cnet.to_isis(df, outname, targetname=target)
+        cnet.write_filelist(self.files, path=flistpath)
 
     def to_bal(self):
         """
@@ -1352,7 +1371,7 @@ class NetworkCandidateGraph(CandidateGraph):
         Parameters
         ----------
 
-        function : obj
+        function : string
                    The function to apply
 
         on : str
@@ -1382,6 +1401,9 @@ class NetworkCandidateGraph(CandidateGraph):
 
         res = []
 
+        if not isinstance(function, (str, bytes)):
+            raise TypeError('Function argument must be a string or bytes object.')
+
         for job_counter, elem in enumerate(onobj.data('data')):
             # Determine if we are working with an edge or a node
             if len(elem) > 2:
@@ -1401,13 +1423,14 @@ class NetworkCandidateGraph(CandidateGraph):
                     'image_path':image_path,
                     'param_step':1}
 
-            self.redis_queue.rpush(self.processing_queue, json.dumps(msg))
+            self.redis_queue.rpush(self.processing_queue, json.dumps(msg, cls=JsonEncoder))
 
         # SLURM is 1 based, while enumerate is 0 based
         job_counter += 1
 
         # Submit the jobs
         submitter = Slurm('acn_submit',
+                     job_name=function,
                      mem_per_cpu=config['cluster']['processing_memory'],
                      time=walltime,
                      partition=config['cluster']['queue'],
@@ -1445,10 +1468,33 @@ class NetworkCandidateGraph(CandidateGraph):
             n.generate_vrt(**kwargs)
 
     def to_isis(self, path, flistpath=None,sql = """
-SELECT points.id, measures.serial, points.pointtype, measures.sample, measures.line, measures.measuretype,
-measures.imageid
-FROM measures INNER JOIN points ON measures.pointid = points.id
-WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE;
+SELECT points.id,
+        points."pointType",
+        points."apriori",
+        points."adjusted",
+        points."pointIgnore",
+        measures."serialnumber",
+        measures."sample",
+        measures."line",
+        measures."measureType",
+        measures."imageid",
+        measures."measureIgnore",
+        measures."measureJigsawRejected",
+        measures."aprioriline",
+        measures."apriorisample"
+FROM measures
+INNER JOIN points ON measures."pointid" = points."id"
+WHERE
+    points."pointIgnore" = False AND
+    measures."measureIgnore" = FALSE AND
+    measures."measureJigsawRejected" = FALSE AND
+    measures."imageid" NOT IN
+        (SELECT measures."imageid"
+        FROM measures
+        INNER JOIN points ON measures."pointid" = points."id"
+        WHERE measures."measureIgnore" = False and measures."measureJigsawRejected" = False AND points."pointIgnore" = False
+        GROUP BY measures."imageid"
+        HAVING COUNT(DISTINCT measures."pointid")  < 3);
 """):
         """
         Given a set of points/measures in an autocnet database, generate an ISIS
@@ -1469,15 +1515,45 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
               The sql query to execute in the database.
 
         """
+
         df = pd.read_sql(sql, engine)
-        df.rename(columns={'imageid':'image_index','id':'point_id', 'pointtype' : 'type',
-            'sample':'x', 'line':'y', 'serial': 'serialnumber'}, inplace=True)
+
+        #create columns in the dataframe; zeros ensure plio (/protobuf) will
+        #ignore unless populated with alternate values
+        df['aprioriX'] = 0
+        df['aprioriY'] = 0
+        df['aprioriZ'] = 0
+        df['adjustedX'] = 0
+        df['adjustedY'] = 0
+        df['adjustedZ'] = 0
+
+        #only populate the new columns for ground points. Otherwise, isis will
+        #recalculate the control point lat/lon from control measures which where
+        #"massaged" by the phase and template matcher.
+        for i, row in df.iterrows():
+            if row['pointType'] == 3 or row['pointType'] == 4:
+                apriori_geom = swkb.loads(row['apriori'], hex=True)
+                row['aprioriX'] = apriori_geom.x
+                row['aprioriY'] = apriori_geom.y
+                row['aprioriZ'] = apriori_geom.z
+                adjusted_geom = swkb.loads(row['adjusted'], hex=True)
+                row['adjustedX'] = adjusted_geom.x
+                row['adjustedY'] = adjusted_geom.y
+                row['adjustedZ'] = adjusted_geom.z
+                df.iloc[i] = row
+
         if flistpath is None:
             flistpath = os.path.splitext(path)[0] + '.lis'
         target = config['spatial'].get('target', None)
 
+        ids = df['imageid'].unique()
+        fpaths = [self.nodes[i]['data']['image_path'] for i in ids]
+        for f in self.files:
+            if f not in fpaths:
+                warnings.warn(f'{f} in candidate graph but not in output network.')
+
         cnet.to_isis(df, path, targetname=target)
-        cnet.write_filelist(self.files, path=flistpath)
+        cnet.write_filelist(fpaths, path=flistpath)
 
     @staticmethod
     def update_from_jigsaw(session, path):
@@ -1492,10 +1568,8 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         """
         # Ingest isis control net as a df and do some massaging
         data = cnet.from_isis(path)
-        data['jigsawFullRejected'] = data['pointJigsawRejected'] | data['jigsawRejected']
-        data_to_update = data[['id', 'serialnumber', 'jigsawFullRejected', 'sampleResidual', 'lineResidual', 'samplesigma', 'linesigma', 'adjustedCovar', 'apriorisample', 'aprioriline']]
-        data_to_update = data_to_update.rename(columns = {'serialnumber': 'serial', 'jigsawFullRejected': 'jigreject', 'sampleResidual': 'sampler', 'lineResidual': 'liner', 'adjustedCovar': 'covar'})
-        data_to_update['covar'] = data_to_update['covar'].apply(lambda row : list(row))
+        data_to_update = data[['id', 'serialnumber', 'measureJigsawRejected', 'sampleResidual', 'lineResidual', 'samplesigma', 'linesigma', 'adjustedCovar', 'apriorisample', 'aprioriline']]
+        data_to_update['adjustedCovar'] = data_to_update['adjustedCovar'].apply(lambda row : list(row))
         data_to_update['id'] = data_to_update['id'].apply(lambda row : int(row))
 
         # Generate a temp table, update the real table, then drop the temp table
@@ -1503,9 +1577,9 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
 
         sql = """
         UPDATE measures AS f
-        SET jigreject = t.jigreject, sampler = t.sampler, liner = t.liner, samplesigma = t.samplesigma, linesigma = t.linesigma, apriorisample = t.apriorisample, aprioriline = t.aprioriline
+        SET "measureJigsawRejected" = t."measureJigsawRejected", sampler = t."sampleResidual", liner = t."lineResidual", samplesigma = t."samplesigma", linesigma = t."linesigma", apriorisample = t."apriorisample", aprioriline = t."aprioriline"
         FROM temp_measures AS t
-        WHERE f.serial = t.serial AND f.pointid = t.id;
+        WHERE f.serialnumber = t.serialnumber AND f.pointid = t.id;
 
         DROP TABLE temp_measures;
         """
@@ -1514,7 +1588,7 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         session.commit()
 
     @classmethod
-    def from_filelist(cls, filelist):
+    def from_filelist(cls, filelist, clear_db=False):
         """
         Parse a filelist to add nodes to the database. Using the
         information in the database, then instantiate a complete,
@@ -1539,9 +1613,14 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         else:
             warnings.warn('Unable to parse the passed filelist')
 
-        for f in filelist:
+        if clear_db:
+            cls.clear_db()
+
+        total=len(filelist)
+        for cnt, f in enumerate(filelist):
             # Create the nodes in the graph. Really, this is creating the
             # images in the DB
+            print('loading {} of {}'.format(cnt+1, total))
             image_name = os.path.basename(f)
             NetworkNode(image_path=f, image_name=image_name)
 
@@ -1549,6 +1628,109 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         # Execute the computation to compute overlapping geometries
         obj._execute_sql(compute_overlaps_sql)
 
+        return obj
+
+    def copy_images(self, newdir):
+        """
+        Copy images from a given directory into a new directory and
+        update the 'path' column in the Images table.
+
+        Parameters
+        ----------
+        newdir : str
+                 The full output PATH where the images are to be copied to.
+        """
+        if not os.path.exists(newdir):
+            os.makedirs(newdir)
+
+        session = Session()
+        images = session.query(Images).all()
+        oldnew = []
+        for obj in images:
+            oldpath = obj.path
+            filename = os.path.basename(oldpath)
+            obj.path = os.path.join(newdir, filename)
+            oldnew.append((oldpath, obj.path))
+        session.commit()
+        session.close()
+
+        # Copy the files
+        [copyfile(old, new) for old, new in oldnew]
+
+    @classmethod
+    def from_remote_database(cls, source_db_config, path,  query_string='SELECT * FROM public.images LIMIT 10'):
+        """
+        This is a constructor that takes an existing database containing images and sensors,
+        copies the selected rows into the project specified in the autocnet_config variable,
+        and instantiates a new NetworkCandidateGraph object. This method is
+        similar to the `from_database` method. The main difference is that this
+        method assumes that the image and sensor rows are prepopulated in an external db
+        and simply copies those entires into the currently speficied project.
+
+        Currently, this method does NOT check for duplicate serial numbers during the
+        bulk add. Therefore multiple runs of this method on the same database will fail.
+
+        Parameters
+        ----------
+        source_db_config : dict
+                           In the form: {'username':'somename',
+                                         'password':'somepassword',
+                                         'host':'somehost',
+                                         'pgbouncer_port':6543,
+                                         'name':'somename'}
+
+        path : str
+               The PATH to which images in the database specified in the config
+               will be copied to. This method duplicates the data and copies it
+               to a user defined PATH to avoid issues with updating image ephemeris
+               across projects.
+
+        query_string : str
+                       An optional string to select a subset of the images in the
+                       database specified in the config.
+
+        Returns
+        -------
+        obj : obj
+              A network candidate graph.
+
+        Example
+        -------
+        >>> source_db_config = {'username':'jay',
+        'password':'abcde',
+        'host':'autocnet.wr.usgs.gov',
+        'pgbouncer_port':5432,
+        'name':'ctx'}
+        >>> geom = 'LINESTRING(145 10, 145 11, 146 11, 146 10, 145 10)'
+        >>> srid = 949900
+        >>> outpath = '/scratch/jlaura/fromdb'
+        >>> query = f"SELECT * FROM Images WHERE ST_INTERSECTS(geom, ST_Polygon(ST_GeomFromText('{geom}'), {srid})) = TRUE"
+        >>> ncg = NetworkCandidateGraph.from_remote_database(source_db_config, outpath, query_string=query)
+        """
+
+        sourceSession, _ = new_connection(source_db_config)
+        sourcesession = sourceSession()
+
+        sourceimages = sourcesession.execute(query_string).fetchall()
+
+        destinationsession = Session()
+        destinationsession.execute(Images.__table__.insert(), sourceimages)
+
+        # Get the camera objects to manually join. Keeps the caller from
+        # having to remember to bring cameras as well.
+        ids = [i[0] for i in sourceimages]
+        #cameras = sourcesession.query(Cameras).filter(Cameras.image_id.in_(ids)).all()
+        #for c in cameras:
+        #    destinationsession.merge(c)
+
+        destinationsession.commit()
+        destinationsession.close()
+        sourcesession.close()
+
+        # Create the graph, copy the images, and compute the overlaps
+        obj = cls.from_database()
+        obj.copy_images(path)
+        obj._execute_sql(compute_overlaps_sql)
         return obj
 
     @classmethod
@@ -1571,11 +1753,11 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         ## Spatial Query
         This example selects those images that intersect a given bounding polygon.  The polygon is
         specified as a Well Known Text LINESTRING with the first and last points being the same.
-        The query says, select the footprint_latlon (the bounding polygons in the database) that
+        The query says, select the geom (the bounding polygons in the database) that
         intersect the user provided polygon (the LINESTRING) in the given spatial reference system
         (SRID), 949900.
 
-        SELECT * FROM Images WHERE ST_INTERSECTS(footprint_latlon, ST_Polygon(ST_GeomFromText('LINESTRING(159 10, 159 11, 160 11, 160 10, 159 10)'),949900)) = TRUE
+        SELECT * FROM Images WHERE ST_INTERSECTS(geom, ST_Polygon(ST_GeomFromText('LINESTRING(159 10, 159 11, 160 11, 160 10, 159 10)'),949900)) = TRUE
 
         ## Select from a specific orbit
         This example selects those images that are from a particular orbit. In this case,
@@ -1588,7 +1770,7 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         composite_query = '''WITH i as ({}) SELECT i1.id
         as i1_id,i1.path as i1_path, i2.id as i2_id, i2.path as i2_path
         FROM i  as i1, i as i2
-        WHERE ST_INTERSECTS(i1.footprint_latlon, i2.footprint_latlon) = TRUE
+        WHERE ST_INTERSECTS(i1.geom, i2.geom) = TRUE
         AND i1.id < i2.id'''.format(query_string)
 
         session = Session()
@@ -1609,7 +1791,8 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
 
         return obj
 
-    def clear_db(self, tables=None):
+    @staticmethod
+    def clear_db(tables=None):
         """
         Truncate all of the database tables and reset any
         autoincrement columns to start with 1.
@@ -1645,21 +1828,6 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         if isinstance(cnet, str):
             cnet = from_isis(cnet)
 
-        # rename some columns
-        newcols = []
-        for i, c in enumerate(cnet.columns):
-            if i == 1:
-                newcols.append('pointtype')
-            elif i == 5:
-                newcols.append('pointignore')
-            elif i == 6:
-                newcols.append('pointjigsawRejected')
-            elif i == 25:
-                newcols.append('measuretype')
-            else:
-                newcols.append(c)
-        cnet.columns = newcols
-
         cnetpoints = cnet.groupby('id')
         points = []
         session = Session()
@@ -1669,14 +1837,14 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
                 res = session.query(Images).filter(Images.serial == row.serialnumber).one()
                 return Measures(pointid=id,
                          imageid=int(res.id), # Need to grab this
-                         measuretype=int(row.measuretype),
+                         measuretype=int(row.measureType),
                          serial=row.serialnumber,
                          sample=float(row['sample']),
                          line=float(row['line']),
                          sampler=float(row.sampleResidual),
                          liner=float(row.lineResidual),
-                         active=not row.ignore, # active = ~ignored
-                         jigreject=row.jigsawRejected,
+                         ignore=row.measureIgnore,
+                         jigreject=row.measureJigsawRejected,
                          aprioriline=float(row.aprioriline),
                          apriorisample=float(row.apriorisample),
                          linesigma=float(row.linesigma),
@@ -1689,10 +1857,10 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
             lon, lat, alt = pyproj.transform(ecef, lla, x, y, z)
 
             point = Points(identifier=id,
-                           active=not row.pointignore, # active = ~ignored
+                           ignore=row.pointIgnore,
                            apriori= shapely.geometry.Point(float(row.aprioriX), float(row.aprioriY), float(row.aprioriZ)),
                            adjusted= shapely.geometry.Point(float(row.adjustedX),float(row.adjustedY),float(row.adjustedZ)),
-                           pointtype=float(row.pointtype))
+                           pointtype=float(row.pointType))
 
             point.measures = list(measures)
             points.append(point)
@@ -1708,3 +1876,33 @@ WHERE points.active = True AND measures.active=TRUE AND measures.jigreject=FALSE
         networkobj = cls.from_filelist(filelist)
         networkobj.place_points_from_cnet(cnet)
         return networkobj
+
+    @property
+    def measures(self):
+        df = pd.read_sql_table('measures', con=engine)
+        return df
+
+    @property
+    def queue_length(self):
+        """
+        Returns the length of the processing queue. Jobs are left on the
+        queue if a cluster job is cancelled. Those cancelled jobs are then
+        called on next cluster job launch, causing failures. This method provides
+        a quick check for left over jobs.
+        """
+        conf = config['redis']
+        queue = StrictRedis(host=conf['host'],
+                            port=conf['port'])
+        llen = queue.llen(conf['processing_queue'])
+        return llen
+
+    @staticmethod
+    def queue_flushdb():
+        """
+        Clear the processing queue of any left over jobs from a previous cluster
+        job cancellation or hanging jobs.
+        """
+        conf = config['redis']
+        queue = StrictRedis(host=conf['host'],
+                            port=conf['port'])
+        queue.flushdb()
