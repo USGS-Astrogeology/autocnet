@@ -3,6 +3,8 @@ import warnings
 import numpy as np
 import pandas as pd
 
+import cv2
+
 FLANN_INDEX_KDTREE = 1  # Algorithm to set centers,
 DEFAULT_FLANN_PARAMETERS = dict(algorithm=FLANN_INDEX_KDTREE, trees=3)
 
@@ -84,7 +86,16 @@ def match(edge, k=2, **kwargs):
     # Swap the indices since mono_matches is generic and source/destin are
     # swapped
     mono_matches(edge.destination, edge.source, aidx=bidx, bidx=aidx)
+
+    source_keypoints = edge.source.keypoints[['x', 'y']]
+    source_keypoints.rename(columns={'x': 'source_x', 'y': 'source_y'}, inplace=True)
+    edge.matches = edge.matches.join(source_keypoints, 'source_idx')
+
+    destination_keypoints = edge.destination.keypoints[['x', 'y']]
+    destination_keypoints.rename(columns={'x': 'destination_x', 'y': 'destination_y'}, inplace=True)
+    edge.matches = edge.matches.join(destination_keypoints, 'destination_idx')
     edge.matches.sort_values(by=['distance'])
+
 
 
 class FlannMatcher(object):

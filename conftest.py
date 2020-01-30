@@ -50,9 +50,9 @@ def candidategraph(node_a, node_b, node_c):
     cg.get_matches = MagicMock(return_value=matches)
 
     # Mock in the node objects onto the candidate graph
-    cg.node[0]['data'] = node_a
-    cg.node[1]['data'] = node_b
-    cg.node[2]['data'] = node_c
+    cg.nodes[0]['data'] = node_a
+    cg.nodes[1]['data'] = node_b
+    cg.nodes[2]['data'] = node_c
 
     return cg
 
