@@ -341,7 +341,7 @@ def create_points_along_line(p1, p2, npts):
     """
     # npts +2 since the endpoints are included in linspace
     # but this func clips them
-    return np.linspace(p1, p2, npts+2)
+    return np.linspace(p1, p2, npts+2)[1:-1]
 
 def xy_in_polygon(x,y, geom):
     """
