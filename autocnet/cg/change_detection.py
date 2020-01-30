@@ -1,4 +1,3 @@
-
 import numpy as np
 from matplotlib.path import Path
 from shapely.geometry import Point, MultiPoint
@@ -18,9 +17,9 @@ def image_diff(arr1, arr2):
     return bdiff
 
 
-def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", extractor_kwargs={"nfeatures": 2000, "scaleFactor": 1.1, "nlevels": 1}, image_func=image_diff):
-    arr1 = image1.read_array()
-    arr2 = image2.read_array()
+def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", extractor_kwargs={"nfeatures": 2000, "scaleFactor": 1.1, "nlevels": 1}, cluster_params={"min_samples": 10, "max_eps": 20, "eps": .3, "xi":.5},  image_func=image_diff):
+    arr1 = byte_scale(image1.read_array())
+    arr2 = byte_scale(image2.read_array())
     arr1[arr1 == arr1.min()] = np.nan
     arr2[arr2 == arr2.min()] = np.nan
 
@@ -31,7 +30,7 @@ def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", extracto
 
     points = [Point(xval, yval) for xval,yval in zip(x,y)]
 
-    optics = OPTICS(min_samples=10, max_eps=20,  eps=.3, p=2, xi=.5).fit(list(zip(x,y)))
+    optics = OPTICS(**cluster_params).fit(list(zip(x,y)))
 
     classes = gpd.GeoDataFrame(columns=["label", "point"], geometry="point")
     classes["label"] = optics.labels_
