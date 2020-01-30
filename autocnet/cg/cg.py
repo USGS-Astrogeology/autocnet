@@ -363,7 +363,68 @@ def xy_in_polygon(x,y, geom):
     """
     return geom.contains(Point(x, y))
 
-def distribute_points(geom, nspts, ewpts):
+
+def distribute_points_classic(geom, nspts, ewpts):
+    """
+    This is a decision tree that attempts to perform a
+    very simplistic approximation of the shape
+    of the geometry and then place some number of
+    north/south and east/west points into the geometry.
+
+    Parameters
+    ----------
+    geom : shapely.geom
+           A shapely geometry object
+
+    nspts : int
+            The number of points to attempt to place
+            in the N/S (up/down) direction
+
+    ewpts : int
+            The number of points to attempt to place
+            in the E/W (right/left) direction
+
+    Returns
+    -------
+    valid : list
+            of point coordinates in the form [(x1,y1), (x2,y2), ..., (xn, yn)]
+    """
+    geom_coords = np.column_stack(geom.exterior.xy)
+
+    coords = np.array(list(zip(*geom.envelope.exterior.xy))[:-1])
+
+    ll = coords[0]
+    lr = coords[1]
+    ur = coords[2]
+    ul = coords[3]
+
+    # Find the points nearest the ul and ur
+    ul_actual = geom_coords[nearest(ul, geom_coords)]
+    ur_actual = geom_coords[nearest(ur, geom_coords)]
+    newtop = create_points_along_line(ul_actual, ur_actual, ewpts)
+
+    # Find the points nearest the ll and lr
+    ll_actual = geom_coords[nearest(ll, geom_coords)]
+    lr_actual = geom_coords[nearest(lr, geom_coords)]
+    newbot = create_points_along_line(ll_actual, lr_actual, ewpts)
+
+    points = []
+    for i in range(len(newtop)):
+        top = newtop[i]
+        bot = newbot[i]
+
+        line_of_points = create_points_along_line(top, bot, nspts)
+        points.append(line_of_points)
+
+    if len(points) < 1:
+        return []
+
+    points = np.vstack(points)
+    # Perform a spatial intersection check to eject points that are not valid
+    valid = [p for p in points if xy_in_polygon(p[0], p[1], geom)]
+    return valid
+
+def distribute_points_new(geom, nspts, ewpts):
     """
     This is a decision tree that attempts to perform a
     very simplistic approximation of the shape
@@ -427,7 +488,7 @@ def distribute_points(geom, nspts, ewpts):
     valid = [p for p in points if xy_in_polygon(p[0], p[1], geom)]
     return valid
 
-def distribute_points_in_geom(geom,
+def distribute_points_in_geom(geom, method="classic",
                               nspts_func=lambda x: ceil(round(x,1)*10),
                               ewpts_func=lambda x: ceil(round(x,1)*5)):
     """
@@ -463,6 +524,14 @@ def distribute_points_in_geom(geom,
             of valid points in the form (x,y) or (lon,lat)
 
     """
+
+    point_funcs = {
+        "classic" :  distribute_points_classic,
+        "new" : distribute_points_new
+    }
+
+    point_distribution_func = point_funcs[method]
+
     coords = list(zip(*geom.envelope.exterior.xy))
     short = np.inf
     long = -np.inf
@@ -502,7 +571,7 @@ def distribute_points_in_geom(geom,
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
-            valid = distribute_points(geom, nspts, ewpts)
+            valid = point_distribution_func(geom, nspts, ewpts)
     elif ew == True:
         # Since this is an LS, we should place these diagonally from the 'lower left' to the 'upper right'
         nspts = ewpts_func(short)
@@ -510,7 +579,7 @@ def distribute_points_in_geom(geom,
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
-            valid = distribute_points(geom, nspts, ewpts)
+            valid = point_distribution_func(geom, nspts, ewpts)
     else:
         print('WTF Willy')
     return valid
