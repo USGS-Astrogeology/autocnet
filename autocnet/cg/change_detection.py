@@ -70,4 +70,3 @@ def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", extracto
 
      return polys, weights, bdiff
 
-
