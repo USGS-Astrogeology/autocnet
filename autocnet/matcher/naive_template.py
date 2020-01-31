@@ -44,8 +44,12 @@ def pattern_match(template, image, upsampling=16, func=cv2.TM_CCORR_NORMED, erro
         raise ValueError
 
     # Fit a 3rd order polynomial to upsample the images
-    u_template = zoom(template, upsampling, order=3)
-    u_image = zoom(image, upsampling, order=3)
+    if upsampling != 1:
+        u_template = zoom(template, upsampling, order=3)
+        u_image = zoom(image, upsampling, order=3)
+    else:
+        u_template = template
+        u_image = image
 
     result = cv2.matchTemplate(u_image, u_template, method=func)
     _, max_corr, min_loc, max_loc = cv2.minMaxLoc(result)
@@ -64,5 +68,5 @@ def pattern_match(template, image, upsampling=16, func=cv2.TM_CCORR_NORMED, erro
     x += (u_template.shape[1] / 2)
 
     x = (x - ideal_x) / upsampling
-    y = (ideal_y - y) / upsampling
+    y = (y - ideal_y) / upsampling
     return x, y, max_corr

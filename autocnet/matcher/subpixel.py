@@ -360,8 +360,8 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
         except:
             return None, None, None
         # Apply the shift to d_search and compute the new correspondence location
-        dx += (shift_x + dxr)
-        dy += (shift_y + dyr)
+        dx += shift_x  # The implementation already applies the dxr, dyr shifts
+        dy += shift_y 
 
         # Break if the solution has converged
         size = (size[0] - reduction, size[1] - reduction)
