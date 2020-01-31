@@ -67,7 +67,7 @@ def test_subpixel_template(apollo_subsets):
     
     assert strength >= 0.99
     assert nx == 50.9375
-    assert ny == 48.9375
+    assert ny == 53.0625
 
 @pytest.mark.parametrize("convergence_threshold, expected", [(1.0, (None, None, None)),
                                                              (2.0, (50.49, 52.44, (0.039507, -9.5e-20)))])

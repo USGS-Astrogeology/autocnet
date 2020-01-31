@@ -49,7 +49,7 @@ class TestNaiveTemplate(unittest.TestCase):
                                                                            self._test_image, upsampling=1)
         # Test offsets
         self.assertEqual(result_x, -3)
-        self.assertEqual(result_y, 3)
+        self.assertEqual(result_y, -3)
         # Test Correlation Strength: At least 0.8
         self.assertGreaterEqual(result_strength, 0.8, "Returned Correlation Strength of %d" % result_strength)
 
@@ -58,7 +58,7 @@ class TestNaiveTemplate(unittest.TestCase):
                                                                            self._test_image, upsampling=1)
         # Test offsets
         self.assertEqual(result_x, 3)
-        self.assertEqual(result_y, -4)
+        self.assertEqual(result_y, 4)
         # Test Correlation Strength: At least 0.8
         self.assertGreaterEqual(result_strength, 0.8, "Returned Correlation Strength of %d" % result_strength)
 
@@ -67,7 +67,7 @@ class TestNaiveTemplate(unittest.TestCase):
                                                                            self._test_image, upsampling=1)
         # Test offsets
         self.assertEqual(result_x, -2)
-        self.assertEqual(result_y, -4)
+        self.assertEqual(result_y, 4)
         # Test Correlation Strength: At least 0.8
         self.assertGreaterEqual(result_strength, 0.8, "Returned Correlation Strength of %d" % result_strength)
 
