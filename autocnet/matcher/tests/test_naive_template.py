@@ -76,7 +76,7 @@ class TestNaiveTemplate(unittest.TestCase):
                                                                            self._test_image, upsampling=1)
         # Test offsets
         self.assertEqual(result_x, 3)
-        self.assertEqual(result_y, 5)
+        self.assertEqual(result_y, -5)
         # Test Correlation Strength: At least 0.8
         self.assertGreaterEqual(result_strength, 0.8, "Returned Correlation Strength of %d" % result_strength)
 
