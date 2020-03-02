@@ -165,7 +165,7 @@ def subpixel_phase(template, search, **kwargs):
     (y_shift, x_shift), error, diffphase = register_translation(search, template, **kwargs)
     return x_shift, y_shift, (error, diffphase)
 
-def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), template_size=(51,51), method=pattern_match_autoreg, **kwargs):
+def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), template_size=(51,51),  **kwargs):
     """
     Uses a pattern-matcher on subsets of two images determined from the passed-in keypoints and optional sizes to
     compute an x and y offset from the search keypoint to the template keypoint and an associated strength.
