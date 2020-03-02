@@ -2,6 +2,7 @@ import warnings
 import json
 
 from redis import StrictRedis
+import numpy as np
 import pyproj
 import shapely
 import sqlalchemy
@@ -11,6 +12,9 @@ from autocnet import config, dem, Session
 from autocnet.cg import cg as compgeom
 from autocnet.io.db.model import Images, Measures, Overlay, Points, JsonEncoder
 from autocnet.spatial import isis
+
+from autocnet.matcher.subpixel import clip_roi
+from autocnet.matcher.cpu_extractor import extract_features
 
 from plurmy import Slurm
 import csmapi
@@ -164,8 +168,37 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
     for v in valid:
         lon = v[0]
         lat = v[1]
+        
         # Calculate the height, the distance (in meters) above or
         # below the aeroid (meters above or below the BCBF spheroid).
+        if dem is None:
+            height = 0
+        else:
+            px, py = dem.latlon_to_pixel(lat, lon)
+            height = dem.read_array(1, [px, py, 1, 1])[0][0]
+
+        node = nodes[0]
+        if cam_type == "isis":
+            line, sample = isis.ground_to_image(node["image_path"], lon ,lat)
+
+        # Extract ORB features in a sub-image around the desired point
+        size = 71
+        image, _, _ = clip_roi(node.geodata, sample, line, size_x=size, size_y=size)
+        kps, desc = extract_features(image, extractor_method='orb', extractor_parameters = {'nfeatures':10})
+        
+        # Naively assume that the maximum variance is the most unique feature
+        vari = np.var(desc, axis=1)
+        interesting = kps.iloc[np.argmax(vari)] 
+
+        # kps are in the image space with upper left origin, so convert to 
+        # center origin and then convert back into full image space
+        newsample = sample + (interesting.x - size) 
+        newline = line + (interesting.y - size)
+        
+        # Get the updated lat/lon from the feature in the node
+        lat, lon = isis.image_to_ground(node["image_path"], newsample, newline)
+
+        # Get the new DEM height
         if dem is None:
             height = 0
         else:
