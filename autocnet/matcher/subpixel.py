@@ -395,7 +395,7 @@ def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_tem
 
     new_template_x, new_template_y, template_metric = subpixel_template(source.sample,
                                                             source.line,
-                                                            detination.sample,
+                                                            destination.sample,
                                                             destination.line,
                                                             source_node.geodata,
                                                             destination_node.geodata,
