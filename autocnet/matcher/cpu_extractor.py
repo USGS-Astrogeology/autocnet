@@ -59,7 +59,8 @@ def extract_features(array, extractor_method='sift', extractor_parameters={}):
     if  extractor_method == 'vlfeat':
         keypoint_objs, descriptors  = vl.sift.sift(array,
                                                    compute_descriptor=True,
-                                                   float_descriptors=True)
+                                                   float_descriptors=True,
+                                                   **extractor_parameters)
         # Swap columns for value style access, vl_feat returns y, x
         keypoint_objs[:, 0], keypoint_objs[:, 1] = keypoint_objs[:, 1], keypoint_objs[:, 0].copy()
         keypoints = pd.DataFrame(keypoint_objs, columns=['x', 'y', 'size', 'angle'])
