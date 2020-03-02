@@ -7,7 +7,7 @@ from redis import StrictRedis
 from plurmy import Slurm
 
 from autocnet import Session, config
-from autocnet.matcher import naive_template
+from autocnet.matcher.naive_template import pattern_match, pattern_match_autoreg
 from autocnet.matcher import ciratefi
 from autocnet.io.db.model import Measures, Points, Images, JsonEncoder
 from autocnet.graph.node import NetworkNode
@@ -165,7 +165,7 @@ def subpixel_phase(template, search, **kwargs):
     (y_shift, x_shift), error, diffphase = register_translation(search, template, **kwargs)
     return x_shift, y_shift, (error, diffphase)
 
-def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), template_size=(51,51), **kwargs):
+def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), template_size=(51,51), method=pattern_match_autoreg, **kwargs):
     """
     Uses a pattern-matcher on subsets of two images determined from the passed-in keypoints and optional sizes to
     compute an x and y offset from the search keypoint to the template keypoint and an associated strength.
@@ -212,6 +212,7 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), templ
     See Also
     --------
     autocnet.matcher.naive_template.pattern_match : for the kwargs that can be passed to the matcher
+    autocnet.matcher.naive_template.pattern_match_autoreg : for the jwargs that can be passed to the autoreg style matcher
     """
 
     image_size = check_image_size(image_size)
@@ -223,7 +224,7 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), templ
     if (s_image is None) or (d_template is None):
         return None, None, None
 
-    shift_x, shift_y, metrics = naive_template.pattern_match(d_template, s_image, **kwargs)
+    shift_x, shift_y, metrics = method(d_template, s_image, **kwargs)
 
     dx = (dx - shift_x + dxr)
     dy = (dy - shift_y + dyr)
@@ -392,26 +393,26 @@ def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_tem
     res = session.query(Images).filter(Images.id == sourceid).one()
     source_node = NetworkNode(node_id=sourceid, image_path=res.path)
 
-    new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample,
-                                                                source.line,
-                                                                destination.sample,
-                                                                destination.line,
-                                                                source_node.geodata,
-                                                                destination_node.geodata,
-                                                                **iterative_phase_kwargs)
-    if new_phase_x == None:
-        destination.ignore = True # Unable to phase match
-        return
-
     new_template_x, new_template_y, template_metric = subpixel_template(source.sample,
                                                             source.line,
-                                                            new_phase_x,
-                                                            new_phase_y,
+                                                            detination.sample,
+                                                            destination.line,
                                                             source_node.geodata,
                                                             destination_node.geodata,
                                                             **subpixel_template_kwargs)
     if new_template_x == None:
         destination.ignore = True # Unable to template match
+        return
+
+    new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample,
+                                                                source.line,
+                                                                new_template_x,
+                                                                new_template_y,
+                                                                source_node.geodata,
+                                                                destination_node.geodata,
+                                                                **iterative_phase_kwargs)
+    if new_phase_x == None:
+        destination.ignore = True # Unable to phase match
         return
 
     dist = np.linalg.norm([new_phase_x-new_template_x, new_phase_y-new_template_y])
