@@ -177,9 +177,16 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
             px, py = dem.latlon_to_pixel(lat, lon)
             height = dem.read_array(1, [px, py, 1, 1])[0][0]
 
+        # Need to get the first node and then convert from lat/lon to image space
         node = nodes[0]
         if cam_type == "isis":
             line, sample = isis.ground_to_image(node["image_path"], lon ,lat)
+        if cam_type == "csm":
+            # The CSM conversion makes the LLA/ECEF conversion explicit
+            x, y, z = pyproj.transform(lla, ecef, lon, lat, height)
+            gnd = csmapi.EcefCoord(x, y, z)
+            image_coord = node.camera.groundToImage(gnd)
+            sample, line = image_coord.samp, image_coord.line
 
         # Extract ORB features in a sub-image around the desired point
         size = 71
