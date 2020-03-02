@@ -67,4 +67,4 @@ def test_place_points_in_overlaps(overlapper, adder, distributekwargs):
         ppio.assert_called_with([Node(), Node()],
                                 Polygon([(0,0),(0,5),(5,5),(5,0),(0,0)]),
                                 distribute_points_kwargs=distributekwargs,
-                                cam_type='csm')
+                                cam_type='isis')
