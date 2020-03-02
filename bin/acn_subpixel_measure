@@ -1,0 +1,49 @@
+#!/usr/bin/env python
+
+import copy
+import os
+import json
+import sys
+import warnings
+
+from redis import StrictRedis
+import yaml
+
+from autocnet.io.db.redis_queue import pop_computetime_push, finalize
+from autocnet.io.db.model import Overlay, Images, Measures
+from autocnet.matcher.subpixel import subpixel_register_measure
+from autocnet.graph.node import NetworkNode
+from autocnet import Session, dem
+
+from plio.io.io_gdal import GeoDataset
+
+#Load the config file
+try:
+    with open(os.environ['autocnet_config'], 'r') as f:
+        config = yaml.safe_load(f)
+except:
+    print("The 'autocnet_config' environment variable is not set.")
+    sys.exit(1)
+
+def main(msg, config):
+    mid = msg['id']
+    print(f'Subpixel registering measure {mid}')
+    subpixel_register_measure(mid,
+                              iterative_phase_kwargs=msg['iterative_phase_kwargs'],
+                              subpixel_template_kwargs=msg['subpixel_template_kwargs'],
+                              threshold=msg['threshold'],
+                              **msg['cost_kwargs'])
+    print('Subpixel registration complete.')
+
+if __name__ == '__main__':
+    conf = config['redis']
+    queue = StrictRedis(host=conf['host'], port=conf['port'], db=0)
+
+    msg = pop_computetime_push(queue,
+                               conf['processing_queue'],
+                               conf['working_queue'])
+    if msg is None:
+        warnings.warn('Expected to process a cluster job, but the message queue is empty.')
+        sys.exit()
+
+    main(msg, config)
