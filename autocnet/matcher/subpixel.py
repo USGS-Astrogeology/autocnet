@@ -7,7 +7,7 @@ from redis import StrictRedis
 from plurmy import Slurm
 
 from autocnet import Session, config
-from autocnet.matcher.naive_template import pattern_match, pattern_match_autoreg
+from autocnet.matcher.naive_template import pattern_match
 from autocnet.matcher import ciratefi
 from autocnet.io.db.model import Measures, Points, Images, JsonEncoder
 from autocnet.graph.node import NetworkNode
