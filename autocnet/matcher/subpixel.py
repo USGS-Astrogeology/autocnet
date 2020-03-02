@@ -224,7 +224,7 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), templ
     if (s_image is None) or (d_template is None):
         return None, None, None
 
-    shift_x, shift_y, metrics = method(d_template, s_image, **kwargs)
+    shift_x, shift_y, metrics = pattern_match(d_template, s_image, **kwargs)
 
     dx = (dx - shift_x + dxr)
     dy = (dy - shift_y + dyr)
