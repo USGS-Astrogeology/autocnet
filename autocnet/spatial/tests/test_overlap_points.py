@@ -63,7 +63,7 @@ class MockOverlap():
 def test_place_points_in_overlaps(overlapper, adder, distributekwargs):
     nodes = [{"id": 0, "data": Node()}, {"id": 1, "data": Node()}]
     with patch('autocnet.spatial.overlap.place_points_in_overlap', return_value=[1,2,3]) as ppio:
-        place_points_in_overlaps(nodes,distribute_points_kwargs=distributekwargs)
+        place_points_in_overlaps(nodes, cam_type="isis", distribute_points_kwargs=distributekwargs)
         ppio.assert_called_with([Node(), Node()],
                                 Polygon([(0,0),(0,5),(5,5),(5,0),(0,0)]),
                                 distribute_points_kwargs=distributekwargs,
