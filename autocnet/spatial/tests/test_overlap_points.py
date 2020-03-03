@@ -49,10 +49,10 @@ def test_place_points_in_overlap(point_distributer):
     third_node.camera.groundToImage.assert_called()
     fourth_node.camera.groundToImage.assert_called()
 
+
 class MockOverlap():
     intersections = [0,1]
     geom = Polygon([(0,0),(0,5),(5,5),(5,0),(0,0)])
-
 
 
 @patch('autocnet.io.db.model.Overlay.overlapping_larger_than', return_value=[MockOverlap()]*3)

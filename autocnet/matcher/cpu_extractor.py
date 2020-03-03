@@ -87,3 +87,34 @@ def extract_features(array, extractor_method='sift', extractor_parameters={}):
             descriptors = descriptors.astype(np.float32)
 
     return keypoints, descriptors
+
+def extract_most_interesting(image, extractor_method='orb', extractor_parameters={'nfeatures':10}):
+    """
+    Given an image, extract the most interesting feature. Interesting is defined
+    as the feature descriptor that has the maximum variance. By default, this func
+    finds 10 features in the image and then selects the best.
+
+    Parameters
+    ----------
+    image : ndarray
+            of DN values
+    
+    extractor_method : str
+                       Any valid, autocnet extractor. Default (orb)
+
+    exctractor_parameters : dict
+                            of extractor parameters passed through to the feature extractor
+
+    Returns
+    -------
+     : pd.series
+       The keypoints row with the higest variance. The row has 'x' and 'y' columns to 
+       get the location.
+    """
+    kps, desc = extract_features(image,
+                                 extractor_method=extractor_method,
+                                 extractor_parameters=extractor_parameters)
+    
+    # Naively assume that the maximum variance is the most unique feature
+    vari = np.var(desc, axis=1)
+    return kps.iloc[np.argmax(vari)] 

@@ -13,7 +13,7 @@ from autocnet.cg import cg as compgeom
 from autocnet.io.db.model import Images, Measures, Overlay, Points, JsonEncoder
 from autocnet.spatial import isis
 from autocnet.matcher.subpixel import clip_roi
-from autocnet.matcher.cpu_extractor import extract_features
+from autocnet.matcher.cpu_extractor import extract_most_interesting
 from autocnet.transformation.spatial import reproject
 
 from plurmy import Slurm
@@ -181,7 +181,9 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
             line, sample = isis.ground_to_image(node["image_path"], lon ,lat)
         if cam_type == "csm":
             # The CSM conversion makes the LLA/ECEF conversion explicit
-            x, y, z = pyproj.transform(lla, ecef, lon, lat, height)
+            x, y, z = reproject([lon, lat, height],
+                                 semi_major, semi_minor,
+                                 'latlon', 'geocent')
             gnd = csmapi.EcefCoord(x, y, z)
             image_coord = node.camera.groundToImage(gnd)
             sample, line = image_coord.samp, image_coord.line
@@ -189,11 +191,7 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
         # Extract ORB features in a sub-image around the desired point
         size = 71
         image, _, _ = clip_roi(node.geodata, sample, line, size_x=size, size_y=size)
-        kps, desc = extract_features(image, extractor_method='orb', extractor_parameters = {'nfeatures':10})
-        
-        # Naively assume that the maximum variance is the most unique feature
-        vari = np.var(desc, axis=1)
-        interesting = kps.iloc[np.argmax(vari)] 
+        interesting = extract_most_interesting(image, sample, line)
 
         # kps are in the image space with upper left origin, so convert to 
         # center origin and then convert back into full image space
