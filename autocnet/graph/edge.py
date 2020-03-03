@@ -5,7 +5,6 @@ from collections import defaultdict, MutableMapping, Counter
 import numpy as np
 import pandas as pd
 import networkx as nx
-import pyproj
 from scipy.spatial.distance import cdist
 from shapely.geometry import Point
 import sqlalchemy
@@ -19,7 +18,7 @@ from autocnet.matcher import subpixel as sp
 from autocnet.matcher import cpu_ring_matcher
 from autocnet.transformation import fundamental_matrix as fm
 from autocnet.transformation import homography as hm
-from autocnet.transformation import spatial
+from autocnet.transformation.spatial import reproject
 from autocnet.vis.graph_view import plot_edge, plot_node, plot_edge_decomposition, plot_matches
 from autocnet.cg import cg
 from autocnet.io.db.model import Images, Keypoints, Matches,\
@@ -239,7 +238,7 @@ class Edge(dict, MutableMapping):
             ic = csmapi.ImageCoord(coords[i][0], coords[i][1])
             ground = camera.imageToGround(ic, 0)
             gnd[i] = [ground.x, ground.y, ground.z]
-        lon, lat, alt = spatial.reproject(gnd.T, semimajor, semiminor,
+        lon, lat, alt = reproject(gnd.T, semimajor, semiminor,
                                     'geocent', 'latlon')
         if srid:
             geoms = []
@@ -975,13 +974,7 @@ class NetworkEdge(Edge):
         session.close()
 
     def get_overlapping_indices(self, kps):
-        ecef = pyproj.Proj(proj='geocent',
-			               a=self.parent.config['spatial']['semimajor_rad'],
-			               b=self.parent.config['spatial']['semiminor_rad'])
-        lla = pyproj.Proj(proj='longlat',
-			              a=self.parent.config['spatial']['semiminor_rad'],
-			              b=self.parent.config['spatial']['semimajor_rad'])
-        lons, lats, alts = pyproj.transform(ecef, lla, kps.xm.values, kps.ym.values, kps.zm.values)
+        lons, lats, alts = reproject([kps.xm.values, kps.ym.values, kps.zm.values], semi_major, semi_minor, 'geocent', 'latlon')
         points = [Point(lons[i], lats[i]) for i in range(len(lons))]
         mask = [i for i in range(len(points)) if self.intersection.contains(points[i])]
         return mask

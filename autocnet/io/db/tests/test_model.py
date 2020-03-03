@@ -127,7 +127,7 @@ def test_create_point(session, data):
     assert p == resp
 
 @pytest.mark.parametrize("data, expected", [
-    ({'pointtype':3, 'adjusted':Point(0,-1000000,0)}, Point(-90, 0)),
+    ({'pointtype':3, 'adjusted':Point(0,-1000000,0)}, Point(270, 0)),
     ({'pointtype':3}, None)
 ])
 def test_create_point_geom(session, data, expected):
@@ -139,7 +139,7 @@ def test_create_point_geom(session, data, expected):
 @pytest.mark.parametrize("data, new_adjusted, expected", [
     ({'pointtype':3, 'adjusted':Point(0,-100000,0)}, None, None),
     ({'pointtype':3, 'adjusted':Point(0,-100000,0)}, Point(0,100000,0), Point(90, 0)),
-    ({'pointtype':3}, Point(0,-100000,0), Point(-90, 0))
+    ({'pointtype':3}, Point(0,-100000,0), Point(270, 0))
 ])
 def test_update_point_geom(session, data, new_adjusted, expected):
     p = model.Points.create(session, **data)

@@ -20,7 +20,6 @@ from sqlalchemy.ext.declarative import declarative_base
 import geopandas as gpd
 import plio
 import pvl
-import pyproj
 import pysis
 
 from gdal import ogr

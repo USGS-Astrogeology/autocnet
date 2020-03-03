@@ -35,8 +35,8 @@ def reproject(record, semi_major, semi_minor, source_proj, dest_proj, **kwargs):
       Transformed coordinates as y, x, z
 
     """
-    source_pyproj = pyproj.Proj(proj = source_proj, a = semi_major, b = semi_minor)
-    dest_pyproj = pyproj.Proj(proj = dest_proj, a = semi_major, b = semi_minor)
+    source_pyproj = pyproj.Proj(proj=source_proj, a=semi_major, b=semi_minor, lon_wrap=180)
+    dest_pyproj = pyproj.Proj(proj=dest_proj, a=semi_major, b=semi_minor, lon_wrap=180)
 
     y, x, z = pyproj.transform(source_pyproj, dest_pyproj, record[0], record[1], record[2], **kwargs)
     return y, x, z
