@@ -19,21 +19,25 @@ def test_place_points_in_overlap(point_distributer, clip_roi, extractor):
     first_node = MagicMock()
     first_node.camera = MagicMock()
     first_node.camera.groundToImage.return_value = csmapi.ImageCoord(1.0, 0.0)
+    first_node.camera.imageToGround.return_value = csmapi.EcefCoord(1.0,1.0,1.0)
     first_node.isis_serial = '1'
     first_node.__getitem__.return_value = 1
     second_node = MagicMock()
     second_node.camera = MagicMock()
     second_node.camera.groundToImage.return_value = csmapi.ImageCoord(1.0, 1.0)
+    second_node.camera.imagetoground.return_value = csmapi.EcefCoord(1.0,1.0,1.0)
     second_node.isis_serial = '2'
     second_node.__getitem__.return_value = 2
     third_node = MagicMock()
     third_node.camera = MagicMock()
     third_node.camera.groundToImage.return_value = csmapi.ImageCoord(0.0, 1.0)
+    third_node.camera.imageToGround.return_value = csmapi.EcefCoord(1.0,1.0,1.0)
     third_node.isis_serial = '3'
     third_node.__getitem__.return_value = 3
     fourth_node = MagicMock()
     fourth_node.camera = MagicMock()
     fourth_node.camera.groundToImage.return_value = csmapi.ImageCoord(0.0, 0.0)
+    first_node.camera.imageToGround.return_value = csmapi.EcefCoord(1.0,0,1.0)
     fourth_node.isis_serial = '4'
     fourth_node.__getitem__.return_value = 4
 
@@ -51,7 +55,7 @@ def test_place_points_in_overlap(point_distributer, clip_roi, extractor):
         assert measure_serials == ['1', '2', '3', '4']
 
     # Check the mocks
-    point_distributer.assert_called_with(Polygon([(0, 0), (0, 10), (10, 10), (10, 0)]))
+    np.testing.assert_array_equal(point_distributer.call_args[0][0], np.array([0.0, 0.0, 0.0]))
     first_node.camera.groundToImage.assert_called()
     second_node.camera.groundToImage.assert_called()
     third_node.camera.groundToImage.assert_called()
