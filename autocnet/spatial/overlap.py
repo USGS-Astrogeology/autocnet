@@ -146,8 +146,8 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
                options: {"csm", "isis"}
                Pick what kind of camera model implementation to use
 
-    size : int  
-           The size of the window used to extractor features to find an 
+    size : int
+           The size of the window used to extractor features to find an
            interesting feature to which the point is shifted.
 
     Returns
@@ -171,7 +171,7 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
     for v in valid:
         lon = v[0]
         lat = v[1]
-        
+
         # Calculate the height, the distance (in meters) above or
         # below the aeroid (meters above or below the BCBF spheroid).
         if dem is None:
@@ -197,24 +197,33 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
         image, _, _ = clip_roi(node.geodata, sample, line, size_x=size, size_y=size)
         interesting = extract_most_interesting(image)
 
-        # kps are in the image space with upper left origin, so convert to 
+        # kps are in the image space with upper left origin, so convert to
         # center origin and then convert back into full image space
-        newsample = sample + (interesting.x - size) 
+        newsample = sample + (interesting.x - size)
         newline = line + (interesting.y - size)
-        
+
         # Get the updated lat/lon from the feature in the node
-        lat, lon = isis.image_to_ground(node["image_path"], newsample, newline)
+        if cam_type == "isis":
+            p = isis.point_info(node["image_path"], newsample, newline, pointtype="image")
+            x, y, z = p["GroundPoint"]["BodyFixedCoordinate"]
+        elif cam_type == "csm":
+            image_coord = csmapi.ImageCoord(newline, newsample)
+            pcoord = node.camera.imageToGround(image_coord)
+            # Get the BCEF coordinate from the lon, lat
+            lon, lat, _ = reproject([pcoord.x, pcoord.y, pcoord.z], semi_major, semi_minor,
+                            'geocent', 'latlon')
 
-        # Get the new DEM height
-        if dem is None:
-            height = 0
-        else:
-            px, py = dem.latlon_to_pixel(lat, lon)
-            height = dem.read_array(1, [px, py, 1, 1])[0][0]
+            # Get the new DEM height
+            if dem is None:
+                height = 0
+            else:
+                px, py = dem.latlon_to_pixel(lat, lon)
+                height = dem.read_array(1, [px, py, 1, 1])[0][0]
 
-        # Get the BCEF coordinate from the lon, lat
-        x, y, z = reproject([lon, lat, height], semi_major, semi_minor,
-                            'latlon', 'geocent')
+
+            # Get the BCEF coordinate from the lon, lat
+            x, y, z = reproject([lon, lat, height], semi_major, semi_minor,
+                                'latlon', 'geocent')
 
         geom = shapely.geometry.Point(x, y, z)
         point = Points(apriori=geom,
