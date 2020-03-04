@@ -1,13 +1,20 @@
+from collections import namedtuple
 import pytest
 from unittest.mock import MagicMock, patch
+import numpy as np
 from shapely.geometry import Polygon
+
 from autocnet.spatial.overlap import place_points_in_overlap, place_points_in_overlaps
 from autocnet.graph.node import Node
 import csmapi
 
+MockKeypoints = namedtuple('Keypoints', ['x', 'y'])
+mockkeypoints = MockKeypoints(0,0)
 
 @patch('autocnet.cg.cg.distribute_points_in_geom', return_value=[(0, 0), (5, 5), (10, 10)])
-def test_place_points_in_overlap(point_distributer):
+@patch('autocnet.matcher.subpixel.clip_roi', return_value=np.zeros((3,3)))
+@patch('autocnet.matcher.cpu_extractor.extract_most_interesting', return_value=mockkeypoints)
+def test_place_points_in_overlap(point_distributer, clip_roi, extractor):
     # Mock setup
     first_node = MagicMock()
     first_node.camera = MagicMock()
@@ -32,7 +39,7 @@ def test_place_points_in_overlap(point_distributer):
 
     # Actual function being tested
     points = place_points_in_overlap([first_node, second_node, third_node, fourth_node],
-                                      Polygon([(0, 0), (0, 10), (10, 10), (10, 0)]))
+                                    Polygon([(0, 0), (0, 10), (10, 10), (10, 0)]))
 
     # Check the function output
     assert len(points) == 3
