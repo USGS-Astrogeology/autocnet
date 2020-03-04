@@ -128,6 +128,7 @@ def cluster_place_points_in_overlaps(size_threshold=0.0007,
     return job_counter
 
 def place_points_in_overlap(nodes, geom, cam_type="csm",
+                            size=71,
                             distribute_points_kwargs={}):
     """
     Place points into an overlap geometry by back-projecing using sensor models.
@@ -144,6 +145,10 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
     cam_type : str
                options: {"csm", "isis"}
                Pick what kind of camera model implementation to use
+
+    size : int  
+           The size of the window used to extractor features to find an 
+           interesting feature to which the point is shifted.
 
     Returns
     -------
@@ -189,7 +194,6 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
             sample, line = image_coord.samp, image_coord.line
 
         # Extract ORB features in a sub-image around the desired point
-        size = 71
         image, _, _ = clip_roi(node.geodata, sample, line, size_x=size, size_y=size)
         interesting = extract_most_interesting(image, sample, line)
 
