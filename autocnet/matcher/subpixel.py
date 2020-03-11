@@ -224,12 +224,12 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), templ
     if (s_image is None) or (d_template is None):
         return None, None, None
 
-    shift_x, shift_y, metrics = pattern_match(d_template, s_image, **kwargs)
+    shift_x, shift_y, metrics, corrmap = pattern_match(d_template, s_image, **kwargs)
 
     dx = (dx - shift_x + dxr)
     dy = (dy - shift_y + dyr)
 
-    return dx, dy, metrics
+    return dx, dy, metrics, corrmap
 
 def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_size=51, **kwargs):
     """
@@ -362,7 +362,7 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
             return None, None, None
         # Apply the shift to d_search and compute the new correspondence location
         dx += shift_x  # The implementation already applies the dxr, dyr shifts
-        dy += shift_y 
+        dy += shift_y
         # Break if the solution has converged
         size = (size[0] - reduction, size[1] - reduction)
 
@@ -379,7 +379,7 @@ def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_tem
                             cost_func=lambda x,y: 1/x**2 * y, threshold=0.005):
 
     session = Session()
-    
+
     # Setup the measure that is going to be matched
     destination = session.query(Measures).filter(Measures.id == measureid).one()
     destinationid = destination.imageid

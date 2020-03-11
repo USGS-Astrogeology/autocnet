@@ -53,12 +53,12 @@ def pattern_match(template, image, upsampling=16, func=cv2.TM_CCORR_NORMED, erro
 
     result = cv2.matchTemplate(u_image, u_template, method=func)
     _, max_corr, min_loc, max_loc = cv2.minMaxLoc(result)
-    
+
     if func == cv2.TM_SQDIFF or func == cv2.TM_SQDIFF_NORMED:
         x, y = (min_loc[0], min_loc[1])
     else:
         x, y = (max_loc[0], max_loc[1])
-    
+
     # Compute the idealized shift (image center)
     ideal_y = u_image.shape[0] / 2
     ideal_x = u_image.shape[1] / 2
@@ -69,4 +69,4 @@ def pattern_match(template, image, upsampling=16, func=cv2.TM_CCORR_NORMED, erro
 
     x = (x - ideal_x) / upsampling
     y = (y - ideal_y) / upsampling
-    return x, y, max_corr
+    return x, y, max_corr, result

@@ -90,7 +90,11 @@ def image_to_ground(cube_path, sample, line, lattype="PlanetocentricLatitude", l
     """
     # campt always does x,y
     pvlres = point_info(cube_path, sample, line, "image")
-    lats, lons = np.asarray([[r[1][lattype].value, r[1][lonttype].value] for r in pvlres]).T
+    try:
+        lats, lons = np.asarray([[r[1][lattype].value, r[1][lonttype].value] for r in pvlres]).T
+    except Exception as e:
+        raise Exception(r[1]["error"])
+
     if len(lats) == 1 and len(lons) == 1:
         lats, lons = lats[0], lons[0]
 
@@ -112,7 +116,10 @@ def ground_to_image(cube_path, lon, lat):
     """
 
     pvlres = point_info(cube_path, lon, lat, "ground")
-    lines, samples = np.asarray([[r[1]["Line"], r[1]["Sample"]] for r in pvlres]).T
+    try:
+        lines, samples = np.asarray([[r[1]["Line"], r[1]["Sample"]] for r in pvlres]).T
+    except:
+        raise Exception(r[1]["error"])
     if len(lines) == 1 and len(samples) == 1:
         lines, samples = lines[0], samples[0]
     return lines, samples
