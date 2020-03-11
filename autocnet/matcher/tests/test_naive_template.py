@@ -1,10 +1,42 @@
+import pytest
+
 import unittest
 from .. import naive_template
-from numpy import array
-from numpy import uint8
+import numpy as np
 
 
-class TestNaiveTemplate(unittest.TestCase):
+
+@pytest.fixture
+def array():
+    array = np.array(((0, 0, 0, 0, 0, 0, 0, 1, 0),
+                                  (0, 0, 0, 0, 0, 0, 0, 1, 0),
+                                  (1, 1, 1, 0, 0, 0, 0, 1, 0),
+                                  (0, 1, 0, 0, 0, 0, 0, 0, 0),
+                                  (0, 1, 0, 0, 0, 0, 0, 0, 0),
+                                  (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                                  (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                                  (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                                  (0, 0, 0, 0, 0, 0, 1, 1, 1),
+                                  (0, 1, 1, 1, 0, 0, 1, 0, 1),
+                                  (0, 1, 0, 1, 0, 0, 1, 0, 1),
+                                  (0, 1, 1, 1, 0, 0, 1, 0, 1),
+                                  (0, 0, 0, 0, 0, 0, 1, 1, 1)), dtype=np.uint8)
+
+@pytest.fixture
+def t_shape():
+    return np.array(((1, 1, 1),
+                    (0, 1, 0),
+                    (0, 1, 0)), dtype=np.uint8)
+
+@pytest.mark.parametrize("res", [(-3,3), ])
+def test_t_shape(array, t_shape, res):
+    print(array)
+    result_x, result_y, result_strength = naive_template.pattern_match(t_shape,
+                                                                       array, upsampling=1)
+
+    assert result_x == res[0]
+    assert result_y == res[1]
+'''class TestNaiveTemplate(unittest.TestCase):
 
     def setUp(self):
         # Center is (5, 6)
@@ -83,3 +115,4 @@ class TestNaiveTemplate(unittest.TestCase):
     def tearDown(self):
         pass
 
+'''

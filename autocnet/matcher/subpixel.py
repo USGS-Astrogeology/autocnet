@@ -7,7 +7,7 @@ from redis import StrictRedis
 from plurmy import Slurm
 
 from autocnet import Session, config
-from autocnet.matcher.naive_template import pattern_match
+from autocnet.matcher.naive_template import pattern_match, pattern_match_autoreg
 from autocnet.matcher import ciratefi
 from autocnet.io.db.model import Measures, Points, Images, JsonEncoder
 from autocnet.graph.node import NetworkNode
@@ -165,7 +165,12 @@ def subpixel_phase(template, search, **kwargs):
     (y_shift, x_shift), error, diffphase = register_translation(search, template, **kwargs)
     return x_shift, y_shift, (error, diffphase)
 
-def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), template_size=(51,51),  **kwargs):
+def subpixel_template(sx, sy, dx, dy, 
+                      s_img, d_img, 
+                      image_size=(251, 251), 
+                      template_size=(51,51), 
+                      func=pattern_match,
+                      **kwargs):
     """
     Uses a pattern-matcher on subsets of two images determined from the passed-in keypoints and optional sizes to
     compute an x and y offset from the search keypoint to the template keypoint and an associated strength.
@@ -224,7 +229,7 @@ def subpixel_template(sx, sy, dx, dy, s_img, d_img, image_size=(251, 251), templ
     if (s_image is None) or (d_template is None):
         return None, None, None
 
-    shift_x, shift_y, metrics = pattern_match(d_template, s_image, **kwargs)
+    shift_x, shift_y, metrics = func(d_template, s_image, **kwargs)
 
     dx = (dx - shift_x + dxr)
     dy = (dy - shift_y + dyr)
