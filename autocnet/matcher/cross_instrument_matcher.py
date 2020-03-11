@@ -1,3 +1,9 @@
+from skimage import transform as tf
+from shapely.geometry import MultiPoint
+from plio.io.io_gdal import GeoDataset
+import numpy as np
+import matplotlib.pyplot as plt
+
 import ctypes
 import enum
 import glob
@@ -20,7 +26,9 @@ from sqlalchemy.ext.declarative import declarative_base
 import geopandas as gpd
 import plio
 import pvl
+import pyproj
 import pysis
+import cv2
 
 from gdal import ogr
 
@@ -48,14 +56,158 @@ from plurmy import Slurm
 from autocnet import config, engine, Session
 from autocnet.io.db.model import Images, Points, Measures, JsonEncoder
 from autocnet.graph.network import NetworkCandidateGraph
-from autocnet.matcher.subpixel import iterative_phase
+from autocnet.matcher.subpixel import iterative_phase, subpixel_template, clip_roi
 from autocnet.cg.cg import distribute_points_in_geom
 from autocnet.io.db.connection import new_connection
 from autocnet.spatial import isis
+from autocnet.utils.utils import bytescale
+from autocnet.matcher.cpu_extractor import extract_most_interesting
+from autocnet import spatial
 
 import warnings
 
-ctypes.CDLL(find_library('usgscsm'))
+def geom_match(input_cube, base_cube, bcenter_x, bcenter_y, size_x=60, size_y=60, verbose=False):
+    """
+    Find some feature from base_cube denoted by a center line/sample and window into the input cube.
+
+    100% untested, 100% Pure Jank
+
+    1. Reproject center to input_cube
+    2. Compute an affine transformation to project input_cube onto base_cube
+    3. Clip ROI from center and size_x, size_y from both cubes
+    4. Apply subpixel template and sub pixel phase matcher to find base_cube's center feature on input_cube
+    5. Apply inverse affine to aquire new adjusted point in input_cube and return sample, line
+
+    Parameters
+    ----------
+    input_cube : GeoDataset
+                 GeoDataset object for destination cube
+
+    base_cube : GeoDataset
+                GeoDataset object for source cube
+
+    bcenter_x : Double
+                Center sample for feature in base_cube
+
+    bcenter_y : Double
+                Center line for feature in base_cube
+
+    size_x : Double
+             Size in the x direction for ROI window
+
+    size_y : Double
+             Size in the y direction for ROI window
+
+    Returns
+    -------
+    sample : Double
+             Sample of feature detected in input_cube
+
+    line : Double
+           Line of feature detected in input_cube
+
+    dist : Double
+           Distance feature moved in projected space
+
+    maxcorr : Double
+              Correlation score at detected feature retuned by template matcher
+
+    corrmap : np.Array
+              MxN Array of correlation scores returned by template matcher
+    """
+    if not isinstance(input_cube, GeoDataset):
+        raise Exception("input cube must be a geodataset obj")
+
+    if not isinstance(base_cube, GeoDataset):
+        raise Exception("match cube must be a geodataset obj")
+
+    base_startx = int(bcenter_x - size_x)
+    base_starty = int(bcenter_y - size_y)
+    base_stopx = int(bcenter_x + size_x)
+    base_stopy = int(bcenter_y + size_y)
+
+    image_size = input_cube.raster_size
+    match_size = base_cube.raster_size
+
+    # for now, require the entire window resides inside both cubes.
+    if base_stopx > match_size[0]:
+        raise Exception(f"Window: {base_stopx} > {match_size[0]}, center: {bcenter_x},{bcenter_y}")
+    if base_startx < 0:
+        raise Exception(f"Window: {base_startx} < 0, center: {bcenter_x},{bcenter_y}")
+    if base_stopy > match_size[1]:
+        raise Exception(f"Window: {base_stopy} > {match_size[1]}, center: {bcenter_x},{bcenter_y} ")
+    if base_starty < 0:
+        raise Exception(f"Window: {base_starty} < 0, center: {bcenter_x},{bcenter_y}")
+
+    mlat, mlon = spatial.isis.image_to_ground(base_cube.file_name, bcenter_x, bcenter_y)
+    center_x, center_y = spatial.isis.ground_to_image(base_cube.file_name, mlon, mlat)
+
+    match_points = [(base_startx,base_starty),
+                    (base_startx,base_stopy),
+                    (base_stopx,base_stopy),
+                    (base_stopx,base_starty)]
+
+    cube_points = []
+    for x,y in match_points:
+        try:
+            lat, lon = spatial.isis.image_to_ground(base_cube.file_name, x, y)
+            cube_points.append(spatial.isis.ground_to_image(input_cube.file_name, lon, lat)[::-1])
+        except Exception as e:
+            if verbose:
+                print("Match Failed with: ", e)
+            return None, None, None, None, None
+
+    affine = tf.estimate_transform('affine', np.array([*match_points]), np.array([*cube_points]))
+
+    startx, starty, stopx, stopy = MultiPoint(cube_points).bounds
+
+    # Do entire cube for now, should be optimized to only warp ROI
+    dst_arr = tf.warp(input_cube.read_array(), affine)
+    dst_arr[dst_arr==0] = np.nan
+    dst_arr = dst_arr[int(match_points[0][1]):int(match_points[2][1]),int(match_points[0][0]):int(match_points[2][0])]
+
+    pixels = list(map(int, [match_points[0][0], match_points[0][1], size_x*2, size_y*2]))
+    base_arr = base_cube.read_array(pixels=pixels)
+
+    if verbose:
+      print("drawing things")
+      fig, axs = plt.subplots(1, 2)
+      axs[0].set_title("Base")
+      axs[0].imshow(base_arr, cmap="Greys_r")
+      axs[1].set_title("Projected Image")
+      axs[1].imshow(dst_arr, cmap="Greys_r")
+      plt.show()
+
+    # Run through one step of template matching then one step of phase matching
+    # These parameters seem to work best, should pass as kwargs later
+    restemplate = subpixel_template(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), func=cv2.TM_CCOEFF_NORMED, image_size=(size_x, size_y), template_size=(size_x//2, size_y//2))
+    resphase = iterative_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, size=10, reduction=1, max_dist=2, convergence_threshold=.5)
+
+    _,_,maxcorr,corrmap = restemplate
+    x, y, _ = resphase
+    if x is None or y is None:
+        return None, None, None, None, None
+
+    sample, line = affine([int(match_points[0][0])+x,int(match_points[0][1])+y])[0]
+
+    if verbose:
+      fig, axs = plt.subplots(1, 3)
+      fig.set_size_inches((30,30))
+      darr,_,_ = clip_roi(input_cube.read_array(), sample, line, 800, 800)
+      axs[1].imshow(darr, cmap="Greys_r")
+      axs[1].scatter(x=[darr.shape[1]/2], y=[darr.shape[0]/2], s=10, c="red")
+      axs[1].set_title("Original Registered Image")
+
+      axs[0].imshow(base_arr, cmap="Greys_r")
+      axs[0].scatter(x=[base_arr.shape[1]/2], y=[base_arr.shape[0]/2], s=10, c="red")
+      axs[0].set_title("Base")
+
+      pcm = axs[2].imshow(corrmap**2, interpolation=None, cmap="coolwarm")
+      plt.show()
+
+    dist = np.linalg.norm([center_x-x, center_y-y])
+    return sample, line, dist, maxcorr, corrmap
+
 
 def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)*1), ewpts_func=lambda x: int(round(x,1)*4)):
     """
@@ -116,7 +268,7 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
     themis_images = gpd.GeoDataFrame.from_postgis(ground_image_query,
                                                   ground_engine, geom_col="geom")
 
-    coords = distribute_points_in_geom(fp_poly, nspts_func=nspts_func, ewpts_func=ewpts_func)
+    coords = distribute_points_in_geom(fp_poly, nspts_func=nspts_func, ewpts_func=ewpts_func, method="new")
     coords = np.asarray(coords)
 
     records = []
@@ -127,6 +279,34 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
         # res = ground_session.execute(formated_sql)
         p = Point(*coord)
         res = themis_images[themis_images.intersects(p)]
+        adjusted = False
+
+        for image_path in res["path"]:
+            try:
+                arr = GeoDataset(image_path)
+                linessamples = isis.point_info(image_path, p.x, p.y, 'ground')
+                sample = linessamples["GroundPoint"].get('Sample')
+                line = linessamples["GroundPoint"].get('Line')
+                size = 100
+                image, _, _ = clip_roi(arr, sample, line, size_x=size, size_y=size)
+                interesting = extract_most_interesting(image,  extractor_parameters={'nfeatures':30})
+
+                # kps are in the image space with upper left origin, so convert to
+                # center origin and then convert back into full image space
+                newsample = sample + (interesting.x - size)
+                newline = line + (interesting.y - size)
+
+                newpoint = isis.point_info(image_path, newsample, newline, 'image')
+                p = Point(newpoint["GroundPoint"].get('PositiveEast360Longitude').value,
+                          newpoint["GroundPoint"].get('PlanetocentricLatitude').value)
+
+                res = themis_images[themis_images.intersects(p)]
+                adjusted = True
+                break
+            except Exception as e:
+                continue
+        if not adjusted:
+            raise("This is some garbage")
 
         for k, record in res.iterrows():
             record["pointid"] = i
@@ -154,8 +334,8 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
         samples = []
         resolutions = []
         for i, res in enumerate(point_list):
-            if res[1].get('Error') is not None:
-                print('Bad intersection: ', res[1].get("Error"))
+            geom = Point(res[1].get("PositiveEast360Longitude").value, res[1].get("PlanetocentricLatitude").value)
+            if res[1].get('Error') is not None and not fp_poly.intersects(geom):
                 lines.append(None)
                 samples.append(None)
                 resolutions.append(None)
@@ -169,10 +349,10 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
         ground_cnet.loc[index, 'resolution'] = resolutions
 
     ground_cnet = gpd.GeoDataFrame(ground_cnet, geometry='point')
-    return ground_cnet, fp_poly, coords
+    return ground_cnet, fp_poly, coord_list
 
 
-def propagate_point(lon, lat, pointid, paths, lines, samples, resolutions):
+def propagate_point(lon, lat, pointid, paths, lines, samples, resolutions, verbose=False):
     """
 
     """
@@ -186,70 +366,54 @@ def propagate_point(lon, lat, pointid, paths, lines, samples, resolutions):
 
     # lazily iterate for now
     for i,image in images.iterrows():
-        res = isis.point_info(image["path"], p.x, p.y, point_type="ground", allow_outside=False)
-        dest_line, dest_sample = res["GroundPoint"]["Line"], res["GroundPoint"]["Sample"]
-
-        try:
-            dest_resolution = res["GroundPoint"]["LineResolution"].value
-        except:
-            warnings.warn(f'Failed to generate ground point info on image {image["path"]} at lat={p.y} lon={p.x}')
-            continue
-
-        dest_data = GeoDataset(image["path"])
-        dest_arr = dest_data.read_array()
+        dest_image = GeoDataset(image["path"])
 
         # list of matching results in the format:
         # [measure_index, x_offset, y_offset, offset_magnitude]
         match_results = []
         for k,m in image_measures.iterrows():
-            # dynamically set scale based on point resolution
-            dest_to_base_scale = dest_resolution/m["resolution"]
-
-            scaled_dest_line = (dest_arr.shape[0]-dest_line)*dest_to_base_scale
-            scaled_dest_sample = dest_sample*dest_to_base_scale
-
-            scaled_dest_arr = imresize(dest_arr, dest_to_base_scale)[::-1]
-
-            base_arr = GeoDataset(m["path"]).read_array()
+            base_image = GeoDataset(m["path"])
 
             sx, sy = m["sample"], m["line"]
-            dx, dy = scaled_dest_sample, scaled_dest_line
+
             try:
-                # not sure what the best parameters are here
-                ret = iterative_phase(sx, sy, dx, dy, base_arr, scaled_dest_arr, size=10, reduction=1, max_dist=2, convergence_threshold=1)
-            except Exception as ex:
-                match_results.append(ex)
+                x,y, dist, metrics, corrmap = geom_match(dest_image, base_image, sx, sy, verbose=verbose)
+            except Exception as e:
+                match_results.append(e)
                 continue
 
-            if ret is not None and None not in ret:
-                x,y,metrics = ret
-            else:
-                match_results.append("Failed to Converge")
-                continue
-
-            dist = np.linalg.norm([x-dx, -1*(y-dy)])
-            match_results.append([k, x-dx, -1*(y-dy), dist])
+            match_results.append([k, x, y,
+                                     metrics, dist, corrmap, m["path"], image["path"]])
 
         # get best offsets, if possible we need better metric for what a
         # good match looks like
         match_results = np.asarray([res for res in match_results if isinstance(res, list)])
         if match_results.shape[0] == 0:
             # no matches
-            print("No Mathces")
             continue
 
-        match_results = match_results[np.argwhere(match_results[:,3] == match_results[:,3].min())][0][0]
-
-        if match_results[3] > 2:
-            # best match drifted too much
-            continue
+        best_results = match_results[np.argwhere(match_results[:,3] == match_results[:,3].max())][0][0]
 
         # apply offsets
-        sample = (match_results[1]/dest_to_base_scale) + dest_sample
-        line = (match_results[2]/dest_to_base_scale) + dest_line
+        sample = best_results[1]
+        line = best_results[2]
 
-        pointpvl = isis.point_info(image["path"], sample, line, point_type="image")
-        groundx, groundy, groundz = pointpvl["GroundPoint"]["BodyFixedCoordinate"].value
+        if verbose:
+          print("Full results: ", match_results)
+          print("Winning CORR: ", match_results[3], "Themis Pixel shift: ", match_results[4])
+          print("Themis Image: ", match_results[6], "CTX image:", match_results[7])
+          print("Themis S,L: ", f"{sx},{sy}", "CTX S,L: ", f"{sample},{line}")
+
+        # hardcoded for now
+        if best_results[3] < 0.7:
+            continue
+
+        pointpvl = isis.point_info(paths[0], x=lon, y=lat, point_type="ground")
+
+        try:
+            groundx, groundy, groundz = pointpvl["GroundPoint"]["BodyFixedCoordinate"].value
+        except:
+            groundx, groundy, groundz = pointpvl["GroundPoint"]["BodyFixedCoordinate"]
         groundx, groundy, groundz = groundx*1000, groundy*1000, groundz*1000
 
         new_measures.append({
@@ -306,9 +470,7 @@ def cluster_propagate_control_network(base_cnet, walltime='00:20:00', chunksize=
     submitter.submit(array='1-{}'.format(job_counter))
     return job_counter
 
-
-
-def propagate_control_network(base_cnet):
+def propagate_control_network(base_cnet, verbose=False):
     """
 
     """
@@ -329,7 +491,7 @@ def propagate_control_network(base_cnet):
 
         # get image in the destination that overlap
         lon, lat = measures["point"].iloc[0].xy
-        gp_measures = propagate_point(lon[0], lat[0], cpoint, measures["path"], measures["line"], measures["sample"], measures["resolution"])
+        gp_measures = propagate_point(lon[0], lat[0], cpoint, measures["path"], measures["line"], measures["sample"], measures["resolution"], verbose=verbose)
         constrained_net.extend(gp_measures)
 
     ground = gpd.GeoDataFrame.from_dict(constrained_net).set_geometry('point_latlon')
@@ -361,3 +523,5 @@ def propagate_control_network(base_cnet):
     session.commit()
 
     return ground
+
+
