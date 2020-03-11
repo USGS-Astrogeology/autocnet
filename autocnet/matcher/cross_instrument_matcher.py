@@ -70,7 +70,7 @@ def geom_match(input_cube, base_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
     """
     Find some feature from base_cube denoted by a center line/sample and window into the input cube.
 
-    100% untested, 100% Pure Jank
+    100% untested for 100% Jank
 
     1. Reproject center to input_cube
     2. Compute an affine transformation to project input_cube onto base_cube
