@@ -45,7 +45,7 @@ class TestNaiveTemplate(unittest.TestCase):
                                      (0, 1, 0)), dtype=uint8)
 
     def test_t_shape(self):
-        result_x, result_y, result_strength = naive_template.pattern_match(self._t_shape,
+        result_x, result_y, result_strength, _ = naive_template.pattern_match(self._t_shape,
                                                                            self._test_image, upsampling=1)
         # Test offsets
         self.assertEqual(result_x, -3)
@@ -54,7 +54,7 @@ class TestNaiveTemplate(unittest.TestCase):
         self.assertGreaterEqual(result_strength, 0.8, "Returned Correlation Strength of %d" % result_strength)
 
     def test_rect_shape(self):
-        result_x, result_y, result_strength = naive_template.pattern_match(self._rect_shape,
+        result_x, result_y, result_strength, _ = naive_template.pattern_match(self._rect_shape,
                                                                            self._test_image, upsampling=1)
         # Test offsets
         self.assertEqual(result_x, 3)
@@ -63,7 +63,7 @@ class TestNaiveTemplate(unittest.TestCase):
         self.assertGreaterEqual(result_strength, 0.8, "Returned Correlation Strength of %d" % result_strength)
 
     def test_square_shape(self):
-        result_x, result_y, result_strength = naive_template.pattern_match(self._square_shape,
+        result_x, result_y, result_strength, _ = naive_template.pattern_match(self._square_shape,
                                                                            self._test_image, upsampling=1)
         # Test offsets
         self.assertEqual(result_x, -2)
@@ -72,7 +72,7 @@ class TestNaiveTemplate(unittest.TestCase):
         self.assertGreaterEqual(result_strength, 0.8, "Returned Correlation Strength of %d" % result_strength)
 
     def test_line_shape(self):
-        result_x, result_y, result_strength = naive_template.pattern_match(self._vertical_line,
+        result_x, result_y, result_strength, _ = naive_template.pattern_match(self._vertical_line,
                                                                            self._test_image, upsampling=1)
         # Test offsets
         self.assertEqual(result_x, 3)

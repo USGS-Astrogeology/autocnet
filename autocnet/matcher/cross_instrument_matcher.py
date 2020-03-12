@@ -66,7 +66,9 @@ from autocnet import spatial
 
 import warnings
 
-def geom_match(input_cube, base_cube, bcenter_x, bcenter_y, size_x=60, size_y=60, verbose=False):
+
+
+def geom_match(input_cube, base_cube, bcenter_x, bcenter_y, size_x=60, size_y=60, template_kwargs={"func": cv2.TM_CCOEFF_NORMED, "image_size":(60,60), "template_size":(31,31)}, phase_kwargs={"size":10, "reduction":1, "max_dist":2, "convergence_threshold":.5}, verbose=False):
     """
     Find some feature from base_cube denoted by a center line/sample and window into the input cube.
 
@@ -180,8 +182,8 @@ def geom_match(input_cube, base_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
 
     # Run through one step of template matching then one step of phase matching
     # These parameters seem to work best, should pass as kwargs later
-    restemplate = subpixel_template(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), func=cv2.TM_CCOEFF_NORMED, image_size=(size_x, size_y), template_size=(size_x//2, size_y//2))
-    resphase = iterative_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, size=10, reduction=1, max_dist=2, convergence_threshold=.5)
+    restemplate = subpixel_template(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
+    resphase = iterative_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, **phase_kwargs)
 
     _,_,maxcorr,corrmap = restemplate
     x, y, _ = resphase
