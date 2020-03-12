@@ -5,9 +5,45 @@ from scipy.ndimage.interpolation import zoom
 
 
 def pattern_match_autoreg(template, image, subpixel_size=3, max_scaler=0.2, func=cv2.TM_CCORR_NORMED):
+    """
+    Call an arbitrary pattern matcher using a subpixel approach where a center of gravity using
+    the correlation coefficients are used for subpixel alignment.
+
+    Parameters
+    ----------
+    template : ndarray
+               The input search template used to 'query' the destination
+               image
+
+    image : ndarray
+            The image or sub-image to be searched
+
+    subpixel_size : int
+                    An odd integer that defines the window size used to compute
+                    the moments
+
+    max_scaler : float
+                 The percentage offset to apply to the delta between the maximum
+                 correlation and the maximum edge correlation.
+
+    func : object
+           The function to be used to perform the template based matching
+           Options: {cv2.TM_CCORR_NORMED, cv2.TM_CCOEFF_NORMED, cv2.TM_SQDIFF_NORMED}
+           In testing the first two options perform significantly better with Apollo data.
+
+    Returns
+    -------
+    x : float
+        The x offset
+
+    y : float
+        The y offset
+
+    max_corr : float
+               The strength of the correlation in the range [-1, 1].   
+    """
     
     result = cv2.matchTemplate(image, template, method=func)
-    #_, max_corr, min_loc, max_loc = cv2.minMaxLoc(result)
 
     if func == cv2.TM_SQDIFF or func == cv2.TM_SQDIFF_NORMED:
         y, x = np.unravel_index(np.argmin(result, axis=None), result.shape)
@@ -51,7 +87,8 @@ def pattern_match_autoreg(template, image, subpixel_size=3, max_scaler=0.2, func
 
 def pattern_match(template, image, upsampling=16, func=cv2.TM_CCORR_NORMED, error_check=False):
     """
-    Call an arbitrary pattern matcher
+    Call an arbitrary pattern matcher using a subpixel approach where the template and image
+    are upsampled using a third order polynomial.
 
     Parameters
     ----------
