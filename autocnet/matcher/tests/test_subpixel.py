@@ -61,10 +61,10 @@ def test_subpixel_template(apollo_subsets):
     a = apollo_subsets[0]
     b = apollo_subsets[1]
     with patch('autocnet.matcher.subpixel.clip_roi', side_effect=clip_side_effect):
-        nx, ny, strength = sp.subpixel_template(a.shape[1]/2, a.shape[0]/2,
+        nx, ny, strength, _ = sp.subpixel_template(a.shape[1]/2, a.shape[0]/2,
                                                 b.shape[1]/2, b.shape[0]/2,
                                                 a, b, upsampling=16)
-    
+
     assert strength >= 0.99
     assert nx == 50.9375
     assert ny == 53.0625
