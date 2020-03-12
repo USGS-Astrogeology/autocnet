@@ -61,6 +61,34 @@ CREATE TRIGGER active_measure_changes
 EXECUTE PROCEDURE validate_points();
 """)
 
+ignore_image_function = DDL("""
+CREATE OR REPLACE FUNCTION ignore_image()
+  RETURNS trigger AS
+$BODY$
+BEGIN
+ IF NEW.ignore
+ THEN
+   UPDATE measures
+     SET "measureIgnore" = True
+     WHERE measures.serialnumber = NEW.serial;
+ END IF;
+
+ RETURN NEW;
+END;
+$BODY$
+
+LANGUAGE plpgsql VOLATILE -- Says the function is implemented in the plpgsql language; VOLATILE says the function has side effects.
+COST 100; -- Estimated execution cost of the function.
+""")
+
+ignore_image_trigger = DDL("""
+CREATE TRIGGER image_ignored
+  AFTER UPDATE
+  ON images
+  FOR EACH ROW
+EXECUTE PROCEDURE ignore_image();
+""")
+
 try:
   latitudinal_srid = config['spatial']['latitudinal_srid']
 except:

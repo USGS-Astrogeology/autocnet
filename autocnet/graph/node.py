@@ -54,6 +54,9 @@ class Node(dict, MutableMapping):
     masks : set
             A list of the available masking arrays
 
+    ignore : bool
+             If the image is flagged as ignored and will be skipped in processing
+
     isis_serial : str
                   If the input images have PVL headers, generate an
                   ISIS compatible serial number
@@ -95,6 +98,16 @@ class Node(dict, MutableMapping):
     @keypoints.setter
     def keypoints(self, kps):
         self._keypoints = kps
+
+    @property
+    def ignore(self):
+        if not hasattr(self, '_ignore'):
+            self._ignore = False
+        return self._ignore
+
+    @ignore.setter
+    def ignore(self, ignore):
+        self._ignore = ignore
 
     def __repr__(self):
         return """
@@ -694,6 +707,26 @@ class NetworkNode(Node):
         res = session.query(Measures).filter(Measures.imageid == self['node_id']).all()
         session.close()
         return res
+
+    @property
+    def ignore(self):
+        """
+        Gets the ignore flag from the Images table
+        """
+        session = Session()
+        res = self._from_db(Images, key='id')
+        return res.ignore
+
+    @ignore.setter
+    def ignore(self, ignore):
+        """
+        Sets the ignore flag in the Images table
+        """
+        session = Session()
+        res = session.query(Images).filter(getattr(Images,'id') == self['node_id']).one()
+        res.ignore = ignore
+        session.commit()
+        session.close()
 
     def generate_vrt(self, **kwargs):
         """

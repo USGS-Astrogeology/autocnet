@@ -39,7 +39,7 @@ def main(msg, config):
 
     print('Placing points in overlap', oid)
     points = place_points_in_overlap(nodes, geom, msg["cam_type"],
-                                     msg['distribute_points_kwargs'])
+                                     distribute_points_kwargs=msg['distribute_points_kwargs'])
 
     print('Adding {} points to the database.'.format(len(points)))
     Points.bulkadd(points)

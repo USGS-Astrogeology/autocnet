@@ -585,7 +585,8 @@ class CandidateGraph(nx.Graph):
     def apply(self, function, on='edge', out=None, args=(), **kwargs):
         """
         Applys a function to every node or edge, returns collected return
-        values.
+        values. If applying a functions to nodes, then all ignored nodes
+        will be skipped.
 
         TODO: Merge with apply_func_to_edges?
 
@@ -626,6 +627,8 @@ class CandidateGraph(nx.Graph):
         if options[on] == self.edges_iter:
             obj = 2
         for elem in options[on](data=True):
+            if getattr(elem[obj], 'ignore', False):
+                continue
             res.append(function(elem[obj], *args, **kwargs))
 
         if out:
@@ -1403,6 +1406,8 @@ class NetworkCandidateGraph(CandidateGraph):
             raise TypeError('Function argument must be a string or bytes object.')
 
         for job_counter, elem in enumerate(onobj.data('data')):
+            if getattr(elem[-1], 'ignore', False):
+                continue
             # Determine if we are working with an edge or a node
             if len(elem) > 2:
                 id = (elem[2].source['node_id'],

@@ -376,6 +376,25 @@ def test_apply(graph):
 
     for matches in results:
         assert len(matches) == 3
+    assert len(matches) == len(graph.edges)
+
+def test_apply_on_nodes(graph):
+    def set_test_attribute(n):
+        n.test_attribute = 1
+
+    def get_test_attribute(n):
+        return n.test_attribute
+
+    for _, data in graph.nodes(data=True):
+        if data['data']['image_name'] == 'AS15-M-0297_SML.png':
+            data['data'].ignore = True
+
+    graph.apply(set_test_attribute, on='node')
+    results = graph.apply(get_test_attribute, on='node')
+
+    assert len(results) == len(graph.nodes) - 1
+    for test_att in results:
+        assert test_att == 1
 
 def test_tofilelist(graph):
     flist = graph.to_filelist()

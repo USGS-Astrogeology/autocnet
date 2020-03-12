@@ -98,7 +98,7 @@ def extract_most_interesting(image, extractor_method='orb', extractor_parameters
     ----------
     image : ndarray
             of DN values
-    
+
     extractor_method : str
                        Any valid, autocnet extractor. Default (orb)
 
@@ -108,13 +108,13 @@ def extract_most_interesting(image, extractor_method='orb', extractor_parameters
     Returns
     -------
      : pd.series
-       The keypoints row with the higest variance. The row has 'x' and 'y' columns to 
+       The keypoints row with the higest variance. The row has 'x' and 'y' columns to
        get the location.
     """
     kps, desc = extract_features(image,
                                  extractor_method=extractor_method,
                                  extractor_parameters=extractor_parameters)
-    
+
     # Naively assume that the maximum variance is the most unique feature
     vari = np.var(desc, axis=1)
-    return kps.iloc[np.argmax(vari)] 
+    return kps.iloc[np.argmax(vari)]
