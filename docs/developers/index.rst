@@ -3,4 +3,3 @@
 
    contributing
    authors
-   history

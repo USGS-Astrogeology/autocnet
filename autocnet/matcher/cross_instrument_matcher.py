@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 import scipy
 from matplotlib import pyplot as plt
-from scipy.misc import imresize
 from sqlalchemy import (Boolean, Column, Float, ForeignKey, Integer,
                         LargeBinary, String, UniqueConstraint, create_engine,
                         event, orm, pool)
@@ -41,9 +40,6 @@ from knoten import csm
 
 from plio.io.io_controlnetwork import from_isis, to_isis
 from plio.io.io_gdal import GeoDataset
-
-from pysis.exceptions import ProcessError
-from pysis.isis import campt
 
 from shapely import wkt
 from shapely.geometry.multipolygon import MultiPolygon
@@ -216,8 +212,10 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
     Provided a config file which points to a database containing ground image path and geom information,
     generates ground points on these images within the range of a source database's images. For example,
     if creating a CTX mosaic which is grounded using themis data, the config files would look like:
+        
         CTX_config -> located in config/[config_name].yml
         database:
+
             type: 'postgresql'
             username: 'jay'
             password: 'abcde'
@@ -228,6 +226,7 @@ def generate_ground_points(ground_db_config, nspts_func=lambda x: int(round(x,1)
             timeout: 500
 
         Themis_config -> passed in to this function as ground_db_config
+        
         ground_db_config = {'username':'jay',
                             'password':'abcde',
                             'host':'autocnet.wr.usgs.gov',

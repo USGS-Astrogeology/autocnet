@@ -3,7 +3,6 @@ from autocnet.camera.utils import crossform
 from cv2 import triangulatePoints
 
 
-
 def compute_epipoles(f):
     """
     Compute the epipole and epipolar prime
@@ -71,7 +70,7 @@ def triangulate(pt, pt1, p, p1):
 
     References
     ----------
-    .. [Hartley2003]
+    [Hartley2003]_
 
     Parameters
     ----------

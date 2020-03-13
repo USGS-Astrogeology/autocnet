@@ -31,7 +31,7 @@ This project is hosted on `Github`_. If you run into a problem, please open an `
 Documentation
 -------------
 .. toctree::
-  :maxdepth: 3
+  :maxdepth: 4
 
   library/index
 

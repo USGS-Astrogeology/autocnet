@@ -7,6 +7,7 @@ Reprojection Transformations
 
    homography
    fundamental
+   spatial
 
 Image Decomposition
 -------------------
