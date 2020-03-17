@@ -220,6 +220,9 @@ def subpixel_template(sx, sy, dx, dy,
     autocnet.matcher.naive_template.pattern_match_autoreg : for the jwargs that can be passed to the autoreg style matcher
     """
 
+    print(f'subpixel template image size ={image_size}')
+    print(f'subpixel template template size ={template_size}')
+
     image_size = check_image_size(image_size)
     template_size = check_image_size(template_size)
 
@@ -336,6 +339,7 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
     dline = dy
     if isinstance(size, int):
         size = (size, size)
+        print(f'iterative phase size = {size}')
     while True:
         s_template, _, _ = clip_roi(s_img, sx, sy,
                                    size_x=size[0], size_y=size[1])
@@ -486,21 +490,10 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
         res = session.query(Images).filter(Images.id == destinationid).one()
         destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
 
-        new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample,
+        new_template_x, new_template_y, template_metric, _ = subpixel_template(source.sample,
                                                                 source.line,
                                                                 measure.sample,
                                                                 measure.line,
-                                                                source_node.geodata,
-                                                                destination_node.geodata,
-                                                                **iterative_phase_kwargs)
-        if new_phase_x == None:
-            measure.ignore = True # Unable to phase match
-            continue
-
-        new_template_x, new_template_y, template_metric, _ = subpixel_template(source.sample,
-                                                                source.line,
-                                                                new_phase_x,
-                                                                new_phase_y,
                                                                 source_node.geodata,
                                                                 destination_node.geodata,
                                                                 **subpixel_template_kwargs)
@@ -508,7 +501,18 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
             measure.ignore = True # Unable to template match
             continue
 
-        dist = np.linalg.norm([new_phase_x-new_template_x, new_phase_y-new_template_y])
+        new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample,
+                                                                source.line,
+                                                                new_template_x,
+                                                                new_template_y,
+                                                                source_node.geodata,
+                                                                destination_node.geodata,
+                                                                **iterative_phase_kwargs)
+        if new_phase_x == None:
+            measure.ignore = True # Unable to phase match
+            continue
+
+        dist = np.linalg.norm([new_template_x-new_phase_x, new_template_y-new_phase_y])
         cost = cost_func(dist, template_metric)
 
         if cost <= threshold:
