@@ -220,9 +220,6 @@ def subpixel_template(sx, sy, dx, dy,
     autocnet.matcher.naive_template.pattern_match_autoreg : for the jwargs that can be passed to the autoreg style matcher
     """
 
-    print(f'subpixel template image size ={image_size}')
-    print(f'subpixel template template size ={template_size}')
-
     image_size = check_image_size(image_size)
     template_size = check_image_size(template_size)
 
@@ -339,7 +336,6 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
     dline = dy
     if isinstance(size, int):
         size = (size, size)
-        print(f'iterative phase size = {size}')
     while True:
         s_template, _, _ = clip_roi(s_img, sx, sy,
                                    size_x=size[0], size_y=size[1])
