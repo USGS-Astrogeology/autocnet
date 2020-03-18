@@ -124,7 +124,7 @@ def cluster_place_points_in_overlaps(size_threshold=0.0007,
                  partition=config['cluster']['queue'],
                  output=config['cluster']['cluster_log_dir']+'/autocnet.place_points-%j')
     job_counter = i+1
-    submitter.submit(array='1-{}'.format(job_counter), chunksize=chunksize, exclude=exclude)
+    submitter.submit(array='1-{}%24'.format(job_counter), chunksize=chunksize, exclude=exclude)
     return job_counter
 
 def place_points_in_overlap(nodes, geom, cam_type="csm",
@@ -202,7 +202,7 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
         except:
             warnings.warn('Could not find an interesting feature around point')
             continue
-    
+
         # kps are in the image space with upper left origin and the roi
         # could be the requested size or smaller if near an image boundary.
         # So use the roi upper left_x and top_y for the actual origin.

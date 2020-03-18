@@ -168,7 +168,7 @@ def subpixel_phase(sx, sy, dx, dy,
                With the RMSE error and absolute difference in phase
     """
     image_size = check_image_size(image_size)
-    
+
     s_roi = roi.Roi(s_img, sx, sy, size_x=image_size[0], size_y=image_size[1])
     d_roi = roi.Roi(d_img, dx, dy, size_x=image_size[0], size_y=image_size[1])
 
@@ -181,7 +181,7 @@ def subpixel_phase(sx, sy, dx, dy,
         d_size = d_template.shape
         updated_size_x = int(min(s_size[1], d_size[1]))
         updated_size_y = int(min(s_size[0], d_size[0]))
-        
+
         # Have to subtract 1 from even entries or else the round up that
         # occurs when the size is split over the midpoint causes the
         # size to be too large by 1.
@@ -203,7 +203,7 @@ def subpixel_phase(sx, sy, dx, dy,
 
         if (s_image is None) or (d_template is None):
             return None, None, None
-    
+
     (shift_y, shift_x), error, diffphase = register_translation(s_image, d_template, **kwargs)
     dx = d_roi.x - shift_x
     dy = d_roi.y - shift_y
@@ -383,7 +383,7 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(251, 251), reduction=11,
     # get initial destination location
     dsample = dx
     dline = dy
-    
+
     while True:
         try:
             shifted_dx, shifted_dy, metrics = subpixel_phase(sx, sy, dx, dy, s_img, d_img, image_size=size, **kwargs)
@@ -407,7 +407,7 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(251, 251), reduction=11,
            delta_dy<= convergence_threshold and\
            abs(dist) <= max_dist:
            break
-        
+
     return dx, dy, metrics
 
 def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_template_kwargs={},
@@ -424,6 +424,8 @@ def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_tem
     # Get the point id and set up the reference measure
     pointid = destination.pointid
     source = session.query(Measures).filter(Measures.pointid==pointid).order_by(Measures.id).first()
+    source.weight = 1
+
     sourceid = source.imageid
     res = session.query(Images).filter(Images.id == sourceid).one()
     source_node = NetworkNode(node_id=sourceid, image_path=res.path)
@@ -458,9 +460,9 @@ def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_tem
         return
 
     # Update the measure
-    if new_template_x:
-        destination.sample = new_template_x
-        destination.line = new_template_y
+    if new_phase_x:
+        destination.sample = new_phase_x
+        destination.line = new_phase_y
         destination.weight = cost
 
     # In case this is a second run, set the ignore to False if this
@@ -667,7 +669,7 @@ def cluster_subpixel_register_points(iterative_phase_kwargs={'size': 251},
                  time=walltime,
                  partition=config['cluster']['queue'],
                  output=config['cluster']['cluster_log_dir']+f'/autocnet.subpixel_register-%j')
-    submitter.submit(array='1-{}'.format(job_counter), chunksize=chunksize, exclude=exclude)
+    submitter.submit(array='1-{}%24'.format(job_counter), chunksize=chunksize, exclude=exclude)
     return job_counter
 
 def cluster_subpixel_register_measures(iterative_phase_kwargs={'size': 251},
