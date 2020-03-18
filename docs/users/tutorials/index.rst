@@ -21,3 +21,10 @@ Working With Apollo Pan
     Adding Correspondences Using Constraints <apollopan/8. Adding Correspondences Using Constraints.ipynb>
     Creating a Control Network <apollopan/9. Creating a Control Network.ipynb>
     Advanced: Extending the CandidateGraph<apollopan/Advanced 1. Extending the CandidateGraph.ipynb>
+
+Coupled Decomposition
+---------------------
+.. toctree::
+   :maxdepth: 1
+
+   Apollo Metric Coupled Decomposition<coupleddecomposition/CoupledDecomposition.ipynb>

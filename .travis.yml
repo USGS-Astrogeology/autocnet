@@ -54,18 +54,23 @@ install:
 
   # Install dependencies
   - conda env update -n test -f environment.yml
-  - export PROJ_LIB=$CONDA_PREFIX/share/proj  
+  - export PROJ_LIB=$CONDA_PREFIX/share/proj 
+  - pip install travis-sphinx 
+  - conda install -c conda-forge nbsphinx
 
 script:
   - autocnet_config=config/test_config.yml pytest -v autocnet
+  - travis-sphinx build --source=docs --nowarn # The sphinx build script
 
 after_success:
   - coveralls
-  # Need to do the build in the root
-  - source deactivate
-  - conda install conda-build anaconda-client
-  - conda config --set anaconda_upload yes
-  - conda build --token $CONDA_UPLOAD_TOKEN --python $PYTHON_VERSION -c conda-forge -c menpo -c usgs-astrogeology conda
+ 
+deploy:
+  provider: script
+  skip_cleanup: true
+  script: bash deploy.sh
+  on:
+    branch: dev
 
 notifications:
   webhooks:

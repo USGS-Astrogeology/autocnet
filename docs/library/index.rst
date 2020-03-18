@@ -8,11 +8,13 @@ Library Reference
 .. toctree::
    :maxdepth: 3
 
+   camera/index
    cg/index
    control/index
-   fileio/index
    graph/index
+   io/index
    matcher/index
+   spatial/index
    transformation/index
    utils/index
    vis/index

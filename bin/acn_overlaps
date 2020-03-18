@@ -30,6 +30,8 @@ def main(msg, config):
     if overlap is None:
         print('Could not find overlap with ID', id)
         sys.exit(1)
+    
+    print('Placing points in overlap', oid)
     geom = overlap.geom
     nodes = []
     for id in overlap.intersections:
@@ -37,8 +39,7 @@ def main(msg, config):
         nodes.append(NetworkNode(node_id=id, image_path=res.path))
     session.close()
 
-    print('Placing points in overlap', oid)
-    points = place_points_in_overlap(nodes, geom, msg["cam_type"],
+    points = place_points_in_overlap(nodes, geom, cam_type=msg["cam_type"],
                                      distribute_points_kwargs=msg['distribute_points_kwargs'])
 
     print('Adding {} points to the database.'.format(len(points)))

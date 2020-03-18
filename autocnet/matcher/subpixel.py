@@ -11,6 +11,7 @@ from autocnet.matcher.naive_template import pattern_match, pattern_match_autoreg
 from autocnet.matcher import ciratefi
 from autocnet.io.db.model import Measures, Points, Images, JsonEncoder
 from autocnet.graph.node import NetworkNode
+from autocnet.transformation import roi
 
 import geopandas as gpd
 import pandas as pd
@@ -68,12 +69,15 @@ def check_image_size(imagesize):
     imagesize : tuple
                 in the form (size_x, size_y)
     """
-    x = imagesize[0] / 2
-    y = imagesize[1] / 2
+    x = imagesize[0]
+    y = imagesize[1]
+
     if x % 2 == 0:
         x += 1
     if y % 2 == 0:
         y += 1
+    x = floor(x/2)
+    y = floor(y/2)
     return x,y
 
 def clip_roi(img, center_x, center_y, size_x=200, size_y=200, dtype="uint64"):
@@ -133,7 +137,10 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200, dtype="uint64"):
             return None, 0, 0
     return subarray, axr, ayr
 
-def subpixel_phase(template, search, **kwargs):
+def subpixel_phase(sx, sy, dx, dy,
+                   s_img, d_img,
+                   image_size=(251, 251),
+                   **kwargs):
     """
     Apply the spectral domain matcher to a search and template image. To
     shift the images, the x_shift and y_shift, need to be subtracted from
@@ -149,7 +156,7 @@ def subpixel_phase(template, search, **kwargs):
     search : ndarray
              The search image
 
-    Returnsslurm-2235260_89.out.2235260_89.out
+    Returns
     -------
     x_offset : float
                Shift in the x-dimension
@@ -160,10 +167,48 @@ def subpixel_phase(template, search, **kwargs):
     strength : tuple
                With the RMSE error and absolute difference in phase
     """
-    if not template.shape == search.shape:
-        raise ValueError('Both the template and search images must be the same shape.')
-    (y_shift, x_shift), error, diffphase = register_translation(search, template, **kwargs)
-    return x_shift, y_shift, (error, diffphase)
+    image_size = check_image_size(image_size)
+
+    s_roi = roi.Roi(s_img, sx, sy, size_x=image_size[0], size_y=image_size[1])
+    d_roi = roi.Roi(d_img, dx, dy, size_x=image_size[0], size_y=image_size[1])
+
+    s_image = s_roi.clip()
+    d_template = d_roi.clip()
+
+    if s_image.shape != d_template.shape:
+
+        s_size = s_image.shape
+        d_size = d_template.shape
+        updated_size_x = int(min(s_size[1], d_size[1]))
+        updated_size_y = int(min(s_size[0], d_size[0]))
+
+        # Have to subtract 1 from even entries or else the round up that
+        # occurs when the size is split over the midpoint causes the
+        # size to be too large by 1.
+        if updated_size_x % 2 == 0:
+            updated_size_x -= 1
+        if updated_size_y % 2 == 0:
+            updated_size_y -= 1
+
+        # Since the image is smaller than the requested size, set the size to
+        # the current maximum image size and reduce from there on potential
+        # future iterations.
+        size = check_image_size((updated_size_x, updated_size_y))
+        s_roi = roi.Roi(s_img, sx, sy,
+                        size_x=size[0], size_y=size[1])
+        d_roi = roi.Roi(d_img, dx, dy,
+                        size_x=size[0], size_y=size[1])
+        s_image = s_roi.clip()
+        d_template = d_roi.clip()
+
+        if (s_image is None) or (d_template is None):
+            return None, None, None
+
+    (shift_y, shift_x), error, diffphase = register_translation(s_image, d_template, **kwargs)
+    dx = d_roi.x - shift_x
+    dy = d_roi.y - shift_y
+
+    return dx, dy, (error, diffphase)
 
 def subpixel_template(sx, sy, dx, dy,
                       s_img, d_img,
@@ -223,16 +268,19 @@ def subpixel_template(sx, sy, dx, dy,
     image_size = check_image_size(image_size)
     template_size = check_image_size(template_size)
 
-    s_image, _, _ = clip_roi(s_img, sx, sy, size_x=image_size[0], size_y=image_size[1])
-    d_template, dxr, dyr = clip_roi(d_img, dx, dy, size_x=template_size[0], size_y=template_size[1])
+    s_roi = roi.Roi(s_img, sx, sy, size_x=image_size[0], size_y=image_size[1])
+    d_roi = roi.Roi(d_img, dx, dy, size_x=template_size[0], size_y=template_size[1])
+
+    s_image = s_roi.clip()
+    d_template = d_roi.clip()
 
     if (s_image is None) or (d_template is None):
-        return None, None, None
+        return None, None, None, None
 
     shift_x, shift_y, metrics, corrmap = func(d_template, s_image, **kwargs)
 
-    dx = (dx - shift_x + dxr)
-    dy = (dy - shift_y + dyr)
+    dx = d_roi.x - shift_x
+    dy = d_roi.y - shift_y
 
     return dx, dy, metrics, corrmap
 
@@ -272,19 +320,22 @@ def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_si
     strength : float
                Strength of the correspondence in the range [-1, 1]
     """
-    template, _, _ = clip_roi(d_img, dx, dy,
+    t_roi = roi.Roi(d_img, dx, dy,
                               size_x=template_size, size_y=template_size)
-    search, dxr, dyr = clip_roi(s_img, sx, sy,
+    s_roi = roi.Roi(s_img, sx, sy,
                                 size_x=search_size, size_y=search_size)
+    template = t_roi.clip()
+    search = s_roi.clip()
+
     if template is None or search is None:
         return None, None, None
 
     x_offset, y_offset, strength = ciratefi.ciratefi(template, search, **kwargs)
-    dx += (x_offset + dxr)
-    dy += (y_offset + dyr)
+    dx += (x_offset + t_roi.axr)
+    dy += (y_offset + t_roi.ayr)
     return dx, dy, strength
 
-def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, convergence_threshold=1.0, max_dist=50, **kwargs):
+def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(251, 251), reduction=11, convergence_threshold=1.0, max_dist=50, **kwargs):
     """
     Iteratively apply a subpixel phase matcher to source (s_img) and destination (d_img)
     images. The size parameter is used to set the initial search space. The algorithm
@@ -307,10 +358,8 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
             A plio geodata object from which the template is extracted
     d_img : object
             A plio geodata object from which the search is extracted
-    size : int, tuple
-           One half of the total size of the template, so a 251 default results in a 502 pixel search space.
-           If an int, the template is square. If a tuple, in the form (x,y), is passed an
-           irregularly shaped template can be used.
+    size : tuple
+           Size of the template in the form (x,y)
     reduction : int
                 With each recursive call to this func, the size is reduced by this amount
     convergence_threshold : float
@@ -334,50 +383,30 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=251, reduction=11, conver
     # get initial destination location
     dsample = dx
     dline = dy
-    if isinstance(size, int):
-        size = (size, size)
+
     while True:
-        s_template, _, _ = clip_roi(s_img, sx, sy,
-                                   size_x=size[0], size_y=size[1])
-        d_search, dxr, dyr = clip_roi(d_img, dx, dy,
-                                 size_x=size[0], size_y=size[1])
-
-        if (s_template is None) or (d_search is None):
-            return None, None, None
-        if s_template.shape != d_search.shape:
-            s_size = s_template.shape
-            d_size = d_search.shape
-            updated_size_x = int(min(s_size[1], d_size[1]))  # Why is this /2?
-            updated_size_y = int(min(s_size[0], d_size[0]))
-            # Since the image is smaller than the requested size, set the size to
-            # the current maximum image size and reduce from there on potential
-            # future iterations.
-            size = (updated_size_x, updated_size_y)
-            s_template, _, _ = clip_roi(s_template, sx, sy,
-                                 size_x=size[0], size_y=size[1])
-            d_search, dxr, dyr = clip_roi(d_search, dx, dy,
-                                size_x=size[0], size_y=size[1])
-            if (s_template is None) or (d_search is None):
-                return None, None, None
-
-        # Apply the phase matcher
         try:
-            shift_x, shift_y, metrics = subpixel_phase(s_template, d_search, **kwargs)
+            shifted_dx, shifted_dy, metrics = subpixel_phase(sx, sy, dx, dy, s_img, d_img, image_size=size, **kwargs)
         except:
             return None, None, None
-        # Apply the shift to d_search and compute the new correspondence location
-        dx += shift_x  # The implementation already applies the dxr, dyr shifts
-        dy += shift_y
+
+        # Compute the amount of move the matcher introduced
+        delta_dx = abs(shifted_dx - dx)
+        delta_dy = abs(shifted_dy - dy)
+        dx = shifted_dx
+        dy = shifted_dy
+
         # Break if the solution has converged
         size = (size[0] - reduction, size[1] - reduction)
-
         dist = np.linalg.norm([dsample-dx, dline-dy])
+
         if min(size) < 1:
             return None, None, None
-        if abs(shift_x) <= convergence_threshold and\
-           abs(shift_y) <= convergence_threshold and\
+        if delta_dx <= convergence_threshold and\
+           delta_dy<= convergence_threshold and\
            abs(dist) <= max_dist:
-            break
+           break
+
     return dx, dy, metrics
 
 def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_template_kwargs={},
@@ -398,7 +427,7 @@ def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_tem
     res = session.query(Images).filter(Images.id == sourceid).one()
     source_node = NetworkNode(node_id=sourceid, image_path=res.path)
 
-    new_template_x, new_template_y, template_metric = subpixel_template(source.sample,
+    new_template_x, new_template_y, template_metric, _ = subpixel_template(source.sample,
                                                             source.line,
                                                             destination.sample,
                                                             destination.line,

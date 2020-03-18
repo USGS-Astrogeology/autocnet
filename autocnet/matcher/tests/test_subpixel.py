@@ -36,16 +36,6 @@ def test_clip_roi(center_x, center_y, size, expected):
 
     assert clip.mean() == expected
 
-
-def test_subpixel_phase(apollo_subsets):
-    a = apollo_subsets[0]
-    b = apollo_subsets[1]
-
-    xoff, yoff, err = sp.subpixel_phase(a, b)
-    assert xoff == 0
-    assert yoff == 2
-    assert len(err) == 2
-
 def test_subpixel_template(apollo_subsets):
     def clip_side_effect(*args, **kwargs):
         if np.array_equal(a, args[0]):
@@ -66,34 +56,109 @@ def test_subpixel_template(apollo_subsets):
                                                 a, b, upsampling=16)
 
     assert strength >= 0.99
-    assert nx == 50.9375
-    assert ny == 53.0625
+    assert nx == 50.5
+    assert ny == 52.4375
 
-@pytest.mark.parametrize("convergence_threshold, expected", [(1.0, (None, None, None)),
-                                                             (2.0, (50.49, 52.44, (0.039507, -9.5e-20)))])
+@pytest.mark.parametrize("convergence_threshold, expected", [(2.0, (50.49, 52.08, (0.039507, -9.5e-20)))])
 def test_iterative_phase(apollo_subsets, convergence_threshold, expected):
-    def clip_side_effect(*args, **kwargs):
-        if np.array_equal(a, args[0]):
-            return a, 0, 0
-        else:
-            return b, 0, 0
     a = apollo_subsets[0]
     b = apollo_subsets[1]
-    with patch('autocnet.matcher.subpixel.clip_roi', side_effect=clip_side_effect):
-        nx, ny, strength = sp.iterative_phase(a.shape[1]/2, a.shape[0]/2,
-                                              b.shape[1]/2, b.shape[1]/2,
-                                              a, b, convergence_threshold=convergence_threshold,
-                                              upsample_factor=100)
-        assert nx == expected[0]
-        assert ny == expected[1]
-        if expected[2] is not None:
-            for i in range(len(strength)):
-                assert pytest.approx(strength[i],6) == expected[2][i]
+    dx, dy, strength = sp.iterative_phase(a.shape[1]/2, a.shape[0]/2,
+                                          b.shape[1]/2, b.shape[1]/2,
+                                          a, b, 
+                                          size=(51,51), 
+                                          convergence_threshold=convergence_threshold,
+                                          upsample_factor=100)
+    assert dx == expected[0]
+    assert dy == expected[1]
+    if expected[2] is not None:
+        for i in range(len(strength)):
+            assert pytest.approx(strength[i],6) == expected[2][i]
 
 @pytest.mark.parametrize("data, expected", [
-    ((21,21), (10.5, 10.5)),
-    ((20,20), (11,11)),
-    ((0,0), (1,1))
+    ((21,21), (10, 10)),
+    ((20,20), (10,10))
 ])
 def test_check_image_size(data, expected):
     assert sp.check_image_size(data) == expected
+
+@pytest.mark.parametrize("x, y, x1, y1, image_size, template_size, expected",[
+    (4, 3, 3, 2, (3,3), (3,3), (3,2)),
+    (4, 3, 3, 2, (7,7), (3,3), (3,2)),  # Increase the search image size
+    (4, 3, 3, 2, (7,7), (5,5), (3,2)), # Increase the template size
+    (4, 3, 2, 2, (7,7), (3,3), (3,2)), # Move point in the x-axis
+    (4, 3, 4, 3, (7,7), (3,3), (3,2)), # Move point in the other x-direction
+    (4, 3, 3, 1, (7,7), (3,3), (3,2)), # Move point negative in the y-axis
+    (4, 3, 3, 3, (7,7), (3,3), (3,2))  # Move point positive in the y-axis
+
+])
+def test_subpixel_template_cooked(x, y, x1, y1, image_size, template_size, expected):
+    test_image = np.array(((0, 0, 0, 0, 0, 0, 0, 1, 0),
+                           (0, 0, 0, 0, 0, 0, 0, 1, 0),
+                           (0, 0, 0, 1, 1, 1, 0, 1, 0),
+                           (0, 0, 0, 0, 1, 0, 0, 0, 0),
+                           (0, 0, 0, 0, 1, 0, 0, 0, 0),
+                           (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                           (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                           (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                           (0, 0, 0, 0, 0, 0, 1, 1, 1),
+                           (0, 1, 1, 1, 0, 0, 1, 0, 1),
+                           (0, 1, 0, 1, 0, 0, 1, 0, 1),
+                           (0, 1, 1, 1, 0, 0, 1, 0, 1),
+                           (0, 0, 0, 0, 0, 0, 1, 1, 1)), dtype=np.uint8)
+
+    # Should yield (-3, 3) offset from image center
+    t_shape = np.array(((0, 0, 0, 0, 0, 0, 0),
+                        (0, 0, 1, 1, 1, 0, 0),
+                        (0, 0, 0, 1, 0, 0, 0),
+                        (0, 0, 0, 1, 0, 0, 0),
+                        (0, 0, 0, 0, 0, 0, 0)), dtype=np.uint8)
+
+    dx, dy, corr, corrmap = sp.subpixel_template(x, y, x1, y1, 
+                                                 test_image, t_shape,
+                                                 image_size=image_size, 
+                                                 template_size=template_size, 
+                                                 upsampling=1)
+    assert corr >= 1.0  # geq because sometime returning weird float > 1 from OpenCV
+    assert dx == expected[0]
+    assert dy == expected[1]
+
+@pytest.mark.parametrize("x, y, x1, y1, image_size, expected",[
+    (4, 3, 3, 2, (3,3), (3,2)),
+    (4, 3, 3, 2, (5,5), (3,2)),  # Increase the search image size
+    (4, 3, 3, 2, (5,5), (3,2)), # Increase the template size
+    (4, 3, 2, 2, (5,5), (3,2)), # Move point in the x-axis
+    (4, 3, 4, 3, (5,5), (3,2)), # Move point in the other x-direction
+    (4, 3, 3, 1, (5,5), (3,2)), # Move point negative in the y-axis; also tests size reduction
+    (4, 3, 3, 3, (5,5), (3,2))  # Move point positive in the y-axis
+
+])
+def test_subpixel_phase_cooked(x, y, x1, y1, image_size, expected):
+    test_image = np.array(((0, 0, 0, 0, 0, 0, 0, 1, 0),
+                           (0, 0, 0, 0, 0, 0, 0, 1, 0),
+                           (0, 0, 0, 1, 1, 1, 0, 1, 0),
+                           (0, 0, 0, 0, 1, 0, 0, 0, 0),
+                           (0, 0, 0, 0, 1, 0, 0, 0, 0),
+                           (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                           (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                           (0, 0, 0, 0, 0, 0, 0, 0, 0),
+                           (0, 0, 0, 0, 0, 0, 1, 1, 1),
+                           (0, 1, 1, 1, 0, 0, 1, 0, 1),
+                           (0, 1, 0, 1, 0, 0, 1, 0, 1),
+                           (0, 1, 1, 1, 0, 0, 1, 0, 1),
+                           (0, 0, 0, 0, 0, 0, 1, 1, 1)), dtype=np.uint8)
+
+    # Should yield (-3, 3) offset from image center
+    t_shape = np.array(((0, 0, 0, 0, 0, 0, 0),
+                        (0, 0, 1, 1, 1, 0, 0),
+                        (0, 0, 0, 1, 0, 0, 0),
+                        (0, 0, 0, 1, 0, 0, 0),
+                        (0, 0, 0, 0, 0, 0, 0),
+                        (0, 0, 0, 0, 0, 0, 0)), dtype=np.uint8)
+
+    dx, dy, metrics = sp.subpixel_phase(x, y, x1, y1, 
+                                                 test_image, t_shape,
+                                                 image_size=image_size)
+
+    assert dx == expected[0]
+    assert dy == expected[1]

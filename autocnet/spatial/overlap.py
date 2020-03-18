@@ -12,9 +12,9 @@ from autocnet import config, dem, Session
 from autocnet.cg import cg as compgeom
 from autocnet.io.db.model import Images, Measures, Overlay, Points, JsonEncoder
 from autocnet.spatial import isis
-from autocnet.matcher.subpixel import clip_roi
 from autocnet.matcher.cpu_extractor import extract_most_interesting
 from autocnet.transformation.spatial import reproject
+from autocnet.transformation import roi
 
 from plurmy import Slurm
 import csmapi
@@ -163,6 +163,7 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
     points = []
     semi_major = config['spatial']['semimajor_rad']
     semi_minor = config['spatial']['semiminor_rad']
+
     valid = compgeom.distribute_points_in_geom(geom, **distribute_points_kwargs)
     if not valid:
         warnings.warn('Failed to distribute points in overlap')
@@ -194,16 +195,20 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
             sample, line = image_coord.samp, image_coord.line
 
         # Extract ORB features in a sub-image around the desired point
-        image, _, _ = clip_roi(node.geodata, sample, line, size_x=size, size_y=size)
-        print(image)
+        image_roi = roi.Roi(node.geodata, sample, line, size_x=size, size_y=size)
+        image = image_roi.clip()
+        try:
+            interesting = extract_most_interesting(image)
+        except:
+            warnings.warn('Could not find an interesting feature around point')
+            continue
 
-
-        interesting = extract_most_interesting(image)
-
-        # kps are in the image space with upper left origin, so convert to
-        # center origin and then convert back into full image space
-        newsample = sample + (interesting.x - size)
-        newline = line + (interesting.y - size)
+        # kps are in the image space with upper left origin and the roi
+        # could be the requested size or smaller if near an image boundary.
+        # So use the roi upper left_x and top_y for the actual origin.
+        left_x, _, top_y, _ = image_roi.image_extent
+        newsample = left_x + interesting.x
+        newline = top_y + interesting.y
 
         # Get the updated lat/lon from the feature in the node
         if cam_type == "isis":

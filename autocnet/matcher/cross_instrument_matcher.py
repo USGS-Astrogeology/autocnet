@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 import scipy
 from matplotlib import pyplot as plt
-from scipy.misc import imresize
 from sqlalchemy import (Boolean, Column, Float, ForeignKey, Integer,
                         LargeBinary, String, UniqueConstraint, create_engine,
                         event, orm, pool)
@@ -42,9 +41,6 @@ from knoten import csm
 from plio.io.io_controlnetwork import from_isis, to_isis
 from plio.io.io_gdal import GeoDataset
 
-from pysis.exceptions import ProcessError
-from pysis.isis import campt
-
 from shapely import wkt
 from shapely.geometry.multipolygon import MultiPolygon
 from shapely.geometry import Point
@@ -67,12 +63,8 @@ from autocnet.transformation.spatial import reproject
 
 import warnings
 
-
-
-
 def generate_ground_points(ground_mosaic, nspts_func=lambda x: int(round(x,1)*1), ewpts_func=lambda x: int(round(x,1)*4)):
     """
-
 
     Parameters
     ----------
@@ -146,7 +138,6 @@ def generate_ground_points(ground_mosaic, nspts_func=lambda x: int(round(x,1)*1)
     ground_cnet["point"] = coord_list
     ground_cnet['line'] = lines
     ground_cnet['sample'] = samples
-
     ground_cnet = gpd.GeoDataFrame(ground_cnet, geometry='point')
     return ground_cnet, fp_poly, coord_list
 

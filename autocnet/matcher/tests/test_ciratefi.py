@@ -7,7 +7,7 @@ from imageio import imread
 from scipy.ndimage.interpolation import rotate
 
 from autocnet.examples import get_path
-from autocnet.matcher import subpixel as sp
+from autocnet.transformation import roi
 from .. import ciratefi
 
 import pytest
@@ -32,7 +32,7 @@ def img_coord():
 @pytest.fixture
 def template(img, img_coord):
     coord_x, coord_y = img_coord
-    template, _, _ = sp.clip_roi(img, coord_x, coord_y, 5, 5)
+    template= roi.Roi(img, coord_x, coord_y, 5, 5).clip()
     template = rotate(template, 90)
     return template
 
@@ -40,7 +40,7 @@ def template(img, img_coord):
 def search():
     coord_x, coord_y = (482.09783936, 652.40679932)
     img = imread(get_path('AS15-M-0298_SML.png'), as_gray=True)
-    search, _, _ = sp.clip_roi(img, coord_x, coord_y, 21, 21)
+    search = roi.Roi(img, coord_x, coord_y, 21, 21).clip()
     return search
 
 @pytest.fixture
@@ -48,7 +48,7 @@ def offset_template(img, img_coord):
     coord_x, coord_y = img_coord
     coord_x += 1
     coord_y += 1
-    offset_template, _, _ = sp.clip_roi(img, coord_x, coord_y, 5, 5)
+    offset_template = roi.Roi(img, coord_x, coord_y, 5, 5).clip()
     return offset_template
 
 def test_cifi_radii_too_large(template, search):

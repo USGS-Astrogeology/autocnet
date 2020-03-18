@@ -26,7 +26,7 @@ else:
 # Defaults
 dem = None
 
-from config_parser import parse_config
+from autocnet.config_parser import parse_config
 
 config = parse_config()
 
@@ -47,7 +47,7 @@ if config:
     hostname = socket.gethostname()
     engine = create_engine(db_uri, poolclass=pool.NullPool,
                     connect_args={"application_name":"AutoCNet_{}".format(hostname)},
-                    isolation_level="AUTOCOMMIT")                   
+                    isolation_level="AUTOCOMMIT")
     Session = orm.session.sessionmaker(bind=engine)
 else:
     def sessionwarn():
