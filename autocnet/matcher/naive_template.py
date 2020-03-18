@@ -40,9 +40,9 @@ def pattern_match_autoreg(template, image, subpixel_size=3, max_scaler=0.2, func
         The y offset
 
     max_corr : float
-               The strength of the correlation in the range [-1, 1].   
+               The strength of the correlation in the range [-1, 1].
     """
-    
+
     result = cv2.matchTemplate(image, template, method=func)
 
     if func == cv2.TM_SQDIFF or func == cv2.TM_SQDIFF_NORMED:
@@ -50,7 +50,7 @@ def pattern_match_autoreg(template, image, subpixel_size=3, max_scaler=0.2, func
     else:
         y, x = np.unravel_index(np.argmax(result, axis=None), result.shape)
     max_corr = result[(y,x)]
-    
+
     upper = int(2 + floor(subpixel_size / 2))
     lower = upper - 1
     # x, y are the location of the upper left hand corner of the template in the image
@@ -60,32 +60,32 @@ def pattern_match_autoreg(template, image, subpixel_size=3, max_scaler=0.2, func
     if area.shape != (subpixel_size+2, subpixel_size+2):
         print("Max correlation is too close to the boundary.")
         return None, None, 0
-        
+
     # Find the max on the edges, scale just like autoreg (but why?)
     edge_max = np.max(np.vstack([area[0], area[-1], area[:,0], area[:,-1]]))
     internal = area[1:-1, 1:-1]
     mask = (internal > edge_max + max_scaler * (edge_max-max_corr)).flatten()
-    
+
     empty = np.column_stack([np.repeat(np.arange(0,subpixel_size),subpixel_size),
-                             np.tile(np.arange(0,subpixel_size),subpixel_size), 
+                             np.tile(np.arange(0,subpixel_size),subpixel_size),
                              np.zeros(subpixel_size*subpixel_size)])
     empty[:,-1] = internal.ravel()
 
     to_weight = empty[mask, :]
     # Average is the shift from y, x form
     average = np.average(to_weight[:,:2], axis=0, weights=to_weight[:,2])
-    
+
     # The center of the 3x3 window is 1.5,1.5, so the shift needs to be recentered to 0,0
     y += (subpixel_size/2 - average[0])
     x += (subpixel_size/2 - average[1])
-    
+
     # Compute the idealized shift (image center)
-    y -= (image.shape[0] / 2) - (template.shape[0] / 2) 
-    x -= (image.shape[1] / 2) - (template.shape[1] / 2) 
-    
+    y -= (image.shape[0] / 2) - (template.shape[0] / 2)
+    x -= (image.shape[1] / 2) - (template.shape[1] / 2)
+
     return x, y, max_corr
 
-def pattern_match(template, image, upsampling=16, func=cv2.TM_CCORR_NORMED, error_check=False):
+def pattern_match(template, image, upsampling=16, func=cv2.TM_CCOEFF_NORMED, error_check=False):
     """
     Call an arbitrary pattern matcher using a subpixel approach where the template and image
     are upsampled using a third order polynomial.

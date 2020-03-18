@@ -6,15 +6,25 @@ from skimage.feature import register_translation
 from redis import StrictRedis
 from plurmy import Slurm
 
+from skimage import transform as tf
+
+from matplotlib import pyplot as plt
+
+from plio.io.io_gdal import GeoDataset
+
 from autocnet import Session, config
 from autocnet.matcher.naive_template import pattern_match, pattern_match_autoreg
 from autocnet.matcher import ciratefi
 from autocnet.io.db.model import Measures, Points, Images, JsonEncoder
 from autocnet.graph.node import NetworkNode
 from autocnet.transformation import roi
+from autocnet import spatial
+from autocnet.utils.utils import bytescale
 
 import geopandas as gpd
 import pandas as pd
+
+import pvl
 
 # TODO: look into KeyPoint.size and perhaps use to determine an appropriately-sized search/template.
 def _prep_subpixel(nmatches, nstrengths=2):
@@ -136,6 +146,7 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200, dtype="uint64"):
         except:
             return None, 0, 0
     return subarray, axr, ayr
+
 
 def subpixel_phase(sx, sy, dx, dy,
                    s_img, d_img,
@@ -409,6 +420,129 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(251, 251), reduction=11,
 
     return dx, dy, metrics
 
+
+def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60,
+               template_kwargs={"image_size":(59,59), "template_size":(31,31)},
+               phase_kwargs=None, verbose=False):
+
+    if not isinstance(input_cube, GeoDataset):
+        raise Exception("input cube must be a geodataset obj")
+
+    if not isinstance(base_cube, GeoDataset):
+        raise Exception("match cube must be a geodataset obj")
+
+    base_startx = int(bcenter_x - size_x)
+    base_starty = int(bcenter_y - size_y)
+    base_stopx = int(bcenter_x + size_x)
+    base_stopy = int(bcenter_y + size_y)
+
+    image_size = input_cube.raster_size
+    match_size = base_cube.raster_size
+
+    # for now, require the entire window resides inside both cubes.
+    if base_stopx > match_size[0]:
+        raise Exception(f"Window: {base_stopx} > {match_size[0]}, center: {bcenter_x},{bcenter_y}")
+    if base_startx < 0:
+        raise Exception(f"Window: {base_startx} < 0, center: {bcenter_x},{bcenter_y}")
+    if base_stopy > match_size[1]:
+        raise Exception(f"Window: {base_stopy} > {match_size[1]}, center: {bcenter_x},{bcenter_y} ")
+    if base_starty < 0:
+        raise Exception(f"Window: {base_starty} < 0, center: {bcenter_x},{bcenter_y}")
+
+    mlat, mlon = spatial.isis.image_to_ground(base_cube.file_name, bcenter_x, bcenter_y)
+    center_x, center_y = spatial.isis.ground_to_image(base_cube.file_name, mlon, mlat)
+
+    match_points = [(base_startx,base_starty),
+                    (base_startx,base_stopy),
+                    (base_stopx,base_stopy),
+                    (base_stopx,base_starty)]
+
+    cube_points = []
+    for x,y in match_points:
+        lat, lon = spatial.isis.image_to_ground(base_cube.file_name, x, y)
+        cube_points.append(spatial.isis.ground_to_image(input_cube.file_name, lon, lat)[::-1])
+    for x,y in cube_points:
+        if x < 0 or y < 0:
+            return None, None, None, None, None
+
+    base_gcps = np.array([*match_points])
+    base_gcps[:,0] -= base_startx
+    base_gcps[:,1] -= base_starty
+
+    dst_gcps = np.array([*cube_points])
+    start_x = dst_gcps[:,0].min()
+    start_y = dst_gcps[:,1].min()
+    stop_x = dst_gcps[:,0].max()
+    stop_y = dst_gcps[:,1].max()
+    dst_gcps[:,0] -= start_x
+    dst_gcps[:,1] -= start_y
+
+    affine = tf.estimate_transform('affine', np.array([*base_gcps]), np.array([*dst_gcps]))
+
+    # read_array not getting correct type by default
+    isis2np_types = {
+            "UnsignedByte" : "uint8",
+            "SignedWord" : "int16",
+            "Real" : "float64"
+    }
+
+    base_pixels = list(map(int, [match_points[0][0], match_points[0][1], size_x*2, size_y*2]))
+    base_type = isis2np_types[pvl.load(base_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
+    base_arr = base_cube.read_array(pixels=base_pixels, dtype=base_type)
+
+    dst_pixels = list(map(int, [start_x, start_y, stop_x-start_x, stop_y-start_y]))
+    dst_type = isis2np_types[pvl.load(input_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
+    dst_arr = input_cube.read_array(pixels=dst_pixels, dtype=dst_type)
+
+    dst_arr = tf.warp(dst_arr, affine)
+    dst_arr = dst_arr[:size_y*2, :size_x*2]
+
+    if verbose:
+      fig, axs = plt.subplots(1, 2)
+      axs[0].set_title("Base")
+      axs[0].imshow(bytescale(base_arr), cmap="Greys_r")
+      axs[1].set_title("Projected Image")
+      axs[1].imshow(bytescale(dst_arr), cmap="Greys_r")
+      plt.show()
+
+
+    # Run through one step of template matching then one step of phase matching
+    # These parameters seem to work best, should pass as kwargs later
+    restemplate = subpixel_template(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
+
+    if phase_kwargs:
+        resphase = iterative_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, **phase_kwargs)
+        _,_,maxcorr, corrmap = restemplate
+        x,y,_ = resphase
+    else:
+        x,y,maxcorr,corrmap = restemplate
+
+    if x is None or y is None:
+        return None, None, None, None, None
+
+    sample, line = affine([x,y])[0]
+    sample += start_x
+    line += start_y
+
+    if verbose:
+      fig, axs = plt.subplots(1, 3)
+      fig.set_size_inches((30,30))
+      darr,_,_ = clip_roi(input_cube.read_array(dtype=dst_type), sample, line, 100, 100)
+      axs[1].imshow(darr, cmap="Greys_r")
+      axs[1].scatter(x=[darr.shape[1]/2], y=[darr.shape[0]/2], s=10, c="red")
+      axs[1].set_title("Original Registered Image")
+
+      axs[0].imshow(base_arr, cmap="Greys_r")
+      axs[0].scatter(x=[base_arr.shape[1]/2], y=[base_arr.shape[0]/2], s=10, c="red")
+      axs[0].set_title("Base")
+
+      pcm = axs[2].imshow(corrmap**2, interpolation=None, cmap="coolwarm")
+      plt.show()
+
+    dist = np.linalg.norm([center_x-x, center_y-y])
+    return sample, line, dist, maxcorr, corrmap
+
+
 def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_template_kwargs={},
                             cost_func=lambda x,y: 1/x**2 * y, threshold=0.005):
 
@@ -434,7 +568,7 @@ def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_tem
                                                             source_node.geodata,
                                                             destination_node.geodata,
                                                             **subpixel_template_kwargs)
-    if new_template_x == Nonee:
+    if new_template_x == None:
         destination.ignore = True # Unable to template match
         return
 
@@ -514,16 +648,15 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
         res = session.query(Images).filter(Images.id == destinationid).one()
         destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
 
-        new_x, new_y, template_metric, _ = geom_match(source_node.geodata, destination_node.geodata,
-                                                      source_node.sample, source_node.line,
+        new_x, new_y, dist, template_metric,  _ = geom_match(source_node.geodata, destination_node.geodata,
+                                                      source.sample, source.line,
                                                       template_kwargs=subpixel_template_kwargs,
-                                                      phase_kwargs=sub_pixel_phase_kwargs, phase=True)
+                                                      phase_kwargs=iterative_phase_kwargs, size_x=100, size_y=100)
 
         if new_x == None:
             measure.ignore = True # Unable to phase match
             continue
 
-        dist = np.linalg.norm([desination_node.sample-new_x, destination_node.line-new_y])
         cost = cost_func(dist, template_metric)
 
         if cost <= threshold:
@@ -697,3 +830,6 @@ def cluster_subpixel_register_measures(iterative_phase_kwargs={'size': 251},
                  output=config['cluster']['cluster_log_dir']+f'/autocnet.subpixel_register-%j')
     submitter.submit(array='1-{}'.format(job_counter), chunksize=chunksize, exclude=exclude)
     return job_counter
+
+
+

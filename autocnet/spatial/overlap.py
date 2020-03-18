@@ -213,8 +213,12 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
         # Get the updated lat/lon from the feature in the node
         if cam_type == "isis":
             p = isis.point_info(node["image_path"], newsample, newline, point_type="image")
-            x, y, z = p["GroundPoint"]["BodyFixedCoordinate"].value
-            if p["GroundPoint"]["BodyFixedCoordinate"].units.lower() == "km":
+            try:
+                x, y, z = p["BodyFixedCoordinate"].value
+            except:
+                x,y,x = ["BodyFixedCoordinate"]
+
+            if p["BodyFixedCoordinate"].units.lower() == "km":
                 x = x * 1000
                 y = y * 1000
                 z = z * 1000

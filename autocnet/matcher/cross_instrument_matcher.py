@@ -1,4 +1,3 @@
-from skimage import transform as tf
 from shapely.geometry import MultiPoint
 from plio.io.io_gdal import GeoDataset
 import numpy as np
@@ -51,15 +50,12 @@ from plurmy import Slurm
 
 from autocnet import config, dem, engine, Session
 from autocnet.io.db.model import Images, Points, Measures, JsonEncoder
-from autocnet.graph.network import NetworkCandidateGraph
-from autocnet.matcher.subpixel import iterative_phase, subpixel_template, clip_roi
+from autocnet.matcher.subpixel import clip_roi
 from autocnet.cg.cg import distribute_points_in_geom
 from autocnet.io.db.connection import new_connection
 from autocnet.spatial import isis
-from autocnet.utils.utils import bytescale
-from autocnet.matcher.cpu_extractor import extract_most_interesting
-from autocnet import spatial
 from autocnet.transformation.spatial import reproject
+from autocnet.matcher.cpu_extractor import extract_most_interesting
 
 import warnings
 
@@ -207,12 +203,10 @@ def propagate_point(lon, lat, pointid, paths, lines, samples, verbose=False):
 
         semi_major = config['spatial']['semimajor_rad']
         semi_minor = config['spatial']['semiminor_rad']
-        print("HEIGHT: ", height)
         # The CSM conversion makes the LLA/ECEF conversion explicit
         x, y, z = reproject([lon, lat, height],
                          semi_major, semi_minor,
                          'latlon', 'geocent')
-        print(x,y,z)
 
         new_measures.append({
                 'pointid' : pointid,
@@ -320,136 +314,5 @@ def propagate_control_network(base_cnet, verbose=False):
     session.commit()
 
     return ground
-
-
-def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60,
-               template_kwargs={"image_size":(59,59), "template_size":(31,31)},
-               phase_kwargs=None, verbose=False):
-
-    if not isinstance(input_cube, GeoDataset):
-        raise Exception("input cube must be a geodataset obj")
-
-    if not isinstance(base_cube, GeoDataset):
-        raise Exception("match cube must be a geodataset obj")
-
-    base_startx = int(bcenter_x - size_x)
-    base_starty = int(bcenter_y - size_y)
-    base_stopx = int(bcenter_x + size_x)
-    base_stopy = int(bcenter_y + size_y)
-
-    image_size = input_cube.raster_size
-    match_size = base_cube.raster_size
-
-    # for now, require the entire window resides inside both cubes.
-    if base_stopx > match_size[0]:
-        raise Exception(f"Window: {base_stopx} > {match_size[0]}, center: {bcenter_x},{bcenter_y}")
-    if base_startx < 0:
-        raise Exception(f"Window: {base_startx} < 0, center: {bcenter_x},{bcenter_y}")
-    if base_stopy > match_size[1]:
-        raise Exception(f"Window: {base_stopy} > {match_size[1]}, center: {bcenter_x},{bcenter_y} ")
-    if base_starty < 0:
-        raise Exception(f"Window: {base_starty} < 0, center: {bcenter_x},{bcenter_y}")
-
-    mlat, mlon = spatial.isis.image_to_ground(base_cube.file_name, bcenter_x, bcenter_y)
-    center_x, center_y = spatial.isis.ground_to_image(base_cube.file_name, mlon, mlat)
-
-    match_points = [(base_startx,base_starty),
-                    (base_startx,base_stopy),
-                    (base_stopx,base_stopy),
-                    (base_stopx,base_starty)]
-
-    cube_points = []
-    for x,y in match_points:
-#         try:
-        lat, lon = spatial.isis.image_to_ground(base_cube.file_name, x, y)
-        cube_points.append(spatial.isis.ground_to_image(input_cube.file_name, lon, lat)[::-1])
-#         except Exception as e:
-#             if verbose:
-#                 print("Match Failed with: ", e)
-#             return None, None, None, None, None
-    for x,y in cube_points:
-        if x < 0 or y < 0:
-            print("projected off cube")
-            return None, None, None, None, None
-
-    print(bcenter_x, bcenter_y, size_x, size_y)
-    print(input_cube.file_name)
-    print(match_points)
-    print(cube_points)
-
-    base_gcps = np.array([*match_points])
-    base_gcps[:,0] -= base_startx
-    base_gcps[:,1] -= base_starty
-
-    dst_gcps = np.array([*cube_points])
-    start_x = dst_gcps[:,0].min()
-    start_y = dst_gcps[:,1].min()
-    stop_x = dst_gcps[:,0].max()
-    stop_y = dst_gcps[:,1].max()
-    dst_gcps[:,0] -= start_x
-    dst_gcps[:,1] -= start_y
-    print(base_gcps)
-    print(dst_gcps)
-    affine = tf.estimate_transform('affine', np.array([*base_gcps]), np.array([*dst_gcps]))
-
-    base_pixels = list(map(int, [match_points[0][0], match_points[0][1], size_x*2, size_y*2]))
-    base_arr = base_cube.read_array(pixels=base_pixels, dtype="uint64")
-
-    dst_pixels = list(map(int, [start_x, start_y, stop_x-start_x, stop_y-start_y]))
-    dst_arr = input_cube.read_array(pixels=dst_pixels, dtype="float64")
-
-    dst_arr = tf.warp(dst_arr, affine)
-    dst_arr = dst_arr[:size_y*2, :size_x*2]
-    print(dst_arr.shape)
-
-    if verbose:
-      fig, axs = plt.subplots(1, 2)
-      axs[0].set_title("Base")
-      axs[0].imshow(bytescale(base_arr), cmap="Greys_r")
-      axs[1].set_title("Projected Image")
-      axs[1].imshow(bytescale(dst_arr), cmap="Greys_r")
-      plt.show()
-
-    print(dst_arr.min(), dst_arr.max())
-
-    # Run through one step of template matching then one step of phase matching
-    # These parameters seem to work best, should pass as kwargs later
-    restemplate = subpixel_template(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
-
-    if phase_kwargs:
-        resphase = iterative_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, **phase_kwargs)
-        _,_,maxcoor, corrmap = restemplate
-        x,y,_ = rephase
-    else:
-        x,y,maxcorr,corrmap = restemplate
-
-    print(x, y)
-    if x is None or y is None:
-        return None, None, None, None, None
-
-    sample, line = affine([x,y])[0]
-    print(sample, line)
-    sample += start_x
-    line += start_y
-
-    print(sample, line)
-
-    if verbose:
-      fig, axs = plt.subplots(1, 3)
-      fig.set_size_inches((30,30))
-      darr,_,_ = clip_roi(input_cube.read_array(), sample, line, 960, 960)
-      axs[1].imshow(darr, cmap="Greys_r")
-      axs[1].scatter(x=[darr.shape[1]/2], y=[darr.shape[0]/2], s=10, c="red")
-      axs[1].set_title("Original Registered Image")
-
-      axs[0].imshow(base_arr, cmap="Greys_r")
-      axs[0].scatter(x=[base_arr.shape[1]/2], y=[base_arr.shape[0]/2], s=10, c="red")
-      axs[0].set_title("Base")
-
-      pcm = axs[2].imshow(corrmap**2, interpolation=None, cmap="coolwarm")
-      plt.show()
-
-    dist = np.linalg.norm([center_x-x, center_y-y])
-    return sample, line, dist, maxcorr, corrmap
 
 
