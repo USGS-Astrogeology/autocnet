@@ -227,7 +227,7 @@ def subpixel_template(sx, sy, dx, dy,
     d_template, dxr, dyr = clip_roi(d_img, dx, dy, size_x=template_size[0], size_y=template_size[1])
 
     if (s_image is None) or (d_template is None):
-        return None, None, None
+        return None, None, None, None
 
     shift_x, shift_y, metrics, corrmap = func(d_template, s_image, **kwargs)
 
@@ -474,6 +474,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
     session = Session()
     measures = session.query(Measures).filter(Measures.pointid == pointid).order_by(Measures.id).all()
     source = measures[0]
+    source.weight = 1
 
     sourceid = source.imageid
     res = session.query(Images).filter(Images.id == sourceid).one()
@@ -516,9 +517,9 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
             continue
 
         # Update the measure
-        if new_template_x:
-            measure.sample = new_template_x
-            measure.line = new_template_y
+        if new_phase_x:
+            measure.sample = new_phase_x
+            measure.line = new_phase_y
             measure.weight = cost
 
         # In case this is a second run, set the ignore to False if this
