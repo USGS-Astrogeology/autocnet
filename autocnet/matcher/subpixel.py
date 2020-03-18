@@ -76,7 +76,7 @@ def check_image_size(imagesize):
         y += 1
     return x,y
 
-def clip_roi(img, center_x, center_y, size_x=200, size_y=200):
+def clip_roi(img, center_x, center_y, size_x=200, size_y=200, dtype="uint64"):
     """
     Given an input image, clip a square region of interest
     centered on some pixel at some size.
@@ -128,7 +128,7 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200):
         subarray = img[pixels[1]:pixels[1] + pixels[3] + 1, pixels[0]:pixels[0] + pixels[2] + 1]
     else:
         try:
-            subarray = img.read_array(pixels=pixels)
+            subarray = img.read_array(pixels=pixels, dtype=dtype)
         except:
             return None, 0, 0
     return subarray, axr, ayr
@@ -405,7 +405,7 @@ def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_tem
                                                             source_node.geodata,
                                                             destination_node.geodata,
                                                             **subpixel_template_kwargs)
-    if new_template_x == None:
+    if new_template_x == Nonee:
         destination.ignore = True # Unable to template match
         return
 
@@ -440,7 +440,6 @@ def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_tem
 
     session.commit()
     session.close()
-
 
 
 def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_template_kwargs={},
@@ -486,29 +485,16 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
         res = session.query(Images).filter(Images.id == destinationid).one()
         destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
 
-        new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample,
-                                                                source.line,
-                                                                measure.sample,
-                                                                measure.line,
-                                                                source_node.geodata,
-                                                                destination_node.geodata,
-                                                                **iterative_phase_kwargs)
-        if new_phase_x == None:
+        new_x, new_y, template_metric, _ = geom_match(source_node.geodata, destination_node.geodata,
+                                                      source_node.sample, source_node.line,
+                                                      template_kwargs=subpixel_template_kwargs,
+                                                      phase_kwargs=sub_pixel_phase_kwargs, phase=True)
+
+        if new_x == None:
             measure.ignore = True # Unable to phase match
             continue
 
-        new_template_x, new_template_y, template_metric = subpixel_template(source.sample,
-                                                                source.line,
-                                                                new_phase_x,
-                                                                new_phase_y,
-                                                                source_node.geodata,
-                                                                destination_node.geodata,
-                                                                **subpixel_template_kwargs)
-        if new_template_x == None:
-            measure.ignore = True # Unable to template match
-            continue
-
-        dist = np.linalg.norm([new_phase_x-new_template_x, new_phase_y-new_template_y])
+        dist = np.linalg.norm([desination_node.sample-new_x, destination_node.line-new_y])
         cost = cost_func(dist, template_metric)
 
         if cost <= threshold:
@@ -517,8 +503,8 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
 
         # Update the measure
         if new_template_x:
-            measure.sample = new_template_x
-            measure.line = new_template_y
+            measure.sample = new_x
+            measure.line = new_y
             measure.weight = cost
 
         # In case this is a second run, set the ignore to False if this

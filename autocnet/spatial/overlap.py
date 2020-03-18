@@ -195,11 +195,10 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
 
         # Extract ORB features in a sub-image around the desired point
         image, _, _ = clip_roi(node.geodata, sample, line, size_x=size, size_y=size)
-        try:
-            interesting = extract_most_interesting(image)
-        except:
-            warnings.warn('Could not find an interesting feature around point')
-            continue
+        print(image)
+
+
+        interesting = extract_most_interesting(image)
 
         # kps are in the image space with upper left origin, so convert to
         # center origin and then convert back into full image space
