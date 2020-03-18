@@ -210,6 +210,12 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
         newsample = left_x + interesting.x
         newline = top_y + interesting.y
 
+        raster_size = node.geodata.raster_size
+        assert newsample <= raster_size[0], f"Out of bounds! Left_x: {left_x}, Shift_X: {interesting_x}"
+        assert newsample >= 0, f"Out of bounds! Left_x: {left_x}, Shift_X: {interesting_x}"
+        assert newline <= raster_size[1], f"Out of bounds! Top_y: {top_y}, Shift_y: {interesting_y}"
+        assert newline >= 0, f"Out of bounds! Top_y: {top_y}, Shift_y: {interesting_y}"
+        
         # Get the updated lat/lon from the feature in the node
         if cam_type == "isis":
             p = isis.point_info(node["image_path"], newsample, newline, point_type="image")
