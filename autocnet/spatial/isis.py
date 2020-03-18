@@ -6,6 +6,7 @@ from numbers import Number
 import numpy as np
 import tempfile
 
+
 def point_info(cube_path, x, y, point_type, allow_outside=False):
     """
     Use Isis's campt to get image/ground point info from an image
@@ -42,37 +43,57 @@ def point_info(cube_path, x, y, point_type, allow_outside=False):
     if isinstance(x, Number) and isinstance(y, Number):
         x, y = [x], [y]
 
-    with tempfile.NamedTemporaryFile("w+") as f:
-        # ISIS wants points in a file, so write to a temp file
-        if point_type == "ground":
+    if point_type == "image":
+        # convert to ISIS pixels
+        x = np.add(x, .5)
+        y = np.add(y, .5)
+
+    if pvl.load(cube_path).get("IsisCube").get("Mapping"):
+      pvlres = []
+      # We have a projected image
+      for x,y in zip(x,y):
+        try:
+          if point_type.lower() == "ground":
+            pvlres.append(isis.mappt(from_=cube_path, longitude=x, latitude=y, allowoutside=allow_outside, coordsys="UNIVERSAL", type_=point_type))
+          elif point_type.lower() == "image":
+            pvlres.append(isis.mappt(from_=cube_path, sample=x, line=y, allowoutside=allow_outside, type_=point_type))
+        except ProcessError as e:
+          print(f"CAMPT call failed, image: {cube_path}\n{e.stderr}")
+          return
+      dictres = [dict(pvl.loads(res)["Results"]) for res  in pvlres]
+      if len(dictres) == 1:
+        pvlres = dictres[0]
+
+    else:
+      with tempfile.NamedTemporaryFile("w+") as f:
+         # ISIS's campt wants points in a file, so write to a temp file
+         if point_type == "ground":
             # campt uses lat, lon for ground but sample, line for image.
             # So swap x,y for ground-to-image calls
             x,y = y,x
-        elif point_type == "image":
-            # convert to ISIS pixels
-            x = np.add(x, .5)
-            y = np.add(y, .5)
 
-        f.write("\n".join(["{}, {}".format(xval,yval) for xval,yval in zip(x, y)]))
-        f.flush()
-        try:
+
+         f.write("\n".join(["{}, {}".format(xval,yval) for xval,yval in zip(x, y)]))
+         f.flush()
+         try:
             pvlres = isis.campt(from_=cube_path, coordlist=f.name, allowoutside=allow_outside, usecoordlist=True, coordtype=point_type)
-        except ProcessError as e:
+         except ProcessError as e:
             warn(f"CAMPT call failed, image: {cube_path}\n{e.stderr}")
             return
 
-        pvlres = pvl.loads(pvlres)
-        if len(x) > 1 and len(y) > 1:
+         pvlres = pvl.loads(pvlres)
+         dictres = []
+         if len(x) > 1 and len(y) > 1:
             for r in pvlres:
                 # convert all pixels to PLIO pixels from ISIS
                 r[1]["Sample"] -= .5
                 r[1]["Line"] -= .5
-        else:
+                dictres.append(dict(r[1]))
+         else:
             pvlres["GroundPoint"]["Sample"] -= .5
             pvlres["GroundPoint"]["Line"] -= .5
-
-
-    return pvlres
+            dictres = dict(pvlres["GroundPoint"])
+    return dictres
 
 
 def image_to_ground(cube_path, sample, line, lattype="PlanetocentricLatitude", lonttype="PositiveEast360Longitude"):
@@ -88,17 +109,20 @@ def image_to_ground(cube_path, sample, line, lattype="PlanetocentricLatitude", l
            1-D array of longitudes or single floating point longitude
 
     """
-    # campt always does x,y
-    pvlres = point_info(cube_path, sample, line, "image")
+    res = point_info(cube_path, sample, line, "image")
+
     try:
-        lats, lons = np.asarray([[r[1][lattype].value, r[1][lonttype].value] for r in pvlres]).T
+        if isinstance(res, list):
+            lats, lons = np.asarray([[r[lattype].value, r[lonttype].value] for r in res]).T
+        else:
+            lats. lons = res[lattype].value, res[lonttype].value
     except Exception as e:
-        raise Exception(r[1]["error"])
-
-    if len(lats) == 1 and len(lons) == 1:
-        lats, lons = lats[0], lons[0]
-
+        if isinstance(res, list):
+            lats, lons = np.asarray([[r[lattype].value, r[lonttype].value] for r in res]).T
+        else:
+            lats, lons = res[lattype].value, res[lonttype].value
     return lats, lons
+
 
 def ground_to_image(cube_path, lon, lat):
     """
@@ -108,20 +132,22 @@ def ground_to_image(cube_path, lon, lat):
     Returns
     -------
     lines : np.array, float
-            array of lines or single flaoting point line
+            array of lines or single floating point line
 
     samples : np.array, float
               array of samples or single dloating point sample
 
     """
+    res = point_info(cube_path, lon, lat, "ground")
 
-    pvlres = point_info(cube_path, lon, lat, "ground")
     try:
-        lines, samples = np.asarray([[r[1]["Line"], r[1]["Sample"]] for r in pvlres]).T
+        if isinstance(res, list):
+            lines, samples = np.asarray([[r["Line"], r["Sample"]] for r in res]).T
+        else:
+            lines, samples =  res["Line"], res["Sample"]
     except:
-        raise Exception(r[1]["error"])
-    if len(lines) == 1 and len(samples) == 1:
-        lines, samples = lines[0], samples[0]
+        raise Exception(res)
+
     return lines, samples
 
 

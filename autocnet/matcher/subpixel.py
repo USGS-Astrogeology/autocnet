@@ -423,7 +423,7 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(251, 251), reduction=11,
 
 def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60,
                template_kwargs={"image_size":(59,59), "template_size":(31,31)},
-               phase_kwargs=None, verbose=False):
+               phase_kwargs=None, verbose=True):
 
     if not isinstance(input_cube, GeoDataset):
         raise Exception("input cube must be a geodataset obj")
@@ -527,7 +527,7 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
     if verbose:
       fig, axs = plt.subplots(1, 3)
       fig.set_size_inches((30,30))
-      darr,_,_ = clip_roi(input_cube.read_array(dtype=dst_type), sample, line, 100, 100)
+      darr = roi.Roi(input_cube.read_array(dtype=dst_type), sample, line, 100, 100).clip()
       axs[1].imshow(darr, cmap="Greys_r")
       axs[1].scatter(x=[darr.shape[1]/2], y=[darr.shape[0]/2], s=10, c="red")
       axs[1].set_title("Original Registered Image")

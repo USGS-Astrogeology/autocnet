@@ -50,12 +50,12 @@ from plurmy import Slurm
 
 from autocnet import config, dem, engine, Session
 from autocnet.io.db.model import Images, Points, Measures, JsonEncoder
-from autocnet.matcher.subpixel import clip_roi
 from autocnet.cg.cg import distribute_points_in_geom
 from autocnet.io.db.connection import new_connection
 from autocnet.spatial import isis
 from autocnet.transformation.spatial import reproject
 from autocnet.matcher.cpu_extractor import extract_most_interesting
+from autocnet.transformation import roi
 
 import warnings
 
@@ -110,7 +110,7 @@ def generate_ground_points(ground_mosaic, nspts_func=lambda x: int(round(x,1)*1)
         sample = linessamples.get('Sample')
         line = linessamples.get('Line')
         size = 200
-        image, _, _ = clip_roi(ground_mosaic, sample, line, size_x=size, size_y=size, dtype="uint64")
+        image = roi.Roi(ground_mosaic, sample, line, size_x=size, size_y=size, dtype="uint64").clip()
         interesting = extract_most_interesting(bytescale(image),  extractor_parameters={'nfeatures':30})
 
         # kps are in the image space with upper left origin, so convert to
