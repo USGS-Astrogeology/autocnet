@@ -115,12 +115,12 @@ def image_to_ground(cube_path, sample, line, lattype="PlanetocentricLatitude", l
         if isinstance(res, list):
             lats, lons = np.asarray([[r[lattype].value, r[lonttype].value] for r in res]).T
         else:
-            lats. lons = res[lattype].value, res[lonttype].value
+            lats, lons = res[lattype].value, res[lonttype].value
     except Exception as e:
         if isinstance(res, list):
-            lats, lons = np.asarray([[r[lattype].value, r[lonttype].value] for r in res]).T
+            lats, lons = np.asarray([[r[lattype], r[lonttype]] for r in res]).T
         else:
-            lats, lons = res[lattype].value, res[lonttype].value
+            lats, lons = res[lattype], res[lonttype]
     return lats, lons
 
 

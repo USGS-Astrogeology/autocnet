@@ -461,8 +461,10 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
     for x,y in match_points:
         lat, lon = spatial.isis.image_to_ground(base_cube.file_name, x, y)
         cube_points.append(spatial.isis.ground_to_image(input_cube.file_name, lon, lat)[::-1])
+
+    input_cube_extents = input_cube.raster_size
     for x,y in cube_points:
-        if x < 0 or y < 0:
+        if x < 0 or y < 0 or x > input_cube_extents[0] or y > input_cube_extents[1]:
             return None, None, None, None, None
 
     base_gcps = np.array([*match_points])

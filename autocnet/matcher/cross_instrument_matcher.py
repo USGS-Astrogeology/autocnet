@@ -109,14 +109,20 @@ def generate_ground_points(ground_mosaic, nspts_func=lambda x: int(round(x,1)*1)
         linessamples = isis.point_info(ground_mosaic.file_name, p.x, p.y, 'ground')
         sample = linessamples.get('Sample')
         line = linessamples.get('Line')
+
+        # hardcoded for themis for now
         size = 200
-        image = roi.Roi(ground_mosaic, sample, line, size_x=size, size_y=size, dtype="uint64").clip()
+
+        image = roi.Roi(ground_mosaic, sample, line, size_x=size, size_y=size, dtype="uint64")
+        image_roi = image.clip()
+
         interesting = extract_most_interesting(bytescale(image),  extractor_parameters={'nfeatures':30})
 
         # kps are in the image space with upper left origin, so convert to
         # center origin and then convert back into full image space
-        newsample = sample + (interesting.x - size)
-        newline = line + (interesting.y - size)
+        left_x, _, top_y, _ = image.image_extent
+        newsample = left_x + interesting.x
+        newline = top_y + interesting.y
 
         newpoint = isis.point_info(ground_mosaic.file_name, newsample, newline, 'image')
         p = Point(newpoint.get('PositiveEast360Longitude'),
