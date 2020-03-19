@@ -655,7 +655,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
                                                       template_kwargs=subpixel_template_kwargs,
                                                       phase_kwargs=iterative_phase_kwargs, size_x=100, size_y=100)
 
-        if new_x == None:
+        if new_x == None or new_y == None:
             measure.ignore = True # Unable to phase match
             continue
 
