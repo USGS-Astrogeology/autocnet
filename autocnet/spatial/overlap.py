@@ -218,7 +218,7 @@ def place_points_in_overlap(nodes, geom, cam_type="csm",
             except:
                 x,y,x = ["BodyFixedCoordinate"]
 
-            if gitattr(p["BodyFixedCoordinate"], "units", "None").lower() == "km":
+            if getattr(p["BodyFixedCoordinate"], "units", "None").lower() == "km":
                 x = x * 1000
                 y = y * 1000
                 z = z * 1000
