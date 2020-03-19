@@ -450,7 +450,7 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
         raise Exception(f"Window: {base_starty} < 0, center: {bcenter_x},{bcenter_y}")
 
     mlat, mlon = spatial.isis.image_to_ground(base_cube.file_name, bcenter_x, bcenter_y)
-    center_x, center_y = spatial.isis.ground_to_image(base_cube.file_name, mlon, mlat)
+    center_x, center_y = spatial.isis.ground_to_image(input_cube.file_name, mlon, mlat)
 
     match_points = [(base_startx,base_starty),
                     (base_startx,base_stopy),
