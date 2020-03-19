@@ -385,10 +385,10 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(251, 251), reduction=11,
     dline = dy
 
     while True:
-        try:
-            shifted_dx, shifted_dy, metrics = subpixel_phase(sx, sy, dx, dy, s_img, d_img, image_size=size, **kwargs)
-        except:
-            return None, None, None
+        #try:
+        shifted_dx, shifted_dy, metrics = subpixel_phase(sx, sy, dx, dy, s_img, d_img, image_size=size, **kwargs)
+        #except:
+        #    return None, None, None
 
 
         # Compute the amount of move the matcher introduced
@@ -407,7 +407,6 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(251, 251), reduction=11,
            delta_dy<= convergence_threshold and\
            abs(dist) <= max_dist:
            break
-
     return dx, dy, metrics
 
 def subpixel_register_measure(measureid, iterative_phase_kwargs={}, subpixel_template_kwargs={},
@@ -517,7 +516,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
 
         res = session.query(Images).filter(Images.id == destinationid).one()
         destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
-
+        
         new_template_x, new_template_y, template_metric, _ = subpixel_template(source.sample,
                                                                 source.line,
                                                                 measure.sample,
@@ -527,7 +526,9 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
                                                                 **subpixel_template_kwargs)
         if new_template_x == None:
             measure.ignore = True # Unable to template match
+            print(f'Subpixel template matching failed for measure {measure.id}.')
             continue
+
 
         new_phase_x, new_phase_y, phase_metrics = iterative_phase(source.sample,
                                                                 source.line,
@@ -536,10 +537,12 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
                                                                 source_node.geodata,
                                                                 destination_node.geodata,
                                                                 **iterative_phase_kwargs)
+        
         if new_phase_x == None:
             measure.ignore = True # Unable to phase match
+            print(f'Subpixel phase matching failed for measure {measure.id}')
             continue
-
+        
         dist = np.linalg.norm([new_template_x-new_phase_x, new_template_y-new_phase_y])
         cost = cost_func(dist, template_metric)
 
