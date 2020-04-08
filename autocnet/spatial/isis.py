@@ -85,14 +85,22 @@ def point_info(cube_path, x, y, point_type, allow_outside=False):
          dictres = []
          if len(x) > 1 and len(y) > 1:
             for r in pvlres:
-                # convert all pixels to PLIO pixels from ISIS
-                r[1]["Sample"] -= .5
-                r[1]["Line"] -= .5
-                dictres.append(dict(r[1]))
+                if r['GroundPoint']['Error'] is not None:
+                    raise ProcessError(returncode=1, cmd=['pysis.campt()'], stdout=r, stderr=r['GroundPoint']['Error'])
+                    return
+                else:
+                    # convert all pixels to PLIO pixels from ISIS
+                    r[1]["Sample"] -= .5
+                    r[1]["Line"] -= .5
+                    dictres.append(dict(r[1]))
          else:
-            pvlres["GroundPoint"]["Sample"] -= .5
-            pvlres["GroundPoint"]["Line"] -= .5
-            dictres = dict(pvlres["GroundPoint"])
+            if pvlres['GroundPoint']['Error'] is not None:
+                raise ProcessError(returncode=1, cmd=['pysis.campt()'], stdout=pvlres, stderr=pvlres['GroundPoint']['Error'])
+                return
+            else:
+                pvlres["GroundPoint"]["Sample"] -= .5
+                pvlres["GroundPoint"]["Line"] -= .5
+                dictres = dict(pvlres["GroundPoint"])
     return dictres
 
 
@@ -109,7 +117,10 @@ def image_to_ground(cube_path, sample, line, lattype="PlanetocentricLatitude", l
            1-D array of longitudes or single floating point longitude
 
     """
-    res = point_info(cube_path, sample, line, "image")
+    try:
+        res = point_info(cube_path, sample, line, "image")
+    except ProcessError as e:
+        raise ProcessError(returncode=e.returncode, cmd=e.cmd, stdout=e.stdout, stderr=e.stderr)
 
     try:
         if isinstance(res, list):
@@ -138,7 +149,10 @@ def ground_to_image(cube_path, lon, lat):
               array of samples or single dloating point sample
 
     """
-    res = point_info(cube_path, lon, lat, "ground")
+    try:
+        res = point_info(cube_path, lon, lat, "ground")
+    except ProcessError as e:
+        raise ProcessError(returncode=e.returncode, cmd=e.cmd, stdout=e.stdout, stderr=e.stderr)
 
     try:
         if isinstance(res, list):
