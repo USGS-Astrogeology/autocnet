@@ -39,9 +39,6 @@ def main(msg, config):
         nodes.append(NetworkNode(node_id=id, image_path=res.path))
     session.close()
     
-    q = "SELECT MAX(id) FROM overlay"
-    oid_max = session.execute(q).first()[0]
-    oid = str(oid).rjust(len(str(oid_max)), '0')
     points = place_points_in_overlap(oid, nodes, geom, cam_type=msg["cam_type"],
                                      distribute_points_kwargs=msg['distribute_points_kwargs'])
 

@@ -671,7 +671,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
             continue
 
         # Update the measure
-        if new_template_x:
+        if new_x:
             measure.sample = new_x
             measure.line = new_y
             measure.weight = cost
