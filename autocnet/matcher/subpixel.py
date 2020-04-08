@@ -27,8 +27,6 @@ import pandas as pd
 
 import pvl
 
-import logging
-
 # TODO: look into KeyPoint.size and perhaps use to determine an appropriately-sized search/template.
 def _prep_subpixel(nmatches, nstrengths=2):
     """
@@ -472,13 +470,6 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
                 print(f'Skip geom_match; Region of interest corner located at ({lon}, {lat}) does not project to image {input_cube.base_name}')
                 return None, None, None, None, None
 
-    # do we need this check anymore? Process Error + try/except should not allow projection outside
-    # of cubes
-    # input_cube_extents = input_cube.raster_size
-    # for x,y in cube_points:
-    #     if x < 0 or y < 0 or x > input_cube_extents[0] or y > input_cube_extents[1]:
-    #         return None, None, None, None, None
-
     base_gcps = np.array([*match_points])
     base_gcps[:,0] -= base_startx
     base_gcps[:,1] -= base_starty
@@ -524,13 +515,10 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
     # These parameters seem to work best, should pass as kwargs later
     restemplate = subpixel_template(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
 
-    print('subpixel_template return: ', restemplate[0], restemplate[1], restemplate[2])
-
     if phase_kwargs:
         resphase = iterative_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, **phase_kwargs)
         _,_,maxcorr, corrmap = restemplate
         x,y,_ = resphase
-        print('iterative_phase return: ', resphase[0], resphase[1], resphase[2])
     else:
         x,y,maxcorr,corrmap = restemplate
 
@@ -538,8 +526,6 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
         return None, None, None, None, None
 
     sample, line = affine([x,y])[0]
-    print(f'x = {x}, y = {y}')
-    print(f'sample = {sample}, line = {line}')
     sample += start_x
     line += start_y
 
@@ -679,8 +665,6 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
             continue
 
         cost = cost_func(dist, template_metric)
-        print(f'dist = {dist}, template_metric = {template_metric}')
-        print(f'cost = {cost}, threshold = {threshold}')
 
         if cost <= threshold:
             measure.ignore = True # Threshold criteria not met
@@ -697,7 +681,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={}, subpixel_templat
         measure.ignore = False
         source.ignore = False
 
-    #session.commit()
+    session.commit()
     session.close()
 
 def subpixel_register_points(iterative_phase_kwargs={'size': 251},
