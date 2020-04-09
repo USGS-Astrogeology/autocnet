@@ -274,7 +274,7 @@ class Points(BaseMixin, Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     _pointtype = Column("pointType", IntEnum(PointType), nullable=False)  # 2, 3, 4 - Could be an enum in the future, map str to int in a decorator
     identifier = Column(String, unique=True)
-    overlapid = Column(Integer, ForeignKey('overlay.id'), nullable=False)
+    overlapid = Column(Integer, ForeignKey('overlay.id'))
     _geom = Column("geom", Geometry('POINT', srid=latitudinal_srid, dimension=2, spatial_index=True))
     cam_type = Column(String)
     ignore = Column("pointIgnore", Boolean, default=False)
