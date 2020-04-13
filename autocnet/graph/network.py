@@ -1847,7 +1847,7 @@ WHERE
 
         sourceimages = sourcesession.execute(query_string).fetchall()
 
-        with session_scope() as destinationsession:
+        with self.session_scope() as destinationsession:
             destinationsession = self.Session()
             destinationsession.execute(Images.__table__.insert(), sourceimages)
 
