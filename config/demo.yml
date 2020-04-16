@@ -5,14 +5,14 @@ cluster:
     # Which processing queue should be used?
     queue: 'shortall'
     # Location to put <jobid.log> files for cluster jobs
-    cluster_log_dir: '/scratch/jlaura/elysium/logs'
+    cluster_log_dir: '/logs'
     # What cluster submission tool should be used
     cluster_submission: 'slurm'  # or `pbs`
     # What scratch or temporary area should be used for temporary file creation
-    tmp_scratch_dir: '/scratch/jlaura'
+    tmp_scratch_dir: '/scratch'
 
     # The amount of RAM (in MB) to request for jobs
-    extractor_memory: 1024
+    extractor_memory: 8192
     processing_memory: 1024
 
 ### Database Configuration ###
@@ -20,20 +20,25 @@ database:
     # Name of the database management system. For example, postgresql or sqlite
     type: 'postgresql'
     # Username used to log in to the database
-    username: 'sample'
+    username: 'jay'
     # Password used to log in to the database
-    password: 'sample'
+    password: 'abcde'
     # Host machine name (or localhost) where the database is running
-    host: 'autocnet.wr.usgs.gov'
+    host: '127.0.0.1'
     # Port that the database is exposed on
-    port: 5432
+    port: 8085
     # Port where a proxy that manages database connections is running
-    pgbouncer_port: 6543
+    pgbouncer_port: 8083
     # The name of the database to connect to.  Tables will be created inside this DB.
-    name: 'jelysiumtest' # This needs to be all lowercase for PostGreSQL!
+    name: 'deleteme' # This needs to be all lowercase for PostGreSQL!
     # The number of seconds to wait while attemping to connect to the DB.
     timeout: 500
 
+env: 
+  conda: 'autocnet'  # The name of a conda environment to initialize for cluster jobs 
+  ISISROOT: '/path_to/isisx.y.z'  # PATH to the ISISROOT directory
+  ISISDATA: '/usgs/cpkgs/isis3/data'  # PATH to the ISISDATA directory
+    
 ### Pfeffernusse / CSM Configuration ###
 pfeffernusse:
     # URL to the service that serves CSM compliant ISDs
@@ -43,25 +48,23 @@ pfeffernusse:
 redis:
     # Name of the redis queue. Ensure it is unique to avoid multiple uses
     # of the same redis queue.
-    basename: 'elysium'
+    basename: 'demo'
     # Hostname (or localhost) where the redis server is running
-    host: 'autocnet.wr.usgs.gov'
+    host: 'localhost'
     # Port that redis is accepting connections on
-    port: '6379'
+    port: '8084'
     # The name of the queue that successful job messages are pushed. This
     # name should be unique to avoid collision with other users.
-    completed_queue: 'jely:done'
+    completed_queue: 'demo:done'
     # The name of the queue used for jobs that need to be started. This
     # name should be unique to avoid collision with other users.
-    processing_queue: 'jely:proc'
+    processing_queue: 'demo:proc'
     # The name of the queue that currently processing jobs are pushed to. This
     # name should be unique to avoid collision with other users.
-    working_queue: 'jely:working'
+    working_queue: 'demo:working'
 
 ### Spatial Reference Setup ###
 spatial:
-    # The name of the target body that will be output in ISIS control networks.
-    target: 'MARS'
     # The following two values need to be added to the database that is storing
     # the spatial information.
     #
@@ -77,47 +80,12 @@ spatial:
     # for planetary bodies.
     proj4_str: '+proj:longlat +a:3396190 +b:3376200 +no_defs'
     # DEM used to generate height values for projection
-    dem: '/scratch/jlaura/mars/molaMarsPlanetaryRadius.cub'
+    dem: '$ISISDATA/dems/molaMarsPlanetaryRadius.cub'
+    # Target for ISIS
+    target: 'MARS'
 
 ### Working Directories ###
 directories:
     # The directory where VRTs should be created
-    vrt_dir: '/sratch/jlaura/elysium/vrt'
+    vrt_dir: '/sratch/vrts'
 
-### Algorithms ###
-# This section contains definitions for algorithms available
-# to AutoCNet. When populated, the values in these blocks
-# are parsed on job submission and used as the args/kwargs.
-# When an algorithm has multiple entries, e.g., 3 for `ring_match`,
-# the algorithm will be run up to 3 times. The first time, it is
-# assumed that the strictest parametrization is used. If this
-# fails, the next parametrization is used and so forth until either
-# the algorithm returns successfully or all parameter combinations
-# have been applied. This capability is experimental!
-algorithms:
-     ring_match:
-         - target_points: 25
-           tolerance: 0.01
-         - target_points: 20
-           tolerance: 0.01
-         - target_points: 25
-           tolerance: 0.02
-     compute_fundamental_matrix:
-         - tolerance: 0.3
-           reproj_threshold: 10
-           initial_x_size: 500
-           initial_y_size: 500
-           corr_x_size: 40
-           corr_y_size: 40
-         - tolerance: 0.3
-           reproj_threshold: 15
-           initial_x_size: 500
-           initial_y_size: 500
-           corr_x_size: 40
-           corr_y_size: 40
-         - tolerance: 0.25
-           reproj_threshold: 20
-           initial_x_size: 500
-           initial_y_size: 500
-           corr_x_size: 40
-           corr_y_size: 40

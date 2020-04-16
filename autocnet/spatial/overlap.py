@@ -226,7 +226,7 @@ def place_points_in_overlap(overlap,
                                                                  'geocent', 'latlon')
 
         point_geom = shapely.geometry.Point(x, y, z)
-        point = Points(overlapid=oid,
+        point = Points(overlapid=overlap.id,
                        apriori=point_geom,
                        adjusted=point_geom,
                        pointtype=2, # Would be 3 or 4 for ground
