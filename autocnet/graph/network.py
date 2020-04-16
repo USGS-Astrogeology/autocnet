@@ -1352,7 +1352,7 @@ class NetworkCandidateGraph(CandidateGraph):
     def config_from_file(self, filepath):
         """
         A NetworkCandidateGraph uses a database. This method parses a config
-        file to set up the connection. Additionally, this loads planetary 
+        file to set up the connection. Additionally, this loads planetary
         information and settings for other operations the candidate graph
         can perform.
 
@@ -1367,7 +1367,7 @@ class NetworkCandidateGraph(CandidateGraph):
     def config_from_dict(self, config_dict):
         """
         A NetworkCandidateGraph uses a database. This method loads a config
-        dict to set up the connection. Additionally, this loads planetary 
+        dict to set up the connection. Additionally, this loads planetary
         information and settings for other operations the candidate graph
         can perform.
 
@@ -1380,7 +1380,7 @@ class NetworkCandidateGraph(CandidateGraph):
 
         # Setup REDIS
         self._setup_queues()
-       
+
         # Setup the database
         self._setup_database()
 
@@ -1455,7 +1455,7 @@ class NetworkCandidateGraph(CandidateGraph):
         conn = self.engine.connect()
         conn.execute(sql)
         conn.close()
-    
+
     def _push_obj_messages(self, onobj, function, walltime, args, kwargs):
         """
         Push messages to the redis queue for objects e.g., Nodes and Edges
@@ -1482,23 +1482,23 @@ class NetworkCandidateGraph(CandidateGraph):
                     'kwargs':kwargs,
                     'walltime':walltime,
                     'image_path':image_path,
-                    'param_step':1, 
+                    'param_step':1,
                     'config':self.config}
 
             self.redis_queue.rpush(self.processing_queue, json.dumps(msg, cls=JsonEncoder))
         return job_counter + 1
-    
+
     def _push_row_messages(self, query_obj, on, function, walltime, filters, args, kwargs):
         """
-        Push messages to the redis queue for DB objects e.g., Points, Measures 
+        Push messages to the redis queue for DB objects e.g., Points, Measures
         """
         with self.session_scope() as session:
             query = session.query(query_obj)
-        
+
             # Now apply any filters that might be passed in.
             for attr, value in filters.items():
                 query = query.filter(getattr(query_obj, attr)==value)
-            
+
             # Execute the query to get the rows to be processed
             res = query.all()
 
@@ -1508,7 +1508,7 @@ class NetworkCandidateGraph(CandidateGraph):
                 msg = {'along':on,
                         'id':row.id,
                         'func':function,
-                        'args':args, 
+                        'args':args,
                         'kwargs':kwargs,
                         'walltime':walltime}
                 msg['config'] = self.config  # Hacky for now, just passs the whole config dict
@@ -1547,38 +1547,38 @@ class NetworkCandidateGraph(CandidateGraph):
         # Determine which obj will be called
         onobj = self.apply_iterable_options[on]
         res = []
-        
+
         if not isinstance(function, (str, bytes)):
             raise TypeError('Function argument must be a string or bytes object.')
         if isinstance(onobj, DeclarativeMeta):
             job_counter = self._push_row_messages(onobj, on, function, walltime, filters, args, kwargs)
         else:
             job_counter = self._push_obj_messages(onobj, function, walltime, args, kwargs)
-     
+
 
         # Submit the jobs
         rconf = self.config['redis']
         rhost = rconf['host']
         rport = rconf['port']
         processing_queue = rconf['processing_queue']
-        
+
         env = self.config['env']
         condaenv = env['conda']
         isisroot = env['ISISROOT']
         isisdata = env['ISISDATA']
-        
+
         isissetup = f'export ISISROOT={isisroot} && export ISIS3DATA={isisdata}'
         condasetup = f'conda activate {condaenv}'
         job = f'acn_submit -r={rhost} -p={rport} {processing_queue}'
         command = f'{condasetup} && {isissetup} && {job}'
-        
+
         submitter = Slurm(command,
                      job_name='AutoCNet',
                      mem_per_cpu=self.config['cluster']['processing_memory'],
                      time=walltime,
                      partition=self.config['cluster']['queue'],
                      output=self.config['cluster']['cluster_log_dir']+f'/autocnet.{function}-%j')
-        submitter.submit(array='1-{}'.format(job_counter), chunksize=chunksize)
+        submitter.submit(array='1-{}%24'.format(job_counter), chunksize=chunksize)
         return job_counter
 
     def generic_callback(self, msg):
@@ -1603,11 +1603,12 @@ class NetworkCandidateGraph(CandidateGraph):
             return
 
     def to_isis(self, path, flistpath=None,sql = """
-SELECT points.id,
+SELECT measures."pointid",
         points."pointType",
         points."apriori",
         points."adjusted",
         points."pointIgnore",
+        measures."id",
         measures."serialnumber",
         measures."sample",
         measures."line",
@@ -1629,7 +1630,8 @@ WHERE
         INNER JOIN points ON measures."pointid" = points."id"
         WHERE measures."measureIgnore" = False and measures."measureJigsawRejected" = False AND points."pointIgnore" = False
         GROUP BY measures."imageid"
-        HAVING COUNT(DISTINCT measures."pointid")  < 3);
+        HAVING COUNT(DISTINCT measures."pointid")  < 3)
+ORDER BY measures."pointid", measures."id";
 """):
         """
         Given a set of points/measures in an autocnet database, generate an ISIS
@@ -1652,6 +1654,11 @@ WHERE
         """
 
         df = pd.read_sql(sql, self.engine)
+
+        # measures.id DB column was read in to ensure the proper ordering of DF
+        # so the correct measure is written as reference
+        del df['id']
+        df.rename(columns = {'pointid': 'id'}, inplace=True)
 
         #create columns in the dataframe; zeros ensure plio (/protobuf) will
         #ignore unless populated with alternate values
@@ -1779,17 +1786,23 @@ WHERE
 
         with self.session_scope() as session:
             images = session.query(Images).all()
-            oldnew = []
+            # oldnew = []
             for obj in images:
                 oldpath = obj.path
                 filename = os.path.basename(oldpath)
                 obj.path = os.path.join(newdir, filename)
-                oldnew.append((oldpath, obj.path))
+                if oldpath != obj.path:
+                    # this method is slower but allows you to run again if connection failed partway through
+                    copyfile(oldpath, obj.path)
+                    session.commit()
+                else:
+                    continue
+                # oldnew.append((oldpath, obj.path))
 
         # Copy the files
-        [copyfile(old, new) for old, new in oldnew]
+        # [copyfile(old, new) for old, new in oldnew]
 
-    
+
     def add_from_remote_database(self, source_db_config, path,  query_string='SELECT * FROM public.images LIMIT 10'):
         """
         This is a constructor that takes an existing database containing images and sensors,
@@ -1847,8 +1860,8 @@ WHERE
 
         sourceimages = sourcesession.execute(query_string).fetchall()
 
-        with session_scope() as destinationsession:
-            destinationsession = self.Session()
+        with self.session_scope() as destinationsession:
+            # destinationsession = self.Session()
             destinationsession.execute(Images.__table__.insert(), sourceimages)
 
             # Get the camera objects to manually join. Keeps the caller from
@@ -1864,7 +1877,7 @@ WHERE
         self.copy_images(path)
         self.from_database()
         self._execute_sql(compute_overlaps_sql)
-        
+
     def from_database(self, query_string='SELECT * FROM public.images'):
         """
         This is a constructor that takes the results from an arbitrary query string,
@@ -1916,7 +1929,7 @@ WHERE
                 adjacency_lookup[dpath] = did
                 if spath != dpath:
                     adjacency[spath].append(dpath)
-        
+
         # Add nodes that do not overlap any images
         self.__init__(adjacency, node_id_map=adjacency_lookup)
 
@@ -2028,10 +2041,10 @@ WHERE
         """
         self.redis_queue.flushdb()
 
-    def cluster_propagate_control_network(self, 
-                                          base_cnet, 
-                                          walltime='00:20:00', 
-                                          chunksize=1000, 
+    def cluster_propagate_control_network(self,
+                                          base_cnet,
+                                          walltime='00:20:00',
+                                          chunksize=1000,
                                           exclude=None):
         warnings.warn('This function is not well tested. No tests currently exists \
         in the test suite for this version of the function.')
@@ -2072,7 +2085,7 @@ WHERE
         job_counter = len(groups.items())
         submitter.submit(array='1-{}'.format(job_counter))
         return job_counter
-    
+
     def subpixel_register_points(self, **kwargs):
         subpixel.subpixel_register_points(self.Session, **kwargs)
 
@@ -2083,10 +2096,10 @@ WHERE
         subpixel.subpixel_register_measure(self.Session, measureid, **kwargs)
 
     def propagate_control_network(self, control_net, **kwargs):
-        cim.propagate_control_network(self.Session, 
-                                      self.config, 
+        cim.propagate_control_network(self.Session,
+                                      self.config,
                                       self.dem,
-                                      control_net) 
+                                      control_net)
 
     def generate_ground_points(self, ground_mosaic, **kwargs):
         cim.generate_ground_points(self.Session, ground_mosaic, **kwargs)
@@ -2095,5 +2108,5 @@ WHERE
         overlap.place_points_in_overlaps(self.Session,
                                          self.config,
                                          self.dem,
-                                         nodes, 
+                                         nodes,
                                          **kwargs)

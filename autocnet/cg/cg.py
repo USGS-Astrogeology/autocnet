@@ -433,11 +433,15 @@ def distribute_points_new(geom, nspts, ewpts, Session):
     very simplistic approximation of the shape
     of the geometry and then place some number of
     north/south and east/west points into the geometry.
+    This function works best on bulky geometries, such as
+    a combination of all network image footprints.
 
     Parameters
     ----------
     geom : shapely.geom
-           A shapely geometry object
+           A shapely geometry object which is a union of
+           all of the image footprints in the network
+           that is being grounded.
 
     nspts : int
             The number of points to attempt to place
