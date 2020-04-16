@@ -1861,7 +1861,6 @@ ORDER BY measures."pointid", measures."id";
         sourceimages = sourcesession.execute(query_string).fetchall()
 
         with self.session_scope() as destinationsession:
-            # destinationsession = self.Session()
             destinationsession.execute(Images.__table__.insert(), sourceimages)
 
             # Get the camera objects to manually join. Keeps the caller from
