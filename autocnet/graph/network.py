@@ -1786,21 +1786,16 @@ ORDER BY measures."pointid", measures."id";
 
         with self.session_scope() as session:
             images = session.query(Images).all()
-            # oldnew = []
             for obj in images:
                 oldpath = obj.path
                 filename = os.path.basename(oldpath)
                 obj.path = os.path.join(newdir, filename)
                 if oldpath != obj.path:
-                    # this method is slower but allows you to run again if connection failed partway through
+                    # Copy the files
                     copyfile(oldpath, obj.path)
                     session.commit()
                 else:
                     continue
-                # oldnew.append((oldpath, obj.path))
-
-        # Copy the files
-        # [copyfile(old, new) for old, new in oldnew]
 
 
     def add_from_remote_database(self, source_db_config, path,  query_string='SELECT * FROM public.images LIMIT 10'):
