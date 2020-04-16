@@ -1578,7 +1578,7 @@ class NetworkCandidateGraph(CandidateGraph):
                      time=walltime,
                      partition=self.config['cluster']['queue'],
                      output=self.config['cluster']['cluster_log_dir']+f'/autocnet.{function}-%j')
-        submitter.submit(array='1-{}%24'.format(job_counter), chunksize=chunksize)
+        submitter.submit(array='1-{}%25'.format(job_counter), chunksize=chunksize)
         return job_counter
 
     def generic_callback(self, msg):

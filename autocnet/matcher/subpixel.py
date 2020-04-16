@@ -410,7 +410,7 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(51, 51), reduction=11, c
         dist = np.linalg.norm([dsample-dx, dline-dy])
 
         if min(size) < 1:
-            return None, None, None
+            return None, None, (None, None)
         if delta_dx <= convergence_threshold and\
            delta_dy<= convergence_threshold and\
            abs(dist) <= max_dist:
@@ -513,13 +513,20 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
 
     if phase_kwargs:
         resphase = iterative_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, **phase_kwargs)
-        _,_,maxcorr, corrmap = restemplate
-        x,y,_ = resphase
+        _,_,maxcorr, temp_corrmap = restemplate
+        x,y,(perror, pdiff) = resphase
+        if x is None or y is None:
+            return None, None, None, None, None
+        temp_dist = np.linalg.norm([size_x/2-restemplate[0], size_y/2-restemplate[1]])
+        phase_dist = np.linalg.norm([restemplate[0]-resphase[0], restemplate[1]-resphase[1]])
+        dist = (temp_dist, phase_dist)
+        metric = (restemplate[2], perror, pdiff)
     else:
-        x,y,maxcorr,corrmap = restemplate
-
-    if x is None or y is None:
-        return None, None, None, None, None
+        x,y,maxcorr,temp_corrmap = restemplate
+        if x is None or y is None:
+            return None, None, None, None, None
+        metric = maxcorr
+        dist = np.linalg.norm([size_x/2-x, size_y/2-y])
 
     sample, line = affine([x,y])[0]
     sample += start_x
@@ -537,23 +544,23 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
       axs[0].scatter(x=[base_arr.shape[1]/2], y=[base_arr.shape[0]/2], s=10, c="red")
       axs[0].set_title("Base")
 
-      pcm = axs[2].imshow(corrmap**2, interpolation=None, cmap="coolwarm")
+      pcm = axs[2].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
       plt.show()
 
-    dist = np.linalg.norm([center_x-sample, center_y-line])
-    return sample, line, dist, maxcorr, corrmap
+    # dist = np.linalg.norm([center_x-sample, center_y-line])
+    return sample, line, dist, metric, temp_corrmap
 
 
-def subpixel_register_measure(measureid, 
-                              iterative_phase_kwargs={}, 
+def subpixel_register_measure(measureid,
+                              iterative_phase_kwargs={},
                               subpixel_template_kwargs={},
-                              cost_func=lambda x,y: 1/x**2 * y, 
+                              cost_func=lambda x,y: 1/x**2 * y,
                               threshold=0.005,
-                              ncg=None, 
+                              ncg=None,
                               **kwargs):
 
-    
-    
+
+
     if isinstance(measureid, Measures):
         measureid = measureid.id
 
@@ -623,7 +630,7 @@ def subpixel_register_measure(measureid,
     return result
 
 
-def subpixel_register_point(pointid, iterative_phase_kwargs={}, 
+def subpixel_register_point(pointid, iterative_phase_kwargs={},
                             subpixel_template_kwargs={},
                             cost_func=lambda x,y: 1/x**2 * y, threshold=0.005,
                             ncg=None,
@@ -636,7 +643,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={},
     Parameters
     ----------
     ncg : obj
-          the network candidate graph that the point is associated with; used for 
+          the network candidate graph that the point is associated with; used for
           the DB session that is able to access the point.
 
     pointid : int or obj
@@ -661,13 +668,19 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={},
     Session = ncg.Session
     if not Session:
         raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
-    
+
     if isinstance(pointid, Points):
         pointid = pointid.id
-    
+
     with ncg.session_scope() as session:
         measures = session.query(Measures).filter(Measures.pointid == pointid).order_by(Measures.id).all()
         source = measures[0]
+
+        source.template_metric = 1
+        source.template_shift = 0
+        source.phase_error = 0
+        source.phase_diff = 0
+        source.phase_shift = 0
 
         sourceid = source.imageid
         res = session.query(Images).filter(Images.id == sourceid).one()
@@ -687,7 +700,7 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={},
             destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
             destination_node.parent = ncg
 
-            new_x, new_y, dist, template_metric,  _ = geom_match(source_node.geodata, destination_node.geodata,
+            new_x, new_y, dist, metric,  _ = geom_match(source_node.geodata, destination_node.geodata,
                                                         source.sample, source.line,
                                                         template_kwargs=subpixel_template_kwargs,
                                                         phase_kwargs=iterative_phase_kwargs, size_x=100, size_y=100)
@@ -697,7 +710,8 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={},
                 currentlog['status'] = 'Failed to geom match.'
                 resultlog.append(currentlog)
                 continue
-            cost = cost_func(dist, template_metric)
+            # cost = cost_func(dist, template_metric)
+            cost = 1
 
             if cost <= threshold:
                 measure.ignore = True # Threshold criteria not met
@@ -705,10 +719,23 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={},
                 resultlog.append(currentlog)
                 continue
 
+            if iterative_phase_kwargs:
+                print('subpixel_register_point -> PHASE MEASURE WRITE OUT')
+                measure.template_metric = metric[0]
+                measure.template_shift = dist[0]
+                measure.phase_error = metric[1]
+                measure.phase_diff = metric[2]
+                measure.phase_shift = dist[1]
+            else:
+                print('subpixel_register_point -> NO PHASE MEASURE WRITE OUT')
+                measure.template_metric = metric
+                measure.template_shift = dist
+
             # Update the measure
             measure.sample = new_x
             measure.line = new_y
             measure.weight = cost
+            measure.choosername = 'subpixel_register_point'
 
             # In case this is a second run, set the ignore to False if this
             # measures passed. Also, set the source measure back to ignore=False

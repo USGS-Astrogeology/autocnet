@@ -42,8 +42,8 @@ INSERT INTO overlay(intersections, geom) SELECT row.intersections, row.geom FROM
 """
 
 def place_points_in_overlaps(size_threshold=0.0007,
-                             distribute_points_kwargs={}, 
-                             cam_type='csm', 
+                             distribute_points_kwargs={},
+                             cam_type='csm',
                              ncg=None):
     """
     Place points in all of the overlap geometries by back-projecing using
@@ -66,20 +66,20 @@ def place_points_in_overlaps(size_threshold=0.0007,
     Session = ncg.Session
     if not Session:
         raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
-    
+
     for overlap in Overlay.overlapping_larger_than(size_threshold, Session):
         if overlap.intersections == None:
             continue
-        place_points_in_overlap(overlap, 
+        place_points_in_overlap(overlap,
                                 cam_type=cam_type,
                                 distribute_points_kwargs=distribute_points_kwargs,
                                 ncg=ncg)
-    
-def place_points_in_overlap(overlap,  
+
+def place_points_in_overlap(overlap,
                             cam_type="csm",
                             size=71,
                             distribute_points_kwargs={},
-                            ncg=None, 
+                            ncg=None,
                             **kwargs):
     """
     Place points into an overlap geometry by back-projecing using sensor models.
@@ -135,7 +135,7 @@ def place_points_in_overlap(overlap,
             nn = NetworkNode(node_id=id, image_path=res.path)
             nn.parent = ncg
             nodes.append(nn)
-    
+
     print(f'Have {len(valid)} potential points to place.')
     for v in valid:
         lon = v[0]
@@ -254,10 +254,11 @@ def place_points_in_overlap(overlap,
                                            aprioriline=line,
                                            imageid=node['node_id'],
                                            serial=node.isis_serial,
-                                           measuretype=3))
+                                           measuretype=3,
+                                           choosername='place_points_in_overlap'))
 
         if len(point.measures) >= 2:
             points.append(point)
     print(f'Able to place {len(points)} points.')
     Points.bulkadd(points, ncg.Session)
-    
+

@@ -257,7 +257,7 @@ class Overlay(BaseMixin, Base):
                 filter(sqlalchemy.func.array_length(cls.intersections, 1) > 1)
         session.close()
         return res
-        
+
 
 class PointType(enum.IntEnum):
     """
@@ -339,7 +339,7 @@ class Points(BaseMixin, Base):
         if isinstance(v, int):
             v = PointType(v)
         self._pointtype = v
-    
+
     #def subpixel_register(self, Session, pointid, **kwargs):
     #    subpixel.subpixel_register_point(args=(Session, pointid), **kwargs)
 
@@ -359,14 +359,20 @@ class Measures(BaseMixin, Base):
     imageid = Column(Integer, ForeignKey('images.id'))
     serial = Column("serialnumber", String, nullable=False)
     _measuretype = Column("measureType", IntEnum(MeasureType), nullable=False)  # [0,3]  # Enum as above
+    ignore = Column("measureIgnore", Boolean, default=False)
     sample = Column(Float, nullable=False)
     line = Column(Float, nullable=False)
+    template_metric = Column("templateMetric", Float)
+    template_shift = Column("templateShift", Float)
+    phase_error = Column("phaseError", Float)
+    phase_diff = Column("phaseDiff", Float)
+    phase_shift = Column("phaseShift", Float)
+    choosername = Column("ChooserName", String)
+    apriorisample = Column(Float)
+    aprioriline = Column(Float)
     sampler = Column(Float)  # Sample Residual
     liner = Column(Float)  # Line Residual
-    ignore = Column("measureIgnore", Boolean, default=False)
     jigreject = Column("measureJigsawRejected", Boolean, default=False)  # jigsaw rejected
-    aprioriline = Column(Float)
-    apriorisample = Column(Float)
     samplesigma = Column(Float)
     linesigma = Column(Float)
     weight = Column(Float, default=None)
@@ -384,7 +390,7 @@ class Measures(BaseMixin, Base):
 
 def try_db_creation(engine, config):
     from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, valid_geom_function, valid_geom_trigger, ignore_image_function, ignore_image_trigger
-    
+
     # Create the database
     if not database_exists(engine.url):
         create_database(engine.url, template='template_postgis')  # This is a hardcode to the local template
@@ -398,9 +404,9 @@ def try_db_creation(engine, config):
         event.listen(Images.__table__, 'after_create', valid_geom_trigger)
         event.listen(Base.metadata, 'before_create', ignore_image_function)
         event.listen(Images.__table__, 'after_create', ignore_image_trigger)
-    
+
     Base.metadata.bind = engine
-    
+
     # Set the class attributes for the SRIDs
     spatial = config['spatial']
     latitudinal_srid = spatial['latitudinal_srid']
@@ -411,7 +417,7 @@ def try_db_creation(engine, config):
     Points.semiminor_rad = spatial['semiminor_rad']
     for cls in [Points, Overlay, Images, Keypoints, Matches]:
         setattr(cls, 'latitudinal_srid', latitudinal_srid)
-        
+
     # If the table does not exist, this will create it. This is used in case a
     # user has manually dropped a table so that the project is not wrecked.
     Base.metadata.create_all(tables=[Overlay.__table__,
