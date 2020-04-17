@@ -517,7 +517,7 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
         x,y,(perror, pdiff) = resphase
         if x is None or y is None:
             return None, None, None, None, None
-        temp_dist = np.linalg.norm([size_x/2-restemplate[0], size_y/2-restemplate[1]])
+        temp_dist = np.linalg.norm([size_x-restemplate[0], size_y-restemplate[1]])
         phase_dist = np.linalg.norm([restemplate[0]-resphase[0], restemplate[1]-resphase[1]])
         dist = (temp_dist, phase_dist)
         metric = (restemplate[2], perror, pdiff)
