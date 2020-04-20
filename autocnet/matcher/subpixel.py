@@ -512,7 +512,7 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
     restemplate = subpixel_template(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
 
     if phase_kwargs:
-        resphase = iterative_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, **phase_kwargs)
+        resphase = subpixel_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, **phase_kwargs)
         _,_,maxcorr, temp_corrmap = restemplate
         x,y,(perror, pdiff) = resphase
         if x is None or y is None:
