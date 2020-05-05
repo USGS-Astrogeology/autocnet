@@ -151,7 +151,7 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200, dtype="uint64"):
 
 def subpixel_phase(sx, sy, dx, dy,
                    s_img, d_img,
-                   image_size=(251, 251),
+                   image_size=(51, 51),
                    **kwargs):
     """
     Apply the spectral domain matcher to a search and template image. To
@@ -446,31 +446,30 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
     if base_starty < 0:
         raise Exception(f"Window: {base_starty} < 0, center: {bcenter_x},{bcenter_y}")
 
-    # specifically not putting this in a try except, because this should never fail,
-    # want to throw error if there is one
+    # specifically not putting this in a try/except, this should never fail
     mlat, mlon = spatial.isis.image_to_ground(base_cube.file_name, bcenter_x, bcenter_y)
     center_x, center_y = spatial.isis.ground_to_image(input_cube.file_name, mlon, mlat)[::-1]
 
-    match_points = [(base_startx,base_starty),
+    base_corners = [(base_startx,base_starty),
                     (base_startx,base_stopy),
                     (base_stopx,base_stopy),
                     (base_stopx,base_starty)]
 
-    cube_points = []
-    for x,y in match_points:
+    dst_corners = []
+    for x,y in base_corners:
         try:
             lat, lon = spatial.isis.image_to_ground(base_cube.file_name, x, y)
-            cube_points.append(spatial.isis.ground_to_image(input_cube.file_name, lon, lat)[::-1])
+            dst_corners.append(spatial.isis.ground_to_image(input_cube.file_name, lon, lat)[::-1])
         except ProcessError as e:
             if 'Requested position does not project in camera model' in e.stderr:
                 print(f'Skip geom_match; Region of interest corner located at ({lon}, {lat}) does not project to image {input_cube.base_name}')
                 return None, None, None, None, None
 
-    base_gcps = np.array([*match_points])
+    base_gcps = np.array([*base_corners])
     base_gcps[:,0] -= base_startx
     base_gcps[:,1] -= base_starty
 
-    dst_gcps = np.array([*cube_points])
+    dst_gcps = np.array([*dst_corners])
     start_x = dst_gcps[:,0].min()
     start_y = dst_gcps[:,1].min()
     stop_x = dst_gcps[:,0].max()
@@ -487,13 +486,15 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
             "Real" : "float64"
     }
 
-    base_pixels = list(map(int, [match_points[0][0], match_points[0][1], size_x*2, size_y*2]))
+    base_pixels = list(map(int, [base_corners[0][0], base_corners[0][1], size_x*2, size_y*2]))
     base_type = isis2np_types[pvl.load(base_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
     base_arr = base_cube.read_array(pixels=base_pixels, dtype=base_type)
+    print(f'geom_match base_arr length: {base_arr.shape}')
 
     dst_pixels = list(map(int, [start_x, start_y, stop_x-start_x, stop_y-start_y]))
     dst_type = isis2np_types[pvl.load(input_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
     dst_arr = input_cube.read_array(pixels=dst_pixels, dtype=dst_type)
+    print(f'geom_match dst_arr length: {dst_arr.shape}')
 
     dst_arr = tf.warp(dst_arr, affine)
     dst_arr = dst_arr[:size_y*2, :size_x*2]
@@ -509,28 +510,40 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
 
     # Run through one step of template matching then one step of phase matching
     # These parameters seem to work best, should pass as kwargs later
+    print(f'geom_match -> (size_x, size_y): {size_x, size_y}')
+    print(f'geom_match -> template_kwargs: {template_kwargs}')
     restemplate = subpixel_template(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
 
     if phase_kwargs:
-        resphase = subpixel_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, **phase_kwargs)
+        print('geom_match -> phase_kwargs = True')
         _,_,maxcorr, temp_corrmap = restemplate
+        sample_template, line_template = affine([restemplate[0], restemplate[1]])[0]
+        sample_template += start_x
+        line_template += start_y
+        dist_temp = np.linalg.norm([center_x-sample_template, center_y-line_template])
+
+        resphase = subpixel_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, **phase_kwargs)
         x,y,(perror, pdiff) = resphase
         if x is None or y is None:
             return None, None, None, None, None
-        temp_dist = np.linalg.norm([size_x-restemplate[0], size_y-restemplate[1]])
-        phase_dist = np.linalg.norm([restemplate[0]-resphase[0], restemplate[1]-resphase[1]])
-        dist = (temp_dist, phase_dist)
-        metric = (restemplate[2], perror, pdiff)
+        sample, line = affine([x, y])[0]
+        sample += start_x
+        line += start_y
+        phase_dist = np.linalg.norm([sample_template-sample, line_template-line])
+
+        dist = (dist_temp, dist_phase)
+        metric = (maxcorr, perror, pdiff)
     else:
+        print('geom_match -> phase_kwargs = False')
         x,y,maxcorr,temp_corrmap = restemplate
         if x is None or y is None:
             return None, None, None, None, None
         metric = maxcorr
-        dist = np.linalg.norm([size_x/2-x, size_y/2-y])
+        sample, line = affine([x, y])[0]
+        sample += start_x
+        line += start_y
+        dist = np.linalg.norm([center_x-sample, center_y-line])
 
-    sample, line = affine([x,y])[0]
-    sample += start_x
-    line += start_y
 
     if verbose:
       fig, axs = plt.subplots(1, 3)
@@ -547,7 +560,6 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
       pcm = axs[2].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
       plt.show()
 
-    # dist = np.linalg.norm([center_x-sample, center_y-line])
     return sample, line, dist, metric, temp_corrmap
 
 

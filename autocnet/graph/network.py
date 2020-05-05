@@ -1487,7 +1487,7 @@ class NetworkCandidateGraph(CandidateGraph):
 
             self.redis_queue.rpush(self.processing_queue, json.dumps(msg, cls=JsonEncoder))
         return job_counter + 1
-    
+
     def _push_row_messages(self, query_obj, on, function, walltime, filters, query_string, args, kwargs):
         """
         Push messages to the redis queue for DB objects e.g., Points, Measures
@@ -1504,7 +1504,7 @@ class NetworkCandidateGraph(CandidateGraph):
 
             # Execute the query to get the rows to be processed
             res = query.all()
-            
+
             # Support either an SQL query string, or a simple dict based query
             if query_string:
                 res = session.execute(query_string).fetchall()
@@ -1514,10 +1514,10 @@ class NetworkCandidateGraph(CandidateGraph):
                 # Now apply any filters that might be passed in.
                 for attr, value in filters.items():
                     query = query.filter(getattr(query_obj, attr)==value)
-                
+
                 # Execute the query to get the rows to be processed
                 res = query.all()
-                
+
             if len(res) == 0:
                 raise ValueError('Query returned zero results.')
             for row in res:
@@ -1561,28 +1561,28 @@ class NetworkCandidateGraph(CandidateGraph):
 
         chunksize : int
                     The maximum number of jobs to submit per job array. Defaults to 1000.
-                    This number may be have an actualy higher or lower limited based on 
+                    This number may be have an actualy higher or lower limited based on
                     how the cluster has been configured.
-        
+
         filters : dict
                   Of simple filters to apply on database rows where the key is the attribute and
-                  the value used to check equivalency (e.g., attribute == value). 
+                  the value used to check equivalency (e.g., attribute == value).
                   This is usable only when applying to measures, points, or overlays.
-                  Filters can not be used with a query_string. Filters are included as a convenience 
+                  Filters can not be used with a query_string. Filters are included as a convenience
                   and are really only usable for simple equivalency checks.
 
         query_string : str
                        A SQL query to be applied to the iterable.
                        This is usable only when applying to measures, points, or overlays.
                        The query_string can not be used with a filter and is appropriate for
-                       any queries. 
+                       any queries.
 
         kwargs : dict
                  Of keyword arguments passed to the function being applied
 
         Examples
         --------
-        Apply a function to the overlay table omitting those overlay rows that already have 
+        Apply a function to the overlay table omitting those overlay rows that already have
         points within them and have an area less than a given threshold.
 
         >>> query_string = 'SELECT overlay.id FROM overlay LEFT JOIN\
@@ -1756,7 +1756,7 @@ ORDER BY measures."pointid", measures."id";
         cnet.to_isis(df, path, targetname=target)
         cnet.write_filelist(fpaths, path=flistpath)
 
-    def update_from_jigsaw(self, session, path):
+    def update_from_jigsaw(self,path):
         """
         Updates the measures table in the database with data from
         a jigsaw bundle adjust
@@ -1784,8 +1784,9 @@ ORDER BY measures."pointid", measures."id";
         DROP TABLE temp_measures;
         """
 
-        session.execute(sql)
-        session.commit()
+        with self.session_scope() as session:
+            session.execute(sql)
+            session.commit()
 
     @classmethod
     def from_filelist(cls, filelist, clear_db=False):

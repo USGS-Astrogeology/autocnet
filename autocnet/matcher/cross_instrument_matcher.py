@@ -12,10 +12,8 @@ import os.path
 import socket
 from ctypes.util import find_library
 
-import numpy as np
 import pandas as pd
 import scipy
-from matplotlib import pyplot as plt
 from sqlalchemy import (Boolean, Column, Float, ForeignKey, Integer,
                         LargeBinary, String, UniqueConstraint, create_engine,
                         event, orm, pool)
@@ -38,7 +36,6 @@ from geoalchemy2 import functions
 from knoten import csm
 
 from plio.io.io_controlnetwork import from_isis, to_isis
-from plio.io.io_gdal import GeoDataset
 
 from shapely import wkt
 from shapely.geometry.multipolygon import MultiPolygon
@@ -47,17 +44,18 @@ from shapely.geometry import Point
 from plurmy import Slurm
 
 from autocnet.io.db.model import Images, Points, Measures, JsonEncoder
-from autocnet.cg.cg import distribute_points_in_geom
+from autocnet.cg.cg import distribute_points_in_geom, xy_in_polygon
 from autocnet.io.db.connection import new_connection
 from autocnet.spatial import isis
 from autocnet.transformation.spatial import reproject
 from autocnet.matcher.cpu_extractor import extract_most_interesting
 from autocnet.transformation import roi
 from autocnet.matcher.subpixel import geom_match
+from autocnet.utils.utils import bytescale
 
 import warnings
 
-def generate_ground_points(Session, ground_mosaic, nspts_func=lambda x: int(round(x,1)*1), ewpts_func=lambda x: int(round(x,1)*4)):
+def generate_ground_points(Session, ground_mosaic, nspts_func=lambda x: int(round(x,1)*1), ewpts_func=lambda x: int(round(x,1)*4), size=(100,100)):
     """
 
     Parameters
@@ -75,6 +73,10 @@ def generate_ground_points(Session, ground_mosaic, nspts_func=lambda x: int(roun
     ewpts_func       : func
                        describes distribution of points along the east-west
                        edge of an overlap.
+
+    size             : tuple of int
+                       (size_x, size_y) maximum distances on either access point
+                       can move when attempting to find an interesting feature.
     """
 
     if isinstance(ground_mosaic, str):
@@ -87,34 +89,36 @@ def generate_ground_points(Session, ground_mosaic, nspts_func=lambda x: int(roun
     fp_poly = wkt.loads(session.query(functions.ST_AsText(functions.ST_Union(Images.geom))).one()[0])
     session.close()
 
-    fp_poly_bounds = list(fp_poly.bounds)
-
-    # just hard code queries to the mars database as it exists for now
-
-    coords = distribute_points_in_geom(fp_poly, nspts_func=nspts_func, ewpts_func=ewpts_func, method="new")
+    coords = distribute_points_in_geom(fp_poly, nspts_func=nspts_func, ewpts_func=ewpts_func, method="new", Session=Session)
     coords = np.asarray(coords)
 
-    records = []
+    old_coord_list = []
     coord_list = []
     lines = []
     samples = []
+    newlines = []
+    newsamples = []
 
     # throw out points not intersecting the ground reference images
+    print('points to lay down: ', len(coords))
     for i, coord in enumerate(coords):
         # res = ground_session.execute(formated_sql)
         p = Point(*coord)
+        print(f'point {i}'),
 
         linessamples = isis.point_info(ground_mosaic.file_name, p.x, p.y, 'ground')
-        sample = linessamples.get('Sample')
-        line = linessamples.get('Line')
+        line = linessamples[0].get('Line')
+        sample = linessamples[0].get('Sample')
 
-        # hardcoded for themis for now
-        size = 200
+        oldpoint = isis.point_info(ground_mosaic.file_name, sample, line, 'image')
+        op = Point(oldpoint[0].get('PositiveEast360Longitude'),
+                   oldpoint[0].get('PlanetocentricLatitude'))
 
-        image = roi.Roi(ground_mosaic, sample, line, size_x=size, size_y=size, dtype="uint64")
-        image_roi = image.clip()
 
-        interesting = extract_most_interesting(bytescale(image),  extractor_parameters={'nfeatures':30})
+        image = roi.Roi(ground_mosaic, sample, line, size_x=size[0], size_y=size[1])
+        image_roi = image.clip(dtype="uint64")
+
+        interesting = extract_most_interesting(bytescale(image_roi),  extractor_parameters={'nfeatures':30})
 
         # kps are in the image space with upper left origin, so convert to
         # center origin and then convert back into full image space
@@ -123,40 +127,56 @@ def generate_ground_points(Session, ground_mosaic, nspts_func=lambda x: int(roun
         newline = top_y + interesting.y
 
         newpoint = isis.point_info(ground_mosaic.file_name, newsample, newline, 'image')
-        p = Point(newpoint.get('PositiveEast360Longitude'),
-                  newpoint.get('PlanetocentricLatitude'))
+        p = Point(newpoint[0].get('PositiveEast360Longitude'),
+                  newpoint[0].get('PlanetocentricLatitude'))
 
+        if not (xy_in_polygon(p.x, p.y, fp_poly)):
+                print('Interesting point not in mosaic area, ignore')
+                continue
+
+        old_coord_list.append(op)
+        lines.append(line)
+        samples.append(sample)
         coord_list.append(p)
-        lines.append(newline)
-        samples.append(newsample)
+        newlines.append(newline)
+        newsamples.append(newsample)
 
 
     # start building the cnet
     ground_cnet = pd.DataFrame()
     ground_cnet["path"] = [ground_mosaic.file_name]*len(coord_list)
     ground_cnet["pointid"] = list(range(len(coord_list)))
+    ground_cnet["original point"] = old_coord_list
     ground_cnet["point"] = coord_list
-    ground_cnet['line'] = lines
-    ground_cnet['sample'] = samples
+    ground_cnet['original line'] = lines
+    ground_cnet['original sample'] = samples
+    ground_cnet['line'] = newlines
+    ground_cnet['sample'] = newsamples
     ground_cnet = gpd.GeoDataFrame(ground_cnet, geometry='point')
     return ground_cnet, fp_poly, coord_list
 
 
-def propagate_point(Session, 
-                    config, 
+def propagate_point(Session,
+                    config,
                     dem,
-                    lon, 
-                    lat, 
-                    pointid, 
-                    paths, 
-                    lines, 
-                    samples, 
+                    lon,
+                    lat,
+                    pointid,
+                    paths,
+                    lines,
+                    samples,
+                    size_x=40,
+                    size_y=40,
+                    template_kwargs={'image_size': (39, 39), 'template_size': (21, 21)},
                     verbose=False):
     """
 
     """
-    engine = Session.get_bind()
-    images = gpd.GeoDataFrame.from_postgis(f"select * from images where ST_Intersects(geom, ST_SetSRID(ST_Point({lon}, {lat}), {config['spatial']['latitudinal_srid']}))", engine, geom_col="geom")
+    session = Session()
+    engine = session.get_bind()
+    string = f"select * from images where ST_Intersects(geom, ST_SetSRID(ST_Point({lon}, {lat}), {config['spatial']['latitudinal_srid']}))"
+    images = pd.read_sql(string, engine)
+    session.close()
 
     image_measures = pd.DataFrame(zip(paths, lines, samples), columns=["path", "line", "sample"])
     measure = image_measures.iloc[0]
@@ -177,7 +197,10 @@ def propagate_point(Session,
             sx, sy = m["sample"], m["line"]
 
             try:
-                x,y, dist, metrics, corrmap = geom_match(base_image, dest_image, sx, sy, verbose=verbose)
+                x,y, dist, metrics, corrmap = geom_match(base_image, dest_image, sx, sy, \
+                        size_x=size_x, size_y=size_y, \
+                        template_kwargs=template_kwargs, \
+                        verbose=verbose)
             except Exception as e:
                 raise Exception(e)
                 match_results.append(e)
@@ -204,6 +227,7 @@ def propagate_point(Session,
           print("Winning CORR: ", best_results[3], "Themis Pixel shift: ", best_results[4])
           print("Themis Image: ", best_results[6], "CTX image:", best_results[7])
           print("Themis S,L: ", f"{sx},{sy}", "CTX S,L: ", f"{sample},{line}")
+          print('\n')
 
         # hardcoded for now
         if best_results[3] == None or best_results[3] < 0.7:
@@ -231,8 +255,26 @@ def propagate_point(Session,
 
     return new_measures
 
-def propagate_control_network(Session, config, dem, base_cnet, verbose=False):
+def propagate_control_network(Session, config, dem, base_cnet, \
+        size_x=40, size_y=40, \
+        template_kwargs={'image_size': (39,39), 'template_size': (21,21)}, verbose=False):
     """
+    Parameters
+    ----------
+    Session
+
+    config
+
+    dem
+
+    base_cnet
+
+    verbose
+
+
+    Output
+    ------
+    ground
 
     """
     warnings.warn('This function is not well tested. No tests currently exists \
@@ -253,14 +295,17 @@ def propagate_control_network(Session, config, dem, base_cnet, verbose=False):
         # get image in the destination that overlap
         lon, lat = measures["point"].iloc[0].xy
         gp_measures = propagate_point(Session,
-                                      config, 
-                                      dem, 
-                                      lon[0], 
-                                      lat[0], 
-                                      cpoint, 
-                                      measures["path"], 
-                                      measures["line"], 
-                                      measures["sample"], 
+                                      config,
+                                      dem,
+                                      lon[0],
+                                      lat[0],
+                                      cpoint,
+                                      measures["path"],
+                                      measures["line"],
+                                      measures["sample"],
+                                      size_x,
+                                      size_y,
+                                      template_kwargs,
                                       verbose=verbose)
 
         constrained_net.extend(gp_measures)

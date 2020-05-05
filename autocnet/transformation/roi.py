@@ -43,7 +43,7 @@ class Roi():
         self.y = y
         self.size_x = size_x
         self.size_y = size_y
-        
+
     @property
     def x(self):
         return self._x + self.axr
@@ -51,7 +51,7 @@ class Roi():
     @x.setter
     def x(self, x):
         self.axr, self._x = modf(x)
-    
+
     @property
     def y(self):
         return self._y + self.ayr
@@ -90,15 +90,15 @@ class Roi():
 
         return list(map(int, [left_x, right_x, top_y, bottom_y]))
 
-    def clip(self):
+    def clip(self, dtype=None):
         pixels = self.image_extent
         if isinstance(self.geodataset, np.ndarray):
-            array = self.geodataset[pixels[2]:pixels[3]+1, 
+            array = self.geodataset[pixels[2]:pixels[3]+1,
                                          pixels[0]:pixels[1]+1]
         else:
             # Have to reformat to [xstart, ystart, xnumberpixels, ynumberpixels]
             pixels = [pixels[0], pixels[2], pixels[1]-pixels[0], pixels[3]-pixels[2]]
-            array = self.geodataset.read_array(pixels=pixels)
+            array = self.geodataset.read_array(pixels=pixels, dtype=dtype)
 
         return array
 
