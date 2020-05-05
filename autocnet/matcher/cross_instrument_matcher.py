@@ -284,7 +284,8 @@ def propagate_control_network(Session, config, dem, base_cnet, \
 
     Output
     ------
-    ground
+    ground   : pd.DataFrame
+               Dataframe containing successfully propagated points
 
     """
     warnings.warn('This function is not well tested. No tests currently exists \
