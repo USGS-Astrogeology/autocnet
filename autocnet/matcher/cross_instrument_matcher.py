@@ -261,15 +261,25 @@ def propagate_control_network(Session, config, dem, base_cnet, \
     """
     Parameters
     ----------
-    Session
+    Session   : sqlalchemy session maker
+                session maker associated with the database you want to propagate to
 
-    config
+    config    : dict
+                configuation file associated with database you want to propagate to
+                In the form: {'username':'somename',
+                              'password':'somepassword',
+                              'host':'somehost',
+                              'pgbouncer_port':6543,
+                              'name':'somename'}
 
-    dem
+    dem       : plio.io.io_gdal.GeoDataset
+                Digital elevation model of target body
 
-    base_cnet
+    base_cnet : pd.DataFrame
+                Dataframe representing the points you want to propagate. Must contain line, sample, path.
 
-    verbose
+    verbose   : boolean
+                Increase the level of print outs/plots recieved during propagation
 
 
     Output

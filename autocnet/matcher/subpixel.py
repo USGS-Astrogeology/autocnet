@@ -489,12 +489,10 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
     base_pixels = list(map(int, [base_corners[0][0], base_corners[0][1], size_x*2, size_y*2]))
     base_type = isis2np_types[pvl.load(base_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
     base_arr = base_cube.read_array(pixels=base_pixels, dtype=base_type)
-    print(f'geom_match base_arr length: {base_arr.shape}')
 
     dst_pixels = list(map(int, [start_x, start_y, stop_x-start_x, stop_y-start_y]))
     dst_type = isis2np_types[pvl.load(input_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
     dst_arr = input_cube.read_array(pixels=dst_pixels, dtype=dst_type)
-    print(f'geom_match dst_arr length: {dst_arr.shape}')
 
     dst_arr = tf.warp(dst_arr, affine)
     dst_arr = dst_arr[:size_y*2, :size_x*2]
@@ -510,12 +508,9 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
 
     # Run through one step of template matching then one step of phase matching
     # These parameters seem to work best, should pass as kwargs later
-    print(f'geom_match -> (size_x, size_y): {size_x, size_y}')
-    print(f'geom_match -> template_kwargs: {template_kwargs}')
     restemplate = subpixel_template(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
 
     if phase_kwargs:
-        print('geom_match -> phase_kwargs = True')
         _,_,maxcorr, temp_corrmap = restemplate
         sample_template, line_template = affine([restemplate[0], restemplate[1]])[0]
         sample_template += start_x
@@ -534,7 +529,6 @@ def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60
         dist = (dist_temp, dist_phase)
         metric = (maxcorr, perror, pdiff)
     else:
-        print('geom_match -> phase_kwargs = False')
         x,y,maxcorr,temp_corrmap = restemplate
         if x is None or y is None:
             return None, None, None, None, None
@@ -732,14 +726,12 @@ def subpixel_register_point(pointid, iterative_phase_kwargs={},
                 continue
 
             if iterative_phase_kwargs:
-                print('subpixel_register_point -> PHASE MEASURE WRITE OUT')
                 measure.template_metric = metric[0]
                 measure.template_shift = dist[0]
                 measure.phase_error = metric[1]
                 measure.phase_diff = metric[2]
                 measure.phase_shift = dist[1]
             else:
-                print('subpixel_register_point -> NO PHASE MEASURE WRITE OUT')
                 measure.template_metric = metric
                 measure.template_shift = dist
 
