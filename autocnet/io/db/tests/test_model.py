@@ -168,7 +168,7 @@ def test_jigsaw_append(mockFunc, session, measure_data, point_data, image_data, 
     assert resp.liner == None
     assert resp.sampler == None
 
-    ncg.update_from_jigsaw(session, '/Some/Path/To/An/ISISNetwork.cnet')
+    ncg.update_from_jigsaw('/Some/Path/To/An/ISISNetwork.cnet')
     resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
     assert resp.liner == 0.1
     assert resp.sampler == 0.1

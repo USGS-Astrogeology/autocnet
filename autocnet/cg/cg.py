@@ -466,8 +466,8 @@ def distribute_points_new(geom, nspts, ewpts, Session):
     rr_coords = np.array(list(zip(*geom.minimum_rotated_rectangle.exterior.xy))[:-1])
     w = min([i[0] for i in rr_coords])
     s = min([i[1] for i in rr_coords])
-    SWid = nearest([w, s], rr_coords)
-    rr_coords = np.vstack([rr_coords[SWid:], rr_coords[0:SWid]]) # reorder to match envelope/coords order
+    swid = nearest([w, s], rr_coords)
+    rr_coords = np.vstack([rr_coords[swid:], rr_coords[0:swid]]) # reorder to match envelope/coords order
 
     top = create_points_along_line(ul, ur, ewpts)
     bot = create_points_along_line(ll, lr, ewpts)

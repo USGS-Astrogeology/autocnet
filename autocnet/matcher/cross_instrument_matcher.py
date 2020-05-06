@@ -148,8 +148,8 @@ def generate_ground_points(Session, ground_mosaic, nspts_func=lambda x: int(roun
     ground_cnet["pointid"] = list(range(len(coord_list)))
     ground_cnet["original point"] = old_coord_list
     ground_cnet["point"] = coord_list
-    ground_cnet['original line'] = lines
-    ground_cnet['original sample'] = samples
+    ground_cnet['original_line'] = lines
+    ground_cnet['original_sample'] = samples
     ground_cnet['line'] = newlines
     ground_cnet['sample'] = newsamples
     ground_cnet = gpd.GeoDataFrame(ground_cnet, geometry='point')
@@ -255,8 +255,8 @@ def propagate_point(Session,
 
     return new_measures
 
-def propagate_control_network(Session, config, dem, base_cnet, \
-        size_x=40, size_y=40, \
+def propagate_control_network(Session, config, dem, base_cnet,
+        size_x=40, size_y=40,
         template_kwargs={'image_size': (39,39), 'template_size': (21,21)}, verbose=False):
     """
     Parameters
