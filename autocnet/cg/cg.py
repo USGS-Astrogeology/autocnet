@@ -469,15 +469,10 @@ def distribute_points_new(geom, nspts, ewpts, Session):
     swid = nearest([w, s], rr_coords)
     rr_coords = np.vstack([rr_coords[swid:], rr_coords[0:swid]]) # reorder to match envelope/coords order
 
-    top = create_points_along_line(ul, ur, ewpts)
-    bot = create_points_along_line(ll, lr, ewpts)
+    x = np.linspace(ul[0], ur[0], ewpts+2)[1:-1]
+    y = np.linspace(ul[1], ll[1], nspts+2)[1:-1]
 
-    grid = create_points_along_line(top[0], bot[0], nspts)
-    for i in range(1, len(top)):
-        top_pt = top[i]
-        bot_pt = bot[i]
-        line_of_points = create_points_along_line(top_pt, bot_pt, nspts)
-        grid = np.vstack((grid, line_of_points))
+    grid = np.transpose([np.tile(x, len(y)), np.repeat(y, len(x))])
 
     if len(grid) < 1:
         return []
