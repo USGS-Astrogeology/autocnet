@@ -166,16 +166,14 @@ def test_jigsaw_append(mockFunc, measure_data, point_data, image_data, ncg):
         model.Points.create(session, **point_data)
         model.Measures.create(session, **measure_data)
         resp1 = session.query(model.Measures).filter(model.Measures.id == 1).first()
-        print(resp1)
-    assert resp1.liner == None
-    assert resp1.sampler == None
+        assert resp1.liner == None
+        assert resp1.sampler == None
 
     ncg.update_from_jigsaw('/Some/Path/To/An/ISISNetwork.cnet')
     with ncg.session_scope() as session:
         resp2 = session.query(model.Measures).filter(model.Measures.id == 1).first()
-        print(resp2)
-    assert resp2.liner == 0.1
-    assert resp2.sampler == 0.1
+        assert resp2.liner == 0.1
+        assert resp2.sampler == 0.1
 
 def test_null_footprint(session):
     i = model.Images.create(session, geom=None,
