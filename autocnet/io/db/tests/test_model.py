@@ -160,16 +160,18 @@ def test_measures_exists(tables):
                                                                                      'adjustedCovar': [[]],
                                                                                      'apriorisample': [0],
                                                                                      'aprioriline': [0]}))
-def test_jigsaw_append(mockFunc, session, measure_data, point_data, image_data, ncg):
-    model.Images.create(session, **image_data)
-    model.Points.create(session, **point_data)
-    model.Measures.create(session, **measure_data)
-    resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
+def test_jigsaw_append(mockFunc, measure_data, point_data, image_data, ncg):
+    with ncg.session_scope() as session:
+        model.Images.create(session, **image_data)
+        model.Points.create(session, **point_data)
+        model.Measures.create(session, **measure_data)
+        resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
     assert resp.liner == None
     assert resp.sampler == None
 
     ncg.update_from_jigsaw('/Some/Path/To/An/ISISNetwork.cnet')
-    resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
+    with ncg.session_scope() as session:
+        resp = session.query(model.Measures).filter(model.Measures.id == 1).first()
     assert resp.liner == 0.1
     assert resp.sampler == 0.1
 
