@@ -18,7 +18,7 @@ def image_diff(arr1, arr2):
      diff = arr1-arr2
      diff[np.isnan(diff)] = 0
 
-     return bytescale(diff)
+     return diff
 
 
 def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", extractor_kwargs={"nfeatures": 2000, "scaleFactor": 1.1, "nlevels": 1}, cluster_params={"min_samples": 10, "max_eps": 10, "eps": .5, "xi":.5},  image_func=image_diff):

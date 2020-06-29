@@ -343,6 +343,7 @@ class Edge(dict, MutableMapping):
         _, mask = self.clean(clean_keys)
         s_keypoints, d_keypoints = self.get_match_coordinates(clean_keys=clean_keys)
         self.fundamental_matrix, fmask = fm.compute_fundamental_matrix(s_keypoints, d_keypoints, **kwargs)
+        fmask = fmask.flatten()
 
         if isinstance(self.fundamental_matrix, np.ndarray):
             # Convert the truncated RANSAC mask back into a full length mask
@@ -1063,7 +1064,7 @@ class NetworkEdge(Edge):
         mask = self.masks[mask]
         matches_to_disable = mask[mask == False].index
 
-        
+
         bad = {}
         with self.parent.session_scope() as session:
             for o in session.query(Matches).filter(Matches.id.in_(matches_to_disable)).all():
