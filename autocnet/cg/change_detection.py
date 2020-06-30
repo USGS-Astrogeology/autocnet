@@ -1,7 +1,5 @@
 import numpy as np
 from matplotlib.path import Path
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-from matplotlib.figure import Figure
 
 from shapely.geometry import Point, MultiPoint
 import geopandas as gpd
