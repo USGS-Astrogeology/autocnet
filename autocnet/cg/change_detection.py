@@ -44,10 +44,10 @@ def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", image_fu
      ----------
 
      image1 : np.array, plio.GeoDataset
-             Image representing the "before" state of the ROI
+             Image representing the "before" state of the ROI, can be a 2D numpy array or plio GeoDataset
 
      image2 : np.array, plio.GeoDataset
-             Image representing the "after" state of the ROI
+             Image representing the "after" state of the ROI, can be a 2D numpy array or plio GeoDataset
 
      image_func : callable
                   Function used to create a derived image from image1 and image2, which in turn is
@@ -122,10 +122,10 @@ def okbm_detector(image1, image2, nbins=50, extractor_method="orb",  image_func=
      ----------
 
      image1 : GeoDataset
-             Image representing the "before" state of the ROI
+             Image representing the "before" state of the ROI, can be a 2D numpy array or plio GeoDataset
 
      image2 : GeoDataset
-             Image representing the "after" state of the ROI
+             Image representing the "after" state of the ROI, can be a 2D numpy array or plio GeoDataset
 
      image_func : callable
                   Function used to create a derived image from image1 and image2, which in turn is
