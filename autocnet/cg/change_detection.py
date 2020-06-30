@@ -1,11 +1,10 @@
 import numpy as np
 from matplotlib.path import Path
-
 from shapely.geometry import Point, MultiPoint
 import geopandas as gpd
-
 import cv2
 from sklearn.cluster import  OPTICS
+from plio.io.io_gdal import GeoDataset
 
 from autocnet.utils.utils import bytescale
 from autocnet.matcher.cpu_extractor import extract_features
@@ -44,15 +43,32 @@ def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", image_fu
      Parameters
      ----------
 
-     image1 : GeoDataset
+     image1 : np.array, plio.GeoDataset
              Image representing the "before" state of the ROI
 
-     image2 : GeoDataset
+     image2 : np.array, plio.GeoDataset
              Image representing the "after" state of the ROI
 
      image_func : callable
-              Function use to create a derived image from image1 and image2, which in turn is
-              the input for the feature extractor. Default function create a difference image.
+                  Function used to create a derived image from image1 and image2, which in turn is
+                  the input for the feature extractor. The first two arguments are 2d numpy arrays, image1 and image2,
+                  and must return a 2d numpy array. Default function returns a difference image.
+
+                  Example func:
+
+                  >>> from numpy import random
+                  >>> image1, image2 = random.random((50,50)), random.random((50,50))
+                  >>> def ratio(image1, image2):
+                  >>>   # do stuff with image1 and image2
+                  >>>   new_image = image1/image2
+                  >>>   return new_image # must return a single variable, a 2D numpy array
+                  >>> results = okubogar_detector(image1, image2, image_func=ratio)
+
+                  Or, alternatively:
+
+                  >>> from numpy import random
+                  >>> image1, image2 = random.random((50,50)), random.random((50,50))
+                  >>> results = okubogar_detector(image1, image2, image_func=lambda im1, im2: im1/im2)
 
      nbins : int
             number of bins to use in the 2d histogram
@@ -70,13 +86,16 @@ def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", image_fu
      feature extractor: autocnet.matcher.cpu_extractor.extract_features
 
      """
+     if isinstance(image1, GeoDataset):
+         image1 = image1.read_array()
 
-     arr1 = image1.read_array()
-     arr2 = image2.read_array()
-     arr1[arr1 == arr1.min()] = 0
-     arr2[arr2 == arr2.min()] = 0
-     arr1 = bytescale(arr1)
-     arr2 = bytescale(arr2)
+     if isinstance(image2, GeoDataset):
+         image2 = image2.read_array()
+
+     image1[image1 == image1.min()] = 0
+     image2[image2 == image2.min()] = 0
+     arr1 = bytescale(image1)
+     arr2 = bytescale(image2)
 
      bdiff = image_func(arr1, arr2)
 
@@ -109,8 +128,25 @@ def okbm_detector(image1, image2, nbins=50, extractor_method="orb",  image_func=
              Image representing the "after" state of the ROI
 
      image_func : callable
-              Function use to create a derived image from image1 and image2, which in turn is
-              the input for the feature extractor. Default function create a difference image.
+                  Function used to create a derived image from image1 and image2, which in turn is
+                  the input for the feature extractor. The first two arguments are 2d numpy arrays, image1 and image2,
+                  and must return a 2d numpy array. Default function returns a difference image.
+
+                  Example func:
+
+                  >>> from numpy import random
+                  >>> image1, image2 = random.random((50,50)), random.random((50,50))
+                  >>> def ratio(image1, image2):
+                  >>>   # do stuff with image1 and image2
+                  >>>   new_image = image1/image2
+                  >>>   return new_image # must return a single variable, a 2D numpy array
+                  >>> results = okbm_detector(image1, image2, image_func=ratio)
+
+                  Or, alternatively:
+
+                  >>> from numpy import random
+                  >>> image1, image2 = random.random((50,50)), random.random((50,50))
+                  >>> results = okbm_detector(image1, image2, image_func=lambda im1, im2: im1/im2)
 
      nbins : int
             number of bins to use in the 2d histogram
@@ -127,12 +163,16 @@ def okbm_detector(image1, image2, nbins=50, extractor_method="orb",  image_func=
 
      """
 
-     arr1 = image1.read_array()
-     arr2 = image2.read_array()
-     arr1[arr1 == arr1.min()] = 0
-     arr2[arr2 == arr2.min()] = 0
-     arr1 = bytescale(arr1)
-     arr2 = bytescale(arr2)
+     if isinstance(image1, GeoDataset):
+         image1 = image1.read_array()
+
+     if isinstance(image2, GeoDataset):
+         image2 = image2.read_array()
+
+     image1[image1 == image1.min()] = 0
+     image2[image2 == image2.min()] = 0
+     arr1 = bytescale(image1)
+     arr2 = bytescale(image2)
 
      bdiff = image_func(arr1, arr2)
 
