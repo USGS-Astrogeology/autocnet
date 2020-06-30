@@ -93,7 +93,7 @@ def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", image_fu
      return points, heatmap, bdiff
 
 
-def obm_detector(image1, image2, nbins=50, extractor_method="orb",  image_func=image_diff,
+def okbm_detector(image1, image2, nbins=50, extractor_method="orb",  image_func=image_diff,
                  extractor_kwargs={"nfeatures": 2000, "scaleFactor": 1.1, "nlevels": 1},
                  cluster_params={"min_samples": 10, "max_eps": 10, "eps": .5, "xi":.5}):
      """
