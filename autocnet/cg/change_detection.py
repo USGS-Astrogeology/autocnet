@@ -289,15 +289,15 @@ def blob_detector(image1, image2, image_func=image_diff, max_sigma=30, num_sigma
      """
 
      if isinstance(image1, GeoDataset):
-         image_array1 = image1.read_array()
+         image1 = image1.read_array()
 
      if isinstance(image2, GeoDataset):
-         image_array2 = image2.read_array()
+         image2 = image2.read_array()
 
-     image_array1[image_array1 == image_array1.min()] = 0
-     image_array2[image_array2 == image_array2.min()] = 0
-     arr1 = bytescale(image_array1)
-     arr2 = bytescale(image_array2)
+     image1[image1 == image1.min()] = 0
+     image2[image2 == image2.min()] = 0
+     arr1 = bytescale(image1)
+     arr2 = bytescale(image2)
 
      bdiff = image_func(arr1, arr2)
 
