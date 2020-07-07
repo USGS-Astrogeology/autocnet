@@ -7,7 +7,7 @@ from sklearn.cluster import  OPTICS
 from plio.io.io_gdal import GeoDataset
 from scipy.spatial import cKDTree
 from skimage.feature import blob_log, blob_doh
-from math import sqrt, atan2
+from math import sqrt, atan2, pi
 
 from autocnet.utils.utils import bytescale
 from autocnet.matcher.cpu_extractor import extract_features
@@ -332,7 +332,7 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff, max_
          """
          x, y = (pt2[1]-pt1[1], pt2[0]-pt1[0])
          # Find angle of vector w.r.t. x axis
-         angle = (math.atan2(y, x) * 180 / math.pi)%360
+         angle = (atan2(y, x) * 180 / pi)%360
          return -tolerance <= subsolar_azimuth - angle <= tolerance
 
      type1_change = []
