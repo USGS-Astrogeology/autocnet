@@ -219,9 +219,8 @@ def okbm_detector(image1, image2, nbins=50, extractor_method="orb",  image_func=
      return polys, weights, bdiff
 
 
-def blob_detector(image1, image2, image_func=image_diff, max_sigma=30, num_sigma=10,
-                  threshold=.075, n_neighbors=3, dist_upper_bound=5, angle_tolerance=10,
-                  sub_solar_azimuth=None):
+def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff, max_sigma=30, num_sigma=10,
+                  threshold=.075, n_neighbors=3, dist_upper_bound=5, angle_tolerance=10):
      """
 
      Parameters
@@ -232,6 +231,11 @@ def blob_detector(image1, image2, image_func=image_diff, max_sigma=30, num_sigma
 
      image2 : GeoDataset
              Image representing the "after" state of the ROI, can be a 2D numpy array or plio GeoDataset
+
+
+     sub_solar_azimuth : scalar or 2d np.array
+                         Per-pixel subsolar azimuth or a single subsolar azimuth
+                         value to be used for the entire image.
 
      image_func : callable
                   Function used to create a derived image from image1 and image2, which in turn is
@@ -283,10 +287,7 @@ def blob_detector(image1, image2, image_func=image_diff, max_sigma=30, num_sigma
                        require an angle tolerance of 5 in order to consider
                        blobs with a 90 degree angle as candidates.
 
-     sub_solar_azimuth : scalar or 2d np.array
-                         Per-pixel subsolar azimuth or a single subsolar azimuth
-                         value to be used for the entire image.
-     """
+          """
 
      if isinstance(image1, GeoDataset):
          image1 = image1.read_array()
@@ -322,8 +323,8 @@ def blob_detector(image1, image2, image_func=image_diff, max_sigma=30, num_sigma
      # Points that have at least one neighbor within threshold distance.
      close_points = blobs_log_inv[[x[0] < len(blobs_log) for x in idx_log]]
 
-     # Indices of nearest neighbors
-     neighbors_idx = [j for j in [i[i!=len(blobs_log)]for i in idx_log] if j.size > 0]
+     # Nearest neighbors
+     neighbors = [blobs_log[j] for j in [i[i!=len(blobs_log)]for i in idx_log] if j.size > 0]
 
      def is_azimuth_colinear(pt1, pt2, subsolar_azimuth, tolerance):
          """ Returns true if pt1, pt2, and subsolar azimuth are colinear within
