@@ -7,7 +7,7 @@ from sklearn.cluster import  OPTICS
 from plio.io.io_gdal import GeoDataset
 from scipy.spatial import cKDTree
 from skimage.feature import blob_log, blob_doh
-from math import sqrt
+from math import sqrt, atan2
 
 from autocnet.utils.utils import bytescale
 from autocnet.matcher.cpu_extractor import extract_features
