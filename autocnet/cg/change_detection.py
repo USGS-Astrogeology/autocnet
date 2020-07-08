@@ -220,7 +220,7 @@ def okbm_detector(image1, image2, nbins=50, extractor_method="orb",  image_func=
 
 
 def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff, max_sigma=30, num_sigma=10,
-                  threshold=.075, n_neighbors=3, dist_upper_bound=5, angle_tolerance=10):
+        threshold=.075, n_neighbors=3, dist_upper_bound=5, angle_tolerance=10):
      """
 
      Parameters
@@ -307,9 +307,9 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff, max_
      inv = 255-bdiff
 
      # Laplacian of Gaussian of diff image (light on dark)
-     blobs_log = blob_log(bdiff, max_sigma=30, num_sigma=10, threshold=.075)
+     blobs_log = blob_log(bdiff, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
      # Laplacian of Gaussian on diff image (inverse -- dark on light)
-     blobs_log_inv = blob_log(inv, max_sigma=30, num_sigma=10, threshold=.075)
+     blobs_log_inv = blob_log(inv, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
      # Compute radii in the 3rd column.  Radii are appx equal to sqrt2 * sigma
      blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
      blobs_log_inv[:, 2] = blobs_log_inv[:, 2] * sqrt(2)
@@ -340,8 +340,8 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff, max_
      for idx, pt1 in enumerate(close_points):
          for pt2 in neighbors[idx]:
              try:
-                 azimuth = sub_solar_azimuth[pt1]
-             except IndexError:
+                 azimuth = sub_solar_azimuth[int(pt1[0]), int(pt1[1])]
+             except IndexError as e:
                  azimuth = sub_solar_azimuth
              if is_azimuth_colinear(pt1, pt2, azimuth, angle_tolerance):
                  type1_change.append([pt1,pt2])
