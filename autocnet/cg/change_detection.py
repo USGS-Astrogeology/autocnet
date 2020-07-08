@@ -264,7 +264,7 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff, max_
                  Gaussian filter are given for each axis as a sequence, or as a
                  single number, in which case it is equal for all axes.
 
-     n_sigma : int
+     num_sigma : int
                The number of intermediate values of standard deviations to
                consider.
 
@@ -287,7 +287,7 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff, max_
                        require an angle tolerance of 5 in order to consider
                        blobs with a 90 degree angle as candidates.
 
-          """
+     """
 
      if isinstance(image1, GeoDataset):
          image1 = image1.read_array()
