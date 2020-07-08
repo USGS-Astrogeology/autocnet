@@ -219,8 +219,9 @@ def okbm_detector(image1, image2, nbins=50, extractor_method="orb",  image_func=
      return polys, weights, bdiff
 
 
-def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff, max_sigma=30, num_sigma=10,
-        threshold=.075, n_neighbors=3, dist_upper_bound=5, angle_tolerance=10):
+def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
+                  subtractive=False, max_sigma=30, num_sigma=10, threshold=.075,
+                  n_neighbors=3, dist_upper_bound=5, angle_tolerance=10):
      """
 
      Parameters
@@ -258,6 +259,11 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff, max_
                   >>> image1, image2 = random.random((50,50)), random.random((50,50))
                   >>> results = okbm_detector(image1, image2, image_func=lambda im1, im2: im1/im2)
 
+     subtractive : Boolean
+                   Find subtractive features instead of additive features.  In other
+                   words, find locations in which a feature "used to be present"
+                   but has since moved.
+
      max_sigma : scalar or sequence of scalars
                  The maximum standard deviation for Gaussian kernel. Keep this
                  high to detect larger blobs. The standard deviations of the
@@ -287,7 +293,29 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff, max_
                        require an angle tolerance of 5 in order to consider
                        blobs with a 90 degree angle as candidates.
 
+     Returns
+     -------
+
+     changes : np.ndarray
+               A numpy array containing candidate change points in the form (y,x,radius)
+
+     bdiff : np.ndarray
+             A numpy array containing the image upon which the change detection
+             algorithm operates, i.e. the image resulting from image_func.
+
      """
+
+     def is_azimuth_colinear(pt1, pt2, subsolar_azimuth, tolerance, subtractive=False):
+         """ Returns true if pt1, pt2, and subsolar azimuth are colinear within
+             some tolerance.
+         """
+         x, y = (pt2[1]-pt1[1], pt2[0]-pt1[0])
+         # Find angle of vector w.r.t. x axis
+         angle = (atan2(y, x) * 180 / pi)%360
+         # If finding subtractive changes, invert the angle.
+         if subtractive:
+             angle = (angle+180)%360
+         return -tolerance <= subsolar_azimuth - angle <= tolerance
 
      if isinstance(image1, GeoDataset):
          image1 = image1.read_array()
@@ -326,28 +354,15 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff, max_
      # Nearest neighbors
      neighbors = [blobs_log[j] for j in [i[i!=len(blobs_log)]for i in idx_log] if j.size > 0]
 
-     def is_azimuth_colinear(pt1, pt2, subsolar_azimuth, tolerance):
-         """ Returns true if pt1, pt2, and subsolar azimuth are colinear within
-             some tolerance.
-         """
-         x, y = (pt2[1]-pt1[1], pt2[0]-pt1[0])
-         # Find angle of vector w.r.t. x axis
-         angle = (atan2(y, x) * 180 / pi)%360
-         return -tolerance <= subsolar_azimuth - angle <= tolerance
-
-     type1_change = []
-     type2_change = []
+     changes = []
      for idx, pt1 in enumerate(close_points):
          for pt2 in neighbors[idx]:
              try:
                  azimuth = sub_solar_azimuth[int(pt1[0]), int(pt1[1])]
              except IndexError as e:
                  azimuth = sub_solar_azimuth
-             if is_azimuth_colinear(pt1, pt2, azimuth, angle_tolerance):
-                 type1_change.append([pt1,pt2])
-             elif is_azimuth_colinear(pt2, pt1, azimuth, angle_tolerance):
-                 type2_change.append([pt1,pt2])
-     type1_change = np.array(type1_change)
-     type2_change = np.array(type2_change)
+             if is_azimuth_colinear(pt1, pt2, azimuth, angle_tolerance, subtractive):
+                 changes.append([pt1,pt2])
+     changes = np.array(changes)
 
-     return (type1_change, type2_change)
+     return changes, bdiff
