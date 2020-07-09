@@ -276,10 +276,9 @@ def propagate_point(Session,
                 match_results.append(e)
                 continue
 
-            if len(images) > 1:
             match_results.append([k, x, y,
-                                     metrics, dist, corrmap, m["path"], image["path"],
-                                     image['id'], image['serial']])
+                                 metrics, dist, corrmap, m["path"], image["path"],
+                                 image['id'], image['serial']])
 
     # get best offsets
     match_results = np.asarray([res for res in match_results if isinstance(res, list) and all(r is not None for r in res)])
@@ -430,7 +429,7 @@ def propagate_control_network(Session,
 
     points = []
 
-    # upload new points
+    # conditionally upload a new point to DB or updated existing point with new measures
     session = Session()
     for p,indices in groundpoints.items():
         point = ground.loc[indices].iloc[0]
@@ -443,7 +442,6 @@ def propagate_control_network(Session,
             warnings.warn(f"There is more than one point at lon: {lon}, lat: {lat}")
 
         elif len(res) == 1:
-            # same as below but controlling the pointid
             for i in indices:
                 row = ground.loc[i]
                 pid = res[0][0]
