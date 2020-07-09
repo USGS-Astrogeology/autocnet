@@ -194,7 +194,7 @@ def propagate_point(Session,
                 longitude of point you want to project
 
     lat       : np.float
-                latitude of point you want to project
+                planetocentric latitude of point you want to project
 
     pointid   : int
                 clerical input used to trace point from generate_ground_points output
@@ -251,26 +251,16 @@ def propagate_point(Session,
     p = Point(lon, lat)
     new_measures = []
 
-    print("point id: ", pointid)
-    print("number of CTX images: ", len(images))
-    print("images: ", images)
-    print("lines: ", lines)
-    print("samples: ", samples)
-    print("paths: ", paths)
-    print()
-
     # list of matching results in the format:
     # [measure_index, x_offset, y_offset, offset_magnitude]
     match_results = []
     # lazily iterate for now
     for k,m in image_measures.iterrows():
-        print('base source: ', m['path'])
         base_image = GeoDataset(m["path"])
 
         sx, sy = m["sample"], m["line"]
 
         for i,image in images.iterrows():
-            print('destination source: ', image['path'])
             dest_image = GeoDataset(image["path"])
 
             if os.path.basename(m['path']) == os.path.basename(image['path']):
@@ -282,19 +272,14 @@ def propagate_point(Session,
                         template_kwargs=template_kwargs, \
                         verbose=verbose)
             except Exception as e:
-                print('RAISING EXCEPTION')
                 raise Exception(e)
                 match_results.append(e)
                 continue
 
             if len(images) > 1:
-                print('append to match_results')
-                print('shit to append: ', [k, x, y, metrics, dist, m['path'], image['path']])
             match_results.append([k, x, y,
                                      metrics, dist, corrmap, m["path"], image["path"],
                                      image['id'], image['serial']])
-            if len(images) > 1:
-                print('match_results length: ', len(match_results))
 
     # get best offsets
     match_results = np.asarray([res for res in match_results if isinstance(res, list) and all(r is not None for r in res)])
@@ -309,8 +294,6 @@ def propagate_point(Session,
         # no matches satisfying cost
         return new_measures
 
-    print('best_results: ', best_results)
-    print('\n')
     if verbose:
         print("Full results: ", best_results)
         print("Winning CORRs: ", best_results[:,3], "Themis Pixel shifts: ", best_results[:,4])
@@ -455,8 +438,6 @@ def propagate_control_network(Session,
         lon = point.point.x
         lat = point.point.y
         res = session.execute(f"SELECT * FROM points WHERE ST_Intersects(geom, ST_Buffer(ST_SetSRID(ST_Point({lon}, {lat}), {config['spatial']['latitudinal_srid']}), 1e-10))").fetchall()
-        print(f'lon: {lon}, lat: {lat}')
-        print('length of result: ', len(res))
 
         if len(res) > 1:
             warnings.warn(f"There is more than one point at lon: {lon}, lat: {lat}")
