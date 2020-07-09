@@ -8,7 +8,6 @@ from plio.io.io_gdal import GeoDataset
 
 from autocnet.utils.utils import bytescale
 from autocnet.matcher.cpu_extractor import extract_features
-from matplotlib import pyplot as plt
 
 def image_diff(arr1, arr2):
      arr1 = arr1.astype("float32")
