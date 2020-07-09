@@ -223,6 +223,14 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
                   subtractive=False, max_sigma=30, num_sigma=10, threshold=.075,
                   n_neighbors=3, dist_upper_bound=5, angle_tolerance=10):
      """
+     Blob based change detection.
+
+     Creates a difference image and uses Laplacian of Gaussian (LoG) blob
+     detection to find light / dark areas.  Creates a KDTree to find neighboring
+     light / dark blobs, then filters based on colinearity of the light/dark pair
+     with subsolar azimuth.
+
+     Based on the method described in https://doi.org/10.1016/j.pss.2019.104733
 
      Parameters
      ----------
