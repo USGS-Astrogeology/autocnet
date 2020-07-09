@@ -5,6 +5,9 @@ import geopandas as gpd
 import cv2
 from sklearn.cluster import  OPTICS
 from plio.io.io_gdal import GeoDataset
+from scipy.spatial import cKDTree
+from skimage.feature import blob_log, blob_doh
+from math import sqrt, atan2, pi
 
 from autocnet.utils.utils import bytescale
 from autocnet.matcher.cpu_extractor import extract_features
@@ -214,3 +217,158 @@ def okbm_detector(image1, image2, extractor_method="orb",  image_func=image_diff
      return polys, weights, bdiff
 
 
+def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
+                  subtractive=False, max_sigma=30, num_sigma=10, threshold=.075,
+                  n_neighbors=3, dist_upper_bound=5, angle_tolerance=10):
+     """
+     Blob based change detection.
+
+     Creates a difference image and uses Laplacian of Gaussian (LoG) blob
+     detection to find light / dark areas.  Creates a KDTree to find neighboring
+     light / dark blobs, then filters based on colinearity of the light/dark pair
+     with subsolar azimuth.
+
+     Based on the method described in https://doi.org/10.1016/j.pss.2019.104733
+
+     Parameters
+     ----------
+
+     image1 : GeoDataset
+             Image representing the "before" state of the ROI, can be a 2D numpy array or plio GeoDataset
+
+     image2 : GeoDataset
+             Image representing the "after" state of the ROI, can be a 2D numpy array or plio GeoDataset
+
+
+     sub_solar_azimuth : scalar or 2d np.array
+                         Per-pixel subsolar azimuth or a single subsolar azimuth
+                         value to be used for the entire image.
+
+     image_func : callable
+                  Function used to create a derived image from image1 and image2, which in turn is
+                  the input for the feature extractor. The first two arguments are 2d numpy arrays, image1 and image2,
+                  and must return a 2d numpy array. Default function returns a difference image.
+
+                  Example func:
+
+                  >>> from numpy import random
+                  >>> image1, image2 = random.random((50,50)), random.random((50,50))
+                  >>> def ratio(image1, image2):
+                  >>>   # do stuff with image1 and image2
+                  >>>   new_image = image1/image2
+                  >>>   return new_image # must return a single variable, a 2D numpy array
+                  >>> results = okbm_detector(image1, image2, image_func=ratio)
+
+                  Or, alternatively:
+
+                  >>> from numpy import random
+                  >>> image1, image2 = random.random((50,50)), random.random((50,50))
+                  >>> results = okbm_detector(image1, image2, image_func=lambda im1, im2: im1/im2)
+
+     subtractive : Boolean
+                   Find subtractive features instead of additive features.  In other
+                   words, find locations in which a feature "used to be present"
+                   but has since moved.
+
+     max_sigma : scalar or sequence of scalars
+                 The maximum standard deviation for Gaussian kernel. Keep this
+                 high to detect larger blobs. The standard deviations of the
+                 Gaussian filter are given for each axis as a sequence, or as a
+                 single number, in which case it is equal for all axes.
+
+     num_sigma : int
+               The number of intermediate values of standard deviations to
+               consider.
+
+     threshold : float
+                 The absolute lower bound for scale space maxima.
+                 Local maxima smaller than thresh are ignored.
+                 Reduce this to detect blobs with less intensities.
+
+     n_neighbors : int
+                   Number of closest neighbors (blobs) to search.
+
+     dist_upper_bound : int
+                        The maximum distance between blobs to be considered
+                        neighbors.
+
+     angle_tolerance : int
+                       The mismatch tolerance between the subsolar azimuth and
+                       the angle between the direction vector w.r.t. the x axis.
+                       For example, a subsolar azimuth of 85 degrees would
+                       require an angle tolerance of 5 in order to consider
+                       blobs with a 90 degree angle as candidates.
+
+     Returns
+     -------
+
+     changes : np.ndarray
+               A numpy array containing candidate change points in the form (y,x,radius)
+
+     bdiff : np.ndarray
+             A numpy array containing the image upon which the change detection
+             algorithm operates, i.e. the image resulting from image_func.
+
+     """
+
+     def is_azimuth_colinear(pt1, pt2, subsolar_azimuth, tolerance, subtractive=False):
+         """ Returns true if pt1, pt2, and subsolar azimuth are colinear within
+             some tolerance.
+         """
+         x, y = (pt2[1]-pt1[1], pt2[0]-pt1[0])
+         # Find angle of vector w.r.t. x axis
+         angle = (atan2(y, x) * 180 / pi)%360
+         # If finding subtractive changes, invert the angle.
+         if subtractive:
+             angle = (angle+180)%360
+         return -tolerance <= subsolar_azimuth - angle <= tolerance
+
+     if isinstance(image1, GeoDataset):
+         image1 = image1.read_array()
+
+     if isinstance(image2, GeoDataset):
+         image2 = image2.read_array()
+
+     image1[image1 == image1.min()] = 0
+     image2[image2 == image2.min()] = 0
+     arr1 = bytescale(image1)
+     arr2 = bytescale(image2)
+
+     bdiff = image_func(arr1, arr2)
+
+     # Laplacian of Gaussian only finds light blobs on a dark image.  In order to
+     #  find dark blobs on a light image, we invert.
+     inv = 255-bdiff
+
+     # Laplacian of Gaussian of diff image (light on dark)
+     blobs_log = blob_log(bdiff, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
+     # Laplacian of Gaussian on diff image (inverse -- dark on light)
+     blobs_log_inv = blob_log(inv, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
+     # Compute radii in the 3rd column.  Radii are appx equal to sqrt2 * sigma
+     blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
+     blobs_log_inv[:, 2] = blobs_log_inv[:, 2] * sqrt(2)
+
+     # Create a KDTree to facilitate nearest neighbor search
+     tree = cKDTree(blobs_log)
+     # Query the kdtree to find neighboring points
+     _, idx_log = tree.query(blobs_log_inv, k=n_neighbors,
+                                    distance_upper_bound=dist_upper_bound)
+
+     # Points that have at least one neighbor within threshold distance.
+     close_points = blobs_log_inv[[x[0] < len(blobs_log) for x in idx_log]]
+
+     # Nearest neighbors
+     neighbors = [blobs_log[j] for j in [i[i!=len(blobs_log)]for i in idx_log] if j.size > 0]
+
+     changes = []
+     for idx, pt1 in enumerate(close_points):
+         for pt2 in neighbors[idx]:
+             try:
+                 azimuth = sub_solar_azimuth[int(pt1[0]), int(pt1[1])]
+             except IndexError as e:
+                 azimuth = sub_solar_azimuth
+             if is_azimuth_colinear(pt1, pt2, azimuth, angle_tolerance, subtractive):
+                 changes.append([pt1,pt2])
+     changes = np.array(changes)
+
+     return changes, bdiff
