@@ -1,4 +1,81 @@
 import pyproj
+import numpy as np
+
+def og2oc(lon, lat, semi_major, semi_minor):
+    """
+    Converts planetographic latitude to planetocentric latitude using pyproj pipeline.
+
+    Parameters
+    ----------
+    lon : float
+          longitude 0 to 360 domain (in degrees)
+
+    lat : float
+          planetographic latitude (in degrees)
+
+    semi_major : float
+                 Radius from the center of the body to the equator
+
+    semi_minor : float
+                 Radius from the center of the body to the pole
+
+    Returns
+    -------
+    lon: float
+         longitude (in degrees)
+
+    lat: float
+         planetocentric latitude (in degrees)
+    """
+    lon_og = np.radians(lon)
+    lat_og = np.radians(lat)
+
+    proj_str = f"""
+    +proj=pipeline
+    +step +proj=geoc +a={semi_major} +b={semi_minor} +lon_wrap=180 +xy_in=rad +xy_out=rad
+    """
+    og2oc = pyproj.transformer.Transformer.from_pipeline(proj_str)
+    lon_oc, lat_oc = og2oc.transform(lon_og, lat_og, errcheck=True, radians=True)
+    return np.degrees(lon_oc), np.degrees(lat_oc)
+
+def oc2og(lon, lat, semi_major, semi_minor):
+    """
+    Converts planetocentric latitude to planetographic latitude using pyproj pipeline.
+
+    Parameters
+    ----------
+    lon : float
+          longitude 0 to 360 domain (in degrees)
+
+    lat : float
+          planetocentric latitude (in degrees)
+
+    semi_major : float
+                 Radius from the center of the body to the equator
+
+    semi_minor : float
+                 Radius from the center of the body to the pole
+
+    Returns
+    -------
+    lon : float
+          longitude (in degrees)
+
+    lat : float
+          planetographic latitude (in degrees)
+    """
+
+    lon_oc = np.radians(lon)
+    lat_oc = np.radians(lat)
+
+    proj_str = f"""
+    +proj=pipeline
+    +step +proj=geoc +a={semi_major} +b={semi_minor} +lon_wrap=180 +inv +xy_in=rad +xy_out=rad
+    """
+    oc2og = pyproj.transformer.Transformer.from_pipeline(proj_str)
+    lon_og, lat_og = oc2og.transform(lon_oc, lat_oc, errcheck=True, radians=True)
+
+    return np.degrees(lon_og), np.degrees(lat_og)
 
 def reproject(record, semi_major, semi_minor, source_proj, dest_proj, **kwargs):
     """

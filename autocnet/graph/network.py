@@ -50,7 +50,7 @@ from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
 from autocnet.spatial.overlap import compute_overlaps_sql
 from autocnet.spatial.isis import point_info
-from autocnet.transformation.spatial import reproject
+from autocnet.transformation.spatial import reproject, og2oc
 
 #np.warnings.filterwarnings('ignore')
 
@@ -1392,7 +1392,7 @@ class NetworkCandidateGraph(CandidateGraph):
         # is the best solution I think. I don't want to pass the DEM around
         # for the sensor calls.
         self._setup_dem()
-    
+
     @contextmanager
     def session_scope(self):
      """
@@ -1664,9 +1664,9 @@ class NetworkCandidateGraph(CandidateGraph):
         if msg['success'] == True:
             return
 
-    def to_isis(self, 
-                path, 
-                flistpath=None, 
+    def to_isis(self,
+                path,
+                flistpath=None,
                 latsigma=10,
                 lonsigma=10,
                 radsigma=15,
@@ -1680,9 +1680,9 @@ class NetworkCandidateGraph(CandidateGraph):
                Outpath to write the control network
 
         flishpath : str
-                    Outpath to write the associated file list. If None (default), 
+                    Outpath to write the associated file list. If None (default),
                     the file list is written alongside the control network
-        
+
         latsigma : int/float
                The estimated sigma (error) in the latitude direction
 
@@ -1701,16 +1701,16 @@ class NetworkCandidateGraph(CandidateGraph):
         Returns
         -------
         None
-        
-        """        
+
+        """
         # Read the cnet from the db
         df = io_controlnetwork.db_to_df(self.engine, **db_kwargs)
-        
+
         # Add the covariance matrices to ground measures
-        df = control.compute_covariance(df, 
-                                        latsigma, 
-                                        lonsigma, 
-                                        radsigma, 
+        df = control.compute_covariance(df,
+                                        latsigma,
+                                        lonsigma,
+                                        radsigma,
                                         self.config['spatial']['semimajor_rad'])
 
         if flistpath is None:
@@ -1801,7 +1801,7 @@ class NetworkCandidateGraph(CandidateGraph):
 
         obj = cls.from_database()
         # Execute the computation to compute overlapping geometries
-        obj._execute_sql(compute_overlaps_sql) 
+        obj._execute_sql(compute_overlaps_sql)
         return obj
 
     def copy_images(self, newdir):
@@ -2020,7 +2020,8 @@ class NetworkCandidateGraph(CandidateGraph):
 
             row = cnetpoint.iloc[0]
             x,y,z= row.adjustedX, row.adjustedY, row.adjustedZ
-            lon, lat, alt = reproject([x, y, z], semi_major, semi_minor, 'geocent', 'latlon')
+            lon_og, lat_og, alt = reproject([x, y, z], semi_major, semi_minor, 'geocent', 'latlon')
+            lon, lat = og2oc(lon_og, lat_og, semi_major, semi_minor)
 
 
             point = Points(identifier=id,
@@ -2043,7 +2044,7 @@ class NetworkCandidateGraph(CandidateGraph):
         networkobj = cls.from_filelist(filelist)
         networkobj.place_points_from_cnet(cnet)
         return networkobj
-    
+
     @property
     def measures(self):
         df = pd.read_sql_table('measures', con=self.engine)

@@ -14,7 +14,7 @@ from autocnet.graph.node import NetworkNode
 from autocnet.io.db.model import Images, Measures, Overlay, Points, JsonEncoder
 from autocnet.spatial import isis
 from autocnet.matcher.cpu_extractor import extract_most_interesting
-from autocnet.transformation.spatial import reproject
+from autocnet.transformation.spatial import reproject, og2oc, oc2og
 from autocnet.transformation import roi
 
 from plurmy import Slurm
@@ -148,20 +148,18 @@ def place_points_in_overlap(overlap,
 
         # Need to get the first node and then convert from lat/lon to image space
         node = nodes[0]
-        x, y, z = reproject([lon, lat, height],
-                             semi_major, semi_minor,
-                             'latlon', 'geocent')
         if cam_type == "isis":
-            # Convert to geocentric lon, lat
-            geocent_lon, geocent_lat, _ = reproject([x, y, z],
-                                                    semi_major, semi_major, 'geocent', 'latlon')
             try:
-                line, sample = isis.ground_to_image(node["image_path"], geocent_lon ,geocent_lat)
+                line, sample = isis.ground_to_image(node["image_path"], lon, lat)
             except ProcessError as e:
                 if 'Requested position does not project in camera model' in e.stderr:
                     print(f'point ({geocent_lon}, {geocent_lat}) does not project to reference image {node["image_path"]}')
                     continue
         if cam_type == "csm":
+            lon_og, lat_og = oc2og(lon, lat, semi_major, semi_minor)
+            x, y, z = reproject([lon_og, lat_og, height],
+                                semi_major, semi_minor,
+                                'latlon', 'geocent')
             # The CSM conversion makes the LLA/ECEF conversion explicit
             gnd = csmapi.EcefCoord(x, y, z)
             image_coord = node.camera.groundToImage(gnd)
@@ -204,26 +202,31 @@ def place_points_in_overlap(overlap,
             image_coord = csmapi.ImageCoord(newline, newsample)
             pcoord = node.camera.imageToGround(image_coord)
             # Get the BCEF coordinate from the lon, lat
-            updated_lon, updated_lat, _ = reproject([pcoord.x, pcoord.y, pcoord.z],
-                                                    semi_major, semi_minor, 'geocent', 'latlon')
+            updated_lon_og, updated_lat_og, _ = reproject([pcoord.x, pcoord.y, pcoord.z],
+                                                           semi_major, semi_minor, 'geocent', 'latlon')
+            updated_lon, updated_lat = og2oc(updated_lon_og, updated_lat_og, semi_major, semi_minor)
 
             px, py = ncg.dem.latlon_to_pixel(updated_lat, updated_lon)
             updated_height = ncg.dem.read_array(1, [px, py, 1, 1])[0][0]
 
 
             # Get the BCEF coordinate from the lon, lat
-            x, y, z = reproject([updated_lon, updated_lat, updated_height],
-                                semi_major, semi_major, 'latlon', 'geocent')
+            x, y, z = reproject([updated_lon_og, updated_lat_og, updated_height],
+                                semi_major, semi_minor, 'latlon', 'geocent')
 
         # If the updated point is outside of the overlap, then revert back to the
         # original point and hope the matcher can handle it when sub-pixel registering
-        updated_lon, updated_lat, updated_height = reproject([x, y, z], semi_major, semi_minor,
+        updated_lon_og, updated_lat_og, updated_height = reproject([x, y, z], semi_major, semi_minor,
                                                              'geocent', 'latlon')
+        updated_lon, updated_lat = og2oc(updated_lon_og, updated_lat_og, semi_major, semi_minor)
+
         if not geom.contains(shapely.geometry.Point(updated_lon, updated_lat)):
-            x, y, z = reproject([lon, lat, height],
-                                semi_major, semi_major, 'latlon', 'geocent')
-            updated_lon, updated_lat, updated_height = reproject([x, y, z], semi_major, semi_minor,
+            lon_og, lat_og = oc2og(lon, lat, semi_major, semi_minor)
+            x, y, z = reproject([lon_og, lat_og, height],
+                                semi_major, semi_minor, 'latlon', 'geocent')
+            updated_lon_og, updated_lat_og, updated_height = reproject([x, y, z], semi_major, semi_minor,
                                                                  'geocent', 'latlon')
+            updated_lon, updated_lat = og2oc(updated_lon_og, updated_lat_og, semi_major, semi_minor)
 
         point_geom = shapely.geometry.Point(x, y, z)
         point = Points(overlapid=overlap.id,
@@ -234,15 +237,14 @@ def place_points_in_overlap(overlap,
 
         # Compute ground point to back project into measurtes
         gnd = csmapi.EcefCoord(x, y, z)
-        geocent_lon, geocent_lat, _ = reproject([x, y, z],
-                                                semi_major, semi_major, 'geocent', 'latlon')
+
         for node in nodes:
             if cam_type == "csm":
                 image_coord = node.camera.groundToImage(gnd)
                 sample, line = image_coord.samp, image_coord.line
             if cam_type == "isis":
                 try:
-                    line, sample = isis.ground_to_image(node["image_path"], geocent_lon, geocent_lat)
+                    line, sample = isis.ground_to_image(node["image_path"], updated_lon, updated_lat)
                 except ProcessError as e:
                     if 'Requested position does not project in camera model' in e.stderr:
                         print(f'interesting point ({geocent_lon},{geocent_lat}) does not project to image {node["image_path"]}')
