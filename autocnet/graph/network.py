@@ -1290,7 +1290,7 @@ class CandidateGraph(nx.Graph):
         #"massaged" by the phase and template matcher.
         for i, group in df.groupby('point_id'):
             zero_group = group.iloc[0]
-            apriori_geom = np.array(point_info(self.nodes[zero_group.image_index]['data'].geodata.file_name, zero_group.x, zero_group.y, 'image')['GroundPoint']['BodyFixedCoordinate'].value) * 1000
+            apriori_geom = np.array(point_info(self.nodes[zero_group.image_index]['data'].geodata.file_name, zero_group.x, zero_group.y, 'image')['BodyFixedCoordinate'].value) * 1000
             for j, row in group.iterrows():
                 row['aprioriX'] = apriori_geom[0]
                 row['aprioriY'] = apriori_geom[1]
@@ -1392,7 +1392,7 @@ class NetworkCandidateGraph(CandidateGraph):
         # is the best solution I think. I don't want to pass the DEM around
         # for the sensor calls.
         self._setup_dem()
-    
+
     @contextmanager
     def session_scope(self):
      """
@@ -1664,9 +1664,9 @@ class NetworkCandidateGraph(CandidateGraph):
         if msg['success'] == True:
             return
 
-    def to_isis(self, 
-                path, 
-                flistpath=None, 
+    def to_isis(self,
+                path,
+                flistpath=None,
                 latsigma=10,
                 lonsigma=10,
                 radsigma=15,
@@ -1680,9 +1680,9 @@ class NetworkCandidateGraph(CandidateGraph):
                Outpath to write the control network
 
         flishpath : str
-                    Outpath to write the associated file list. If None (default), 
+                    Outpath to write the associated file list. If None (default),
                     the file list is written alongside the control network
-        
+
         latsigma : int/float
                The estimated sigma (error) in the latitude direction
 
@@ -1701,16 +1701,16 @@ class NetworkCandidateGraph(CandidateGraph):
         Returns
         -------
         None
-        
-        """        
+
+        """
         # Read the cnet from the db
         df = io_controlnetwork.db_to_df(self.engine, **db_kwargs)
-        
+
         # Add the covariance matrices to ground measures
-        df = control.compute_covariance(df, 
-                                        latsigma, 
-                                        lonsigma, 
-                                        radsigma, 
+        df = control.compute_covariance(df,
+                                        latsigma,
+                                        lonsigma,
+                                        radsigma,
                                         self.config['spatial']['semimajor_rad'])
 
         if flistpath is None:
@@ -1801,7 +1801,7 @@ class NetworkCandidateGraph(CandidateGraph):
 
         obj = cls.from_database()
         # Execute the computation to compute overlapping geometries
-        obj._execute_sql(compute_overlaps_sql) 
+        obj._execute_sql(compute_overlaps_sql)
         return obj
 
     def copy_images(self, newdir):
@@ -2043,7 +2043,7 @@ class NetworkCandidateGraph(CandidateGraph):
         networkobj = cls.from_filelist(filelist)
         networkobj.place_points_from_cnet(cnet)
         return networkobj
-    
+
     @property
     def measures(self):
         df = pd.read_sql_table('measures', con=self.engine)
@@ -2136,3 +2136,4 @@ class NetworkCandidateGraph(CandidateGraph):
                                          self.dem,
                                          nodes,
                                          **kwargs)
+                                

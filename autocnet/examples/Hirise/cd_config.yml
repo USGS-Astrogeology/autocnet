@@ -1,0 +1,41 @@
+okb: 
+  nbins: 50 
+  extractor_method: "orb"
+  image_func: "diff"
+  extractor_kwargs: 
+    nfeatures: 2000
+    scaleFactor: 1.1 
+    nlevels: 1
+
+okbm:
+  nbins: 100 
+  extractor_method: "orb"
+  image_func: "diff"
+  extractor_kwargs: 
+    nfeatures: 2000
+    scaleFactor: 1.1
+    nlevels: 1
+  cluster_kwargs: 
+    min_samples: 10 
+    max_eps: 10 
+    eps: .5 
+    xi: .5
+
+jigsaw:
+  # Parameters that seem to have the best results on Hirise pairs
+  radius: 'yes'
+  errorpropagation: 'yes'
+  outlier_rejection: 'yes'
+  point_longitude_sigma: 10 
+  point_latitude_sigma: 10 
+  point_radius_sigma: 2 
+  maxits: 30 
+  camsolve: "velocities"
+  twist: "yes"
+  overexisting: "yes"
+  spsolve: "None"
+
+
+
+
+
