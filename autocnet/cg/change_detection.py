@@ -122,6 +122,9 @@ def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", image_fu
      heatmap, xedges, yedges = np.histogram2d(y, x, bins=nbins, range=[[0, bdiff.shape[0]], [0, bdiff.shape[1]]])
      heatmap = cv2.resize(heatmap, dsize=(bdiff.shape[1], bdiff.shape[0]), interpolation=cv2.INTER_NEAREST)
 
+     #square image to improve signal to noise ratio
+     heatmap = heatmap**2
+
      return points, heatmap, bdiff
 
 
