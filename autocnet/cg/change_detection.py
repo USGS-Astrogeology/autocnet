@@ -115,7 +115,7 @@ def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", image_fu
      if isinstance(image_func, str):
          try:
              image_func = func_map[image_func]
-         except Exception as e:
+         except KeyError as e:
              raise Exception(f"{image_func} is not a valid method, available image functions: {func_map.keys()}")
 
      image1[image1 == image1.min()] = 0
@@ -349,6 +349,13 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
 
      if isinstance(image2, GeoDataset):
          image2 = image2.read_array()
+
+     if isinstance(image_func, str):
+         try:
+             image_func = func_map[image_func]
+         except KeyError as e:
+             raise Exception(f"{image_func} is not a valid method, available image functions: {func_map.keys()}")
+
 
      image1[image1 == image1.min()] = 0
      image2[image2 == image2.min()] = 0
