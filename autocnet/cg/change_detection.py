@@ -92,6 +92,14 @@ def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", image_fu
      extractor_kwargs : dict
                         A dictionary containing OpenCV SIFT parameters names and values.
 
+     Returns
+     -------
+     : pd.DataFrame
+       Dataframe containing polygon results as wkt
+
+     : np.array
+       Numpy array image, the image used to compute change
+
      See Also
      --------
 
@@ -120,15 +128,13 @@ def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", image_fu
      keys, descriptors = extract_features(bdiff, extractor_method, extractor_parameters=extractor_kwargs)
      x,y = keys["x"], keys["y"]
 
-     points = [Point(xval, yval) for xval,yval in zip(x,y)]
-
      heatmap, xedges, yedges = np.histogram2d(y, x, bins=nbins, range=[[0, bdiff.shape[0]], [0, bdiff.shape[1]]])
      heatmap = cv2.resize(heatmap, dsize=(bdiff.shape[1], bdiff.shape[0]), interpolation=cv2.INTER_NEAREST)
 
      #square image to improve signal to noise ratio
      heatmap = heatmap**2
 
-     return points, heatmap, bdiff
+     return keys, heatmap, bdiff
 
 
 def okbm_detector(image1, image2, extractor_method="orb",  image_func=image_diff,
@@ -179,8 +185,19 @@ def okbm_detector(image1, image2, extractor_method="orb",  image_func=image_diff
      cluster_kwargs : dict
                       A dictionary containing sklearn.cluster.OPTICS parameters
 
+     Returns
+     -------
+     : pd.DataFrame
+       Dataframe containing polygon results as wkt
+
+     : np.array
+       Numpy array image, the image used to compute change
+
      """
-     points, _, bdiff = okubogar_detector(image1, image2, extractor_method, image_func, extractor_kwargs)
+     keys, _, bdiff = okubogar_detector(image1, image2, 10, extractor_method, image_func, extractor_kwargs)
+
+     x,y = keys['x'], keys['y']
+     points = [Point(xval, yval) for xval,yval in zip(x,y)]
 
      optics = OPTICS(**cluster_kwargs).fit(list(zip(x,y)))
 
@@ -211,10 +228,14 @@ def okbm_detector(image1, image2, extractor_method="orb",  image_func=image_diff
          mask = Path(np.asarray(poly.exterior.xy).T.astype("uint64")).contains_points(points).reshape(int(ymax-ymin), int(xmax-xmin))
          weight = bdiff[ymin:ymax,xmin:xmax].mean()
 
-         polys.append(poly)
+         polys.append(poly.wkt)
          weights.append(weight)
 
-     return polys, weights, bdiff
+     results = pd.DataFrame()
+     result['geom'] = polys
+     result['weight'] = weights
+
+     return result, bdiff
 
 
 def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
@@ -302,12 +323,12 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
      Returns
      -------
 
-     changes : np.ndarray
-               A numpy array containing candidate change points in the form (y,x,radius)
+     : pd.DataFrame
+       A pandas dataframe containing a points of changed areas
 
-     bdiff : np.ndarray
-             A numpy array containing the image upon which the change detection
-             algorithm operates, i.e. the image resulting from image_func.
+     : np.ndarray
+       A numpy array containing the image upon which the change detection
+       algorithm operates, i.e. the image resulting from image_func.
 
      """
 
@@ -360,7 +381,11 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
      # Nearest neighbors
      neighbors = [blobs_log[j] for j in [i[i!=len(blobs_log)]for i in idx_log] if j.size > 0]
 
-     changes = []
+     x0 = []
+     y0 = []
+     x1 = []
+     y1 = []
+
      for idx, pt1 in enumerate(close_points):
          for pt2 in neighbors[idx]:
              try:
@@ -368,7 +393,16 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
              except IndexError as e:
                  azimuth = sub_solar_azimuth
              if is_azimuth_colinear(pt1, pt2, azimuth, angle_tolerance, subtractive):
-                 changes.append([pt1,pt2])
-     changes = np.array(changes)
+                 x0.append(pt1[0])
+                 y0.append(pt1[1])
+                 x1.append(pt2[0])
+                 x2.append(pt2[1])
+
+     # changes = np.array(changes)
+     changes = pd.DataFrame()
+     changes['x0'] = x0
+     changes['y0'] = y0
+     changes['x1'] = x1
+     changes['x2'] = x2
 
      return changes, bdiff

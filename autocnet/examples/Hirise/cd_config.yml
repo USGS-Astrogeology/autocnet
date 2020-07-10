@@ -1,5 +1,5 @@
 okb: 
-  nbins: 50 
+  nbins: 200 
   extractor_method: "orb"
   image_func: "diff"
   extractor_kwargs: 
@@ -8,7 +8,7 @@ okb:
     nlevels: 1
 
 okbm:
-  nbins: 100 
+  nbins: 200 
   extractor_method: "orb"
   image_func: "diff"
   extractor_kwargs: 
