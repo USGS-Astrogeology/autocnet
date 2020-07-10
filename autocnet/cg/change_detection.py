@@ -24,6 +24,10 @@ def image_diff(arr1, arr2):
      return diff
 
 
+def image_diff_sq(arr1, arr2):
+     return image_diff(arr1, arr2)**2
+
+
 def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", image_func=image_diff,
                       extractor_kwargs={"nfeatures": 2000, "scaleFactor": 1.1, "nlevels": 1}):
      """
@@ -219,13 +223,13 @@ def okbm_detector(image1, image2, nbins=50, extractor_method="orb",  image_func=
      return polys, weights, bdiff
 
 
-def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
-                  subtractive=False, max_sigma=30, num_sigma=10, threshold=.075,
-                  n_neighbors=3, dist_upper_bound=5, angle_tolerance=10):
+def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
+                  subtractive=False,  min_sigma=.45, max_sigma=30, num_sigma=10, threshold=.25,
+                  n_neighbors=3, dist_upper_bound=5, angle_tolerance=3):
      """
      Blob based change detection.
 
-     Creates a difference image and uses Laplacian of Gaussian (LoG) blob
+     Creates a difference image and uses Laplacian of Gaussian (loG) blob
      detection to find light / dark areas.  Creates a KDTree to find neighboring
      light / dark blobs, then filters based on colinearity of the light/dark pair
      with subsolar azimuth.
@@ -271,6 +275,13 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
                    Find subtractive features instead of additive features.  In other
                    words, find locations in which a feature "used to be present"
                    but has since moved.
+
+     min_sigma : scalar or sequence of scalars
+                 The minimum standard deviation for Gaussian kernel. Keep this
+                 low to detect smaller blobs. The standard deviations of the
+                 Gaussian filter are given for each axis as a sequence, or as a
+                 single number, in which case it is equal for all axes.
+
 
      max_sigma : scalar or sequence of scalars
                  The maximum standard deviation for Gaussian kernel. Keep this
@@ -331,21 +342,18 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
      if isinstance(image2, GeoDataset):
          image2 = image2.read_array()
 
-     image1[image1 == image1.min()] = 0
-     image2[image2 == image2.min()] = 0
-     arr1 = bytescale(image1)
-     arr2 = bytescale(image2)
 
-     bdiff = image_func(arr1, arr2)
+     bdiff = image_func(image1,image2)
+     bdiff = bytescale(bdiff)
 
      # Laplacian of Gaussian only finds light blobs on a dark image.  In order to
      #  find dark blobs on a light image, we invert.
-     inv = 255-bdiff
+     inv = bdiff.max()-bdiff
 
      # Laplacian of Gaussian of diff image (light on dark)
-     blobs_log = blob_log(bdiff, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
+     blobs_log = blob_log(bdiff, min_sigma=min_sigma, max_sigma=max_sigma, threshold=threshold)
      # Laplacian of Gaussian on diff image (inverse -- dark on light)
-     blobs_log_inv = blob_log(inv, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
+     blobs_log_inv = blob_log(inv, min_sigma=min_sigma, max_sigma=max_sigma,  threshold=threshold)
      # Compute radii in the 3rd column.  Radii are appx equal to sqrt2 * sigma
      blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
      blobs_log_inv[:, 2] = blobs_log_inv[:, 2] * sqrt(2)
