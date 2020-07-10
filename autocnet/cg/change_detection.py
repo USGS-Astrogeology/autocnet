@@ -229,7 +229,7 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
      """
      Blob based change detection.
 
-     Creates a difference image and uses Laplacian of Gaussian (loG) blob
+     Creates a difference image and uses Laplacian of Gaussian (LoG) blob
      detection to find light / dark areas.  Creates a KDTree to find neighboring
      light / dark blobs, then filters based on colinearity of the light/dark pair
      with subsolar azimuth.
@@ -341,7 +341,6 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
 
      if isinstance(image2, GeoDataset):
          image2 = image2.read_array()
-
 
      bdiff = image_func(image1,image2)
      bdiff = bytescale(bdiff)
