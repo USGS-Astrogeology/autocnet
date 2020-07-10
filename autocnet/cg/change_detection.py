@@ -224,7 +224,8 @@ def okbm_detector(image1, image2, nbins=50, extractor_method="orb",  image_func=
 
 
 def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
-                  subtractive=False,  min_sigma=.45, max_sigma=30,  threshold=.25,
+                  subtractive=False,  min_sigma=.45, max_sigma=30, num_sigma=10,
+                  threshold=.25, overlap=.5, log_scale=False, exclude_border=False,
                   n_neighbors=3, dist_upper_bound=5, angle_tolerance=3):
      """
      Blob based change detection.
@@ -289,10 +290,32 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
                  Gaussian filter are given for each axis as a sequence, or as a
                  single number, in which case it is equal for all axes.
 
+     num_sigma : int
+                 The number of intermediate values of standard deviations to
+                 consider between min_sigma and max_sigma.
+
      threshold : float
                  The absolute lower bound for scale space maxima.
                  Local maxima smaller than thresh are ignored.
                  Reduce this to detect blobs with less intensities.
+
+     overlap : float
+               A value between 0 and 1. If the area of two blobs overlaps by a
+               fraction greater than threshold, the smaller blob is eliminated.
+
+     log_scale : bool
+                 If set intermediate values of standard deviations are
+                 interpolated using a logarithmic scale to the base 10. If not,
+                 linear interpolation is used.
+
+     exclude_border: tuple of ints, int, or False
+                 If tuple of ints, the length of the tuple must match the input
+                 array’s dimensionality. Each element of the tuple will exclude
+                 peaks from within exclude_border-pixels of the border of the
+                 image along that dimension. If nonzero int, exclude_border
+                 excludes peaks from within exclude_border-pixels of the border
+                 of the image. If zero or False, peaks are identified regardless
+                 of their distance from the border.
 
      n_neighbors : int
                    Number of closest neighbors (blobs) to search.
@@ -346,9 +369,13 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
      inv = bdiff.max()-bdiff
 
      # Laplacian of Gaussian of diff image (light on dark)
-     blobs_log = blob_log(bdiff, min_sigma=min_sigma, max_sigma=max_sigma, threshold=threshold)
+     blobs_log = blob_log(bdiff, min_sigma=min_sigma, max_sigma=max_sigma,
+                          num_sigma=num_sigma, threshold=threshold, overlap=overlap,
+                          log_scale=log_scale, exclude_border=exclude_border)
      # Laplacian of Gaussian on diff image (inverse -- dark on light)
-     blobs_log_inv = blob_log(inv, min_sigma=min_sigma, max_sigma=max_sigma,  threshold=threshold)
+     blobs_log_inv = blob_log(inv, min_sigma=min_sigma, max_sigma=max_sigma,
+                              num_sigma=num_sigma, threshold=threshold, overlap=overlap,
+                              log_scale=log_scale, exclude_border=exclude_border)
      # Compute radii in the 3rd column.  Radii are appx equal to sqrt2 * sigma
      blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
      blobs_log_inv[:, 2] = blobs_log_inv[:, 2] * sqrt(2)
