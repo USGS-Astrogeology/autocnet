@@ -172,7 +172,7 @@ def propagate_point(Session,
                     cost=lambda x, y: y == np.max(x)):
     """
     Conditionally propagate a point into a stack of images. The point and all corresponding measures
-    are matched against database netwrok (to which you are propagating), best result(s) is(are) kept.
+    are matched against database network (to which you are propagating), best result(s) is(are) kept.
 
     Parameters
     ----------
@@ -209,17 +209,19 @@ def propagate_point(Session,
                 apriori sample(s) corresponding to point projected in 'paths' image(s)
 
     size_x    : int
-                size of GeoDataset used in geom_match, must be larger than template_kwargs 'image_size'
+                half width of GeoDataset that is cut from full image and affinely transfromed in geom_match;
+                must be larger than 1/2 template_kwargs 'image_size'
 
     size_y    : int
-                size of GeoDataset used in geom_match, must be larger than template_kwargs 'image_size'
+                half height of GeoDataset that is cut from full image and affinely transfromed in geom_match;
+                must be larger than 1/2 template_kwargs 'image_size'
 
     template_kwargs : dict
                       kwargs passed through to control matcher.subpixel_template()
 
     verbose   : boolean
                 If True, this will print out the results of each propagation, including prints of the
-                matcher areas and their correaltion map.
+                matcher areas and their correlation map.
 
     cost      : anonymous function
                 determines to which image(s) the point should be propagated. x corresponds to a list
@@ -228,12 +230,12 @@ def propagate_point(Session,
                 Example:
                 cost = lambda x,y: y == np.max(x) will get you one result corresponding to the image that
                 has the maximum correlation with the source image
-                cost = lambda x,y: y > 0.6 will propegate the point to all images whose correlation
+                cost = lambda x,y: y > 0.6 will propagate the point to all images whose correlation
                 result is greater than 0.6
 
 
-    Output
-    ----------
+    Returns
+    -------
     new_measures : pd.DataFrame
                    Dataframe containing pointid, imageid, image serial number, line, sample, and ground location (both latlon
                    and cartesian) of successfully propagated points
@@ -282,18 +284,19 @@ def propagate_point(Session,
 
     # get best offsets
     match_results = np.asarray([res for res in match_results if isinstance(res, list) and all(r is not None for r in res)])
-    print("match_results final length: ", len(match_results))
     if match_results.shape[0] == 0:
         # no matches
         return new_measures
 
+    # column index 3 is the metric returned by the geom matcher
     best_results = np.asarray([match for match in match_results if cost(match_results[:,3], match[3])])
-    print("best_results length: ", len(best_results))
     if best_results.shape[0] == 0:
         # no matches satisfying cost
         return new_measures
 
     if verbose:
+        print("match_results final length: ", len(match_results))
+        print("best_results length: ", len(best_results))
         print("Full results: ", best_results)
         print("Winning CORRs: ", best_results[:,3], "Themis Pixel shifts: ", best_results[:,4])
         print("Themis Images: ", best_results[:,6], "CTX images:", best_results[:,7])
@@ -301,6 +304,7 @@ def propagate_point(Session,
         print("Themis Line: ", sy, "CTX Lines: ", best_results[:,2])
         print('\n')
 
+    # if the single best results metric (returned by geom_matcher) is None
     if len(best_results[:,3])==1 and best_results[:,3][0] is None:
         return new_measures
 
@@ -343,17 +347,17 @@ def propagate_control_network(Session,
         verbose=False,
         cost=lambda x,y: y == np.max(x)):
     """
-    Propagate a contorl network made of line, sample, image path to a network contained within
-    a database.
+    Loops over a base control network's measure information (line, sample, image path) and uses image matching
+    algorithms (autocnet.matcher.subpixel.geom_match) to find the corresponding line(s)/sample(s) in database images.
 
 
     Parameters
     ----------
     Session   : sqlalchemy.sessionmaker
-                session maker associated with the database you want to propagate to
+                session maker associated with the database containing the images you want to propagate to
 
     config    : dict
-                configuation file associated with database you want to propagate to
+                configuation file associated with database containing the images you want to propagate to
                 In the form: {'username':'somename',
                               'password':'somepassword',
                               'host':'somehost',
@@ -381,8 +385,8 @@ def propagate_control_network(Session,
                 result is greater than 0.6
 
 
-    Output
-    ------
+    Returns
+    -------
     ground   : pd.DataFrame
                Dataframe containing pointid, imageid, image serial number, line, sample, and ground location (both latlon
                and cartesian) of successfully propagated points
@@ -419,9 +423,10 @@ def propagate_control_network(Session,
                                       template_kwargs,
                                       verbose=verbose,
                                       cost=cost)
+
+        # do not append if propagate_point is unable to find result
         if len(gp_measures) == 0:
             continue
-
         constrained_net.extend(gp_measures)
 
     ground = gpd.GeoDataFrame.from_dict(constrained_net).set_geometry('point')
@@ -430,13 +435,14 @@ def propagate_control_network(Session,
     points = []
 
     # conditionally upload a new point to DB or updated existing point with new measures
+    lat_srid = config['spatial']['latitudinal_srid']
     session = Session()
     for p,indices in groundpoints.items():
         point = ground.loc[indices].iloc[0]
         # if point already exists in DB
         lon = point.point.x
         lat = point.point.y
-        res = session.execute(f"SELECT * FROM points WHERE ST_Intersects(geom, ST_Buffer(ST_SetSRID(ST_Point({lon}, {lat}), {config['spatial']['latitudinal_srid']}), 1e-10))").fetchall()
+        res = session.query(Points).filter(functions.ST_Intersects(Points.geom, functions.ST_Buffer(functions.ST_SetSRID(functions.ST_Point(lon,lat), lat_srid), 10e-10))).all()
 
         if len(res) > 1:
             warnings.warn(f"There is more than one point at lon: {lon}, lat: {lat}")
@@ -445,7 +451,7 @@ def propagate_control_network(Session,
             for i in indices:
                 row = ground.loc[i]
                 pid = res[0][0]
-                meas = session.execute(f"SELECT serialnumber FROM measures WHERE pointid={pid}").fetchall()
+                meas = session.query(Measures.serial).filter(Measures.pointid == pid).all()
                 serialnumbers = [m[0] for m in meas]
 
                 if row['serial'] in serialnumbers:
