@@ -12,7 +12,7 @@ def test_oc2og():
 def test_og2oc():
     lon = 0
     lat = 20
-    lon_oc, lat_oc = spatial.oc2og(lon, lat, 3396190, 3376200)
+    lon_oc, lat_oc = spatial.og2oc(lon, lat, 3396190, 3376200)
     assert lat_oc == 19.78356596059272
 
 
