@@ -224,7 +224,7 @@ def okbm_detector(image1, image2, nbins=50, extractor_method="orb",  image_func=
 
 
 def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
-                  subtractive=False,  min_sigma=.45, max_sigma=30, num_sigma=10, threshold=.25,
+                  subtractive=False,  min_sigma=.45, max_sigma=30,  threshold=.25,
                   n_neighbors=3, dist_upper_bound=5, angle_tolerance=3):
      """
      Blob based change detection.
@@ -288,10 +288,6 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
                  high to detect larger blobs. The standard deviations of the
                  Gaussian filter are given for each axis as a sequence, or as a
                  single number, in which case it is equal for all axes.
-
-     num_sigma : int
-               The number of intermediate values of standard deviations to
-               consider.
 
      threshold : float
                  The absolute lower bound for scale space maxima.
