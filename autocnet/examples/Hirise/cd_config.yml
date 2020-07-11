@@ -42,11 +42,11 @@ blob:
   min_sigma: .45 
   max_sigma: 30
   num_sigma: 10 
-  threshhold: .25
+  threshold: .25
   overlap: .5
   log_scale: False 
   exclude_border: False 
-  n_neighbor: 3 
+  n_neighbors: 3 
   dist_upper_bound: 5 
   angle_tolerance: 3 
   
