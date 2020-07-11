@@ -9,8 +9,14 @@ from scipy.spatial import cKDTree
 from skimage.feature import blob_log, blob_doh
 from math import sqrt, atan2, pi
 
+from shapely import wkt
+from shapely.geometry import Point, MultiPoint
+import pandas as pd
+import geopandas as gpd
+
 from autocnet.utils.utils import bytescale
 from autocnet.matcher.cpu_extractor import extract_features
+
 
 def image_diff(arr1, arr2):
      arr1 = arr1.astype("float32")
@@ -23,6 +29,7 @@ def image_diff(arr1, arr2):
 
      return diff
 
+
 def image_ratio(arr1, arr2):
      arr1 = arr1.astype("float32")
      arr2 = arr2.astype("float32")
@@ -34,10 +41,17 @@ def image_ratio(arr1, arr2):
 
      return ratio
 
+
+def image_diff_sq(arr1, arr2):
+     return image_diff(arr1, arr2)**2
+
+
 func_map = {
     "diff" : image_diff,
+    "diff_sq": image_diff_sq,
     "ratio" : image_ratio
 }
+
 
 def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", image_func=image_diff,
                       extractor_kwargs={"nfeatures": 2000, "scaleFactor": 1.1, "nlevels": 1}):
@@ -134,6 +148,8 @@ def okubogar_detector(image1, image2, nbins=50, extractor_method="orb", image_fu
      #square image to improve signal to noise ratio
      heatmap = heatmap**2
 
+     keys = gpd.GeoDataFrame(keys, geometry= gpd.points_from_xy(keys.x, keys.y))
+
      return keys, heatmap, bdiff
 
 
@@ -228,19 +244,19 @@ def okbm_detector(image1, image2, extractor_method="orb",  image_func=image_diff
          mask = Path(np.asarray(poly.exterior.xy).T.astype("uint64")).contains_points(points).reshape(int(ymax-ymin), int(xmax-xmin))
          weight = bdiff[ymin:ymax,xmin:xmax].mean()
 
-         polys.append(poly.wkt)
+         polys.append(poly)
          weights.append(weight)
 
-     results = pd.DataFrame()
-     result['geom'] = polys
+     results = gpd.GeoDataFrame(geometry=polys)
      result['weight'] = weights
 
      return result, bdiff
 
 
-def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
-                  subtractive=False, max_sigma=30, num_sigma=10, threshold=.075,
-                  n_neighbors=3, dist_upper_bound=5, angle_tolerance=10):
+def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
+                  subtractive=False,  min_sigma=.45, max_sigma=30, num_sigma=10,
+                  threshold=.25, overlap=.5, log_scale=False, exclude_border=False,
+                  n_neighbors=3, dist_upper_bound=5, angle_tolerance=3):
      """
      Blob based change detection.
 
@@ -291,6 +307,13 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
                    words, find locations in which a feature "used to be present"
                    but has since moved.
 
+     min_sigma : scalar or sequence of scalars
+                 The minimum standard deviation for Gaussian kernel. Keep this
+                 low to detect smaller blobs. The standard deviations of the
+                 Gaussian filter are given for each axis as a sequence, or as a
+                 single number, in which case it is equal for all axes.
+
+
      max_sigma : scalar or sequence of scalars
                  The maximum standard deviation for Gaussian kernel. Keep this
                  high to detect larger blobs. The standard deviations of the
@@ -298,13 +321,31 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
                  single number, in which case it is equal for all axes.
 
      num_sigma : int
-               The number of intermediate values of standard deviations to
-               consider.
+                 The number of intermediate values of standard deviations to
+                 consider between min_sigma and max_sigma.
 
      threshold : float
                  The absolute lower bound for scale space maxima.
                  Local maxima smaller than thresh are ignored.
                  Reduce this to detect blobs with less intensities.
+
+     overlap : float
+               A value between 0 and 1. If the area of two blobs overlaps by a
+               fraction greater than threshold, the smaller blob is eliminated.
+
+     log_scale : bool
+                 If set intermediate values of standard deviations are
+                 interpolated using a logarithmic scale to the base 10. If not,
+                 linear interpolation is used.
+
+     exclude_border: tuple of ints, int, or False
+                 If tuple of ints, the length of the tuple must match the input
+                 array’s dimensionality. Each element of the tuple will exclude
+                 peaks from within exclude_border-pixels of the border of the
+                 image along that dimension. If nonzero int, exclude_border
+                 excludes peaks from within exclude_border-pixels of the border
+                 of the image. If zero or False, peaks are identified regardless
+                 of their distance from the border.
 
      n_neighbors : int
                    Number of closest neighbors (blobs) to search.
@@ -345,6 +386,7 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
          return -tolerance <= subsolar_azimuth - angle <= tolerance
 
      if isinstance(image1, GeoDataset):
+         if
          image1 = image1.read_array()
 
      if isinstance(image2, GeoDataset):
@@ -356,22 +398,21 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
          except KeyError as e:
              raise Exception(f"{image_func} is not a valid method, available image functions: {func_map.keys()}")
 
-
-     image1[image1 == image1.min()] = 0
-     image2[image2 == image2.min()] = 0
-     arr1 = bytescale(image1)
-     arr2 = bytescale(image2)
-
-     bdiff = image_func(arr1, arr2)
+     bdiff = image_func(image1,image2)
+     bdiff = bytescale(bdiff)
 
      # Laplacian of Gaussian only finds light blobs on a dark image.  In order to
      #  find dark blobs on a light image, we invert.
-     inv = 255-bdiff
+     inv = bdiff.max()-bdiff
 
      # Laplacian of Gaussian of diff image (light on dark)
-     blobs_log = blob_log(bdiff, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
+     blobs_log = blob_log(bdiff, min_sigma=min_sigma, max_sigma=max_sigma,
+                          num_sigma=num_sigma, threshold=threshold, overlap=overlap,
+                          log_scale=log_scale, exclude_border=exclude_border)
      # Laplacian of Gaussian on diff image (inverse -- dark on light)
-     blobs_log_inv = blob_log(inv, max_sigma=max_sigma, num_sigma=num_sigma, threshold=threshold)
+     blobs_log_inv = blob_log(inv, min_sigma=min_sigma, max_sigma=max_sigma,
+                              num_sigma=num_sigma, threshold=threshold, overlap=overlap,
+                              log_scale=log_scale, exclude_border=exclude_border)
      # Compute radii in the 3rd column.  Radii are appx equal to sqrt2 * sigma
      blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
      blobs_log_inv[:, 2] = blobs_log_inv[:, 2] * sqrt(2)
@@ -388,11 +429,7 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
      # Nearest neighbors
      neighbors = [blobs_log[j] for j in [i[i!=len(blobs_log)]for i in idx_log] if j.size > 0]
 
-     x0 = []
-     y0 = []
-     x1 = []
-     y1 = []
-
+     polys = []
      for idx, pt1 in enumerate(close_points):
          for pt2 in neighbors[idx]:
              try:
@@ -400,16 +437,7 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff,
              except IndexError as e:
                  azimuth = sub_solar_azimuth
              if is_azimuth_colinear(pt1, pt2, azimuth, angle_tolerance, subtractive):
-                 x0.append(pt1[0])
-                 y0.append(pt1[1])
-                 x1.append(pt2[0])
-                 x2.append(pt2[1])
+                 polys.append(MultiPoint([(pt1[0], pt1[1]), (pt2[0], pt1[1])]))
 
-     # changes = np.array(changes)
-     changes = pd.DataFrame()
-     changes['x0'] = x0
-     changes['y0'] = y0
-     changes['x1'] = x1
-     changes['x2'] = x2
-
+     changes = pd.GeoDataFrame(geometry=polys)
      return changes, bdiff

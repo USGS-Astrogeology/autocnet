@@ -2136,4 +2136,3 @@ class NetworkCandidateGraph(CandidateGraph):
                                          self.dem,
                                          nodes,
                                          **kwargs)
-                                

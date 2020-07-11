@@ -18,8 +18,10 @@ from autocnet.spatial.isis import point_info
 from autocnet.utils import hirise
 from autocnet.utils.utils import bytescale
 from autocnet.examples import get_path
-
+from shapely.geometry import Point
 import numpy as np
+
+from affine import Affine
 
 import pysis
 from pysis.exceptions import ProcessError
@@ -34,6 +36,22 @@ _cd_functions_ = {
     "okbm" : cd.okbm_detector,
     "blob" : cd.blob_detector
 }
+
+def poly_pixel_to_latlon(poly, affine, coord_transform):
+    poly_type = type(poly)
+    x,y = poly.xy
+
+    lonlats = []
+    for xval,yval in zip(x,y):
+        lon, lat = Affine.from_gdal(*affine) * (xval, yval)
+        lon, lat, _ = coord_transform.TransformPoint(lon, lat)
+        lonlats.append([lon, lat])
+
+    if poly_type == Point:
+        return Point(lonlats[0][0], lonlats[0][1])
+    return poly_type(lonlats)
+
+
 
 if __name__ == "__main__":
     cd_function_help_string = ("Change detection algorithm to use.\n"
@@ -56,13 +74,16 @@ if __name__ == "__main__":
     with open(args.config) as f:
         config = yaml.load(f, Loader=yaml.FullLoader)
 
+    # temp path for temp files
+    dirpath = tempfile.mkdtemp()
+
     if args.register:
         # Point to the adjacency Graph
         adjacency = {args.before: [args.after], args.after: [args.before]}
         cg = CandidateGraph.from_adjacency(adjacency)
 
         # Apply SIFT to extract features
-        cg.extract_features(extractor_method='vlfeat')
+        cg.extract_features(extractor_method='vlfeat', extractor_parameters={"edge_thresh":20})
         cg.match()
 
         # Apply outlier detection
@@ -77,7 +98,6 @@ if __name__ == "__main__":
         cg.generate_control_network(clean_keys=["fundamental"])
 
         # write cnet out to temp file, run it through bundle adjust.
-        dirpath = tempfile.mkdtemp()
         cnet_path = os.path.join(dirpath, "cnet.net")
         filelist_path = os.path.join(dirpath, "cnet.lis")
 
@@ -87,6 +107,7 @@ if __name__ == "__main__":
             output = isis.jigsaw(fromlist=filelist_path, cnet=cnet_path, onet=cnet_path, update="yes", **config['jigsaw'])
             print(output.decode())
         except ProcessError as e:
+            print(e.stdout.decode('utf-8'))
             print(e.stderr)
             exit()
 
@@ -110,18 +131,38 @@ if __name__ == "__main__":
     before_proj_geo = GeoDataset(args.before)
     after_proj_geo = GeoDataset(args.after)
 
-    ret = _cd_functions_[args.algorithm](before_proj_geo, after_proj_geo, **config[args.algorithm])
+    if args.algorithm == 'blob':
+        # Requires sub solar azmith
+        ssa_path = os.path.join(dirpath, 'ssa.cub')
+        try:
+            isis.phocube(from_=roi1_proj, to=ssa_path, subsolargroundazimuth=True)
+        except ProcessError as e:
+            print(e.stderr)
+
+        ssa = GeoDataset(ssa_path).read_array()
+        ret = _cd_functions_[args.algorithm.strip()](before_proj_geo, after_proj_geo, ssa, **config.get(args.algorithm, {}))
+
+    ret = _cd_functions_[args.algorithm.strip()](before_proj_geo, after_proj_geo, **config.get(args.algorithm, {}))
 
     # for now, write out raster files assuming okb
     # make it match one of the projected images
     match_srs = before_proj_geo.dataset.GetProjection()
     match_gt = before_proj_geo.geotransform
+    match_coord_trans = before_proj_geo.coordinate_transformation
 
     if os.path.splitext(args.out)[1] == '':
         args.out = args.out + ".tif"
 
     print(f"Writing {args.out}")
     array_to_raster(ret[1], args.out, projection=match_srs, geotransform=match_gt, outformat="GTiff")
+
     print(f"Writing {os.path.splitext(args.out)[0]+'.csv'}")
-    ret[0].to_csv(os.path.splitext(args.out)[0]+".csv")
+
+    geodf = ret[0]
+    geodf["geometry"] = geodf['geometry']
+    geodf['latlon_geometry'] = geodf['geometry'].apply(lambda x: poly_pixel_to_latlon(x, match_gt, match_coord_trans ))
+    geodf['geometry'] = [g.wkt for g in geodf['geometry']]
+    geodf['latlon_geometry'] = [g.wkt for g in geodf['latlon_geometry']]
+
+    geodf.to_csv(os.path.splitext(args.out)[0]+".csv")
 

@@ -3,12 +3,11 @@ okb:
   extractor_method: "orb"
   image_func: "diff"
   extractor_kwargs: 
-    nfeatures: 2000
+    nfeatures: 500
     scaleFactor: 1.1 
     nlevels: 1
 
 okbm:
-  nbins: 200 
   extractor_method: "orb"
   image_func: "diff"
   extractor_kwargs: 
@@ -29,13 +28,26 @@ jigsaw:
   point_longitude_sigma: 10 
   point_latitude_sigma: 10 
   point_radius_sigma: 2 
-  maxits: 30 
+  maxits: 30
+  sigma0: .1
   camsolve: "velocities"
   twist: "yes"
   overexisting: "yes"
   spsolve: "None"
 
 
-
-
-
+blob: 
+  image_func: "diff_sq"
+  subtractive: False
+  min_sigma: .45 
+  max_sigma: 30
+  num_sigma: 10 
+  threshhold: .25
+  overlap: .5
+  log_scale: False 
+  exclude_border: False 
+  n_neighbor: 3 
+  dist_upper_bound: 5 
+  angle_tolerance: 3 
+  
+  
