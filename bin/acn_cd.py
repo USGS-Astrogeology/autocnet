@@ -135,7 +135,7 @@ if __name__ == "__main__":
         # Requires sub solar azmith
         ssa_path = os.path.join(dirpath, 'ssa.cub')
         try:
-            isis.phocube(from_=roi1_proj, to=ssa_path, subsolargroundazimuth=True)
+            isis.phocube(from_=args.before, to=ssa_path, subsolargroundazimuth=True)
         except ProcessError as e:
             print(e.stderr)
 

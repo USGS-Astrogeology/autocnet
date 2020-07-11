@@ -386,7 +386,6 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
          return -tolerance <= subsolar_azimuth - angle <= tolerance
 
      if isinstance(image1, GeoDataset):
-         if
          image1 = image1.read_array()
 
      if isinstance(image2, GeoDataset):
