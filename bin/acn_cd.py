@@ -18,7 +18,7 @@ from autocnet.spatial.isis import point_info
 from autocnet.utils import hirise
 from autocnet.utils.utils import bytescale
 from autocnet.examples import get_path
-from shapely.geometry import Point
+from shapely.geometry import Point, MultiPoint
 import numpy as np
 
 from affine import Affine
@@ -39,7 +39,14 @@ _cd_functions_ = {
 
 def poly_pixel_to_latlon(poly, affine, coord_transform):
     poly_type = type(poly)
-    x,y = poly.xy
+
+    if poly_type == MultiPoint:
+        x = [p.x for p in poly]
+        y = [p.y for p in poly]
+    elif poly_type == Point:
+        x,y = poly.xy
+    else:
+        x,y = poly.exterior.coords.xy
 
     lonlats = []
     for xval,yval in zip(x,y):
@@ -49,6 +56,7 @@ def poly_pixel_to_latlon(poly, affine, coord_transform):
 
     if poly_type == Point:
         return Point(lonlats[0][0], lonlats[0][1])
+
     return poly_type(lonlats)
 
 
@@ -133,16 +141,16 @@ if __name__ == "__main__":
 
     if args.algorithm == 'blob':
         # Requires sub solar azmith
-        ssa_path = os.path.join(dirpath, 'ssa.cub')
+        ssa_path = "/tmp/ssa.cub" # os.path.join(dirpath, 'ssa.cub')
         try:
             isis.phocube(from_=args.before, to=ssa_path, subsolargroundazimuth=True)
         except ProcessError as e:
             print(e.stderr)
-
-        ssa = GeoDataset(ssa_path).read_array()
+        print("created: ", ssa_path)
+        ssa = GeoDataset(ssa_path).read_array(6)
         ret = _cd_functions_[args.algorithm.strip()](before_proj_geo, after_proj_geo, ssa, **config.get(args.algorithm, {}))
-
-    ret = _cd_functions_[args.algorithm.strip()](before_proj_geo, after_proj_geo, **config.get(args.algorithm, {}))
+    else:
+        ret = _cd_functions_[args.algorithm.strip()](before_proj_geo, after_proj_geo, **config.get(args.algorithm, {}))
 
     # for now, write out raster files assuming okb
     # make it match one of the projected images
@@ -164,5 +172,5 @@ if __name__ == "__main__":
     geodf['geometry'] = [g.wkt for g in geodf['geometry']]
     geodf['latlon_geometry'] = [g.wkt for g in geodf['latlon_geometry']]
 
-    geodf.to_csv(os.path.splitext(args.out)[0]+".csv")
+    geodf.to_csv(os.path.splitext(args.out)[0]+".csv", index=False)
 

@@ -20,6 +20,20 @@ okbm:
     eps: .5 
     xi: .5
 
+blob: 
+  image_func: "diff_sq"
+  subtractive: False
+  min_sigma: .45 
+  max_sigma: 30
+  num_sigma: 10 
+  threshold: .4
+  overlap: .5
+  log_scale: False 
+  exclude_border: False 
+  n_neighbors: 3 
+  dist_upper_bound: 5 
+  angle_tolerance: 20   
+
 jigsaw:
   # Parameters that seem to have the best results on Hirise pairs
   radius: 'yes'
@@ -36,18 +50,4 @@ jigsaw:
   spsolve: "None"
 
 
-blob: 
-  image_func: "diff_sq"
-  subtractive: False
-  min_sigma: .45 
-  max_sigma: 30
-  num_sigma: 10 
-  threshold: .25
-  overlap: .5
-  log_scale: False 
-  exclude_border: False 
-  n_neighbors: 3 
-  dist_upper_bound: 5 
-  angle_tolerance: 3 
-  
-  
+ 

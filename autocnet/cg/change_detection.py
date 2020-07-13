@@ -9,10 +9,15 @@ from scipy.spatial import cKDTree
 from skimage.feature import blob_log, blob_doh
 from math import sqrt, atan2, pi
 
+import matplotlib
+from matplotlib import pyplot as plt
+
 from shapely import wkt
 from shapely.geometry import Point, MultiPoint
 import pandas as pd
 import geopandas as gpd
+
+import pysis
 
 from autocnet.utils.utils import bytescale
 from autocnet.matcher.cpu_extractor import extract_features
@@ -23,6 +28,10 @@ def image_diff(arr1, arr2):
      arr2 = arr2.astype("float32")
      arr1[arr1 == 0] = np.nan
      arr2[arr2 == 0] = np.nan
+
+     isis_null = pysis.specialpixels.SPECIAL_PIXELS['Real']['Null']
+     arr1[arr1 == isis_null] = np.nan
+     arr2[arr2 == isis_null] = np.nan
 
      diff = arr1-arr2
      diff[np.isnan(diff)] = 0
@@ -35,6 +44,10 @@ def image_ratio(arr1, arr2):
      arr2 = arr2.astype("float32")
      arr1[arr1 == 0] = np.nan
      arr2[arr2 == 0] = np.nan
+
+     isis_null = pysis.specialpixels.SPECIAL_PIXELS['Real']['Null']
+     arr1[arr1 == isis_null] = np.nan
+     arr2[arr2 == isis_null] = np.nan
 
      ratio = arr1/arr2
      ratio[np.isnan(ratio)] = 0
@@ -248,9 +261,9 @@ def okbm_detector(image1, image2, extractor_method="orb",  image_func=image_diff
          weights.append(weight)
 
      results = gpd.GeoDataFrame(geometry=polys)
-     result['weight'] = weights
+     results['weight'] = weights
 
-     return result, bdiff
+     return results, bdiff
 
 
 def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
@@ -412,12 +425,17 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
      blobs_log_inv = blob_log(inv, min_sigma=min_sigma, max_sigma=max_sigma,
                               num_sigma=num_sigma, threshold=threshold, overlap=overlap,
                               log_scale=log_scale, exclude_border=exclude_border)
+
      # Compute radii in the 3rd column.  Radii are appx equal to sqrt2 * sigma
      blobs_log[:, 2] = blobs_log[:, 2] * sqrt(2)
      blobs_log_inv[:, 2] = blobs_log_inv[:, 2] * sqrt(2)
 
+     if not len(blobs_log) or not len(blobs_log_inv):
+         raise Exception("No blobs detected")
+
      # Create a KDTree to facilitate nearest neighbor search
      tree = cKDTree(blobs_log)
+
      # Query the kdtree to find neighboring points
      _, idx_log = tree.query(blobs_log_inv, k=n_neighbors,
                                     distance_upper_bound=dist_upper_bound)
@@ -436,7 +454,10 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
              except IndexError as e:
                  azimuth = sub_solar_azimuth
              if is_azimuth_colinear(pt1, pt2, azimuth, angle_tolerance, subtractive):
-                 polys.append(MultiPoint([(pt1[0], pt1[1]), (pt2[0], pt1[1])]))
+                 if subtractive:
+                     polys.append(Point(pt1[1], pt1[0]))
+                 else:
+                     polys.append(Point(pt2[1], pt2[0]))
 
-     changes = pd.GeoDataFrame(geometry=polys)
+     changes = gpd.GeoDataFrame(geometry=polys)
      return changes, bdiff
