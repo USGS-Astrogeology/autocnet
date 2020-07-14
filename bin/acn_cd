@@ -67,7 +67,7 @@ if __name__ == "__main__":
                                "Okubogar modified method (okbm). Experimental feature based change detection algorithm that expands on okobubogar to allow for programmatic change detection."
     )
 
-    parser = argparse.ArgumentParser(description="Registers two image and runs a change detection algorithm on the pair of images. WARNING: Runs bundle adjust with update=yes, make sure you are using copies.")
+    parser = argparse.ArgumentParser(description="Registers two image and runs a change detection algorithm on the pair of images. WARNING: Runs bundle adjust with update=yes, make sure you are using copies. Out is a .tif file and .csv file. The former is a GEOTIFF image, usually the diff image that change detection was run on. The latter .csv file contains polygon results as a WKT field in the CSV file.")
     parser.add_argument('before', action='store', help='Path to image 1, generally the "before image"')
     parser.add_argument('after', action='store', help='Path to image 2, generally the "after image"')
     parser.add_argument('out', action='store', help='Output image path, csv with geometries are also written as a side cart file as a csv.')
@@ -75,7 +75,7 @@ if __name__ == "__main__":
     parser.add_argument('--config', '-c', action='store', default=get_path('cd_config.yml'), help='path to json or yaml file containing parameters for change detection algorithms')
     parser.add_argument('--map','-m',  action='store', help='path to ISIS map file, determines the projection of the two registered images', default=os.path.join(os.environ["ISISROOT"], "appdata", "templates", "maps", "equirectangular.map"))
     parser.add_argument('--register','-r', action="store_true", default=False, help='Whether or not to register the two images, reccomended to set to false if the two images have been registered before.')
-    parser.add_argument('--write-registered-cubes','-w', default=False, action="store_true", help='Pass this flag id you want to write out the projected cubes to disk. Useful if you want to run multiple cd algorithms without having to rerun the registration step.')
+    parser.add_argument('--write-registered-cubes','-w', default=False, action="store_true", help='Pass this flag id you want to write out the projected cubes to disk (co-located with input files). Useful if you want to run multiple cd algorithms without having to rerun the registration step.')
 
     args = parser.parse_args()
 
