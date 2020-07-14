@@ -294,7 +294,7 @@ class Points(BaseMixin, Base):
     @hybrid_property
     def geom(self):
         try:
-            return to_shape(self._geom, srid=self.latitudinal_srid)
+            return to_shape(self._geom)
         except:
             return self._geom
 
