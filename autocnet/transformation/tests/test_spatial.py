@@ -1,5 +1,6 @@
 from unittest import mock
 import pytest
+import math
 
 from autocnet.transformation import spatial
 
@@ -7,13 +8,24 @@ def test_oc2og():
     lon = 0
     lat = 20
     lon_og, lat_og = spatial.oc2og(lon, lat, 3396190, 3376200)
-    assert lat_og == 20.218400434636393
+
+    # calculate lat conversion by hand
+    dlat = math.radians(lat)
+    dlat = math.atan(((3396190 / 3376200)**2) * (math.tan(dlat)))
+    dlat = math.degrees(dlat)
+
+    assert math.isclose(lat_og, dlat)
 
 def test_og2oc():
     lon = 0
     lat = 20
     lon_oc, lat_oc = spatial.og2oc(lon, lat, 3396190, 3376200)
-    assert lat_oc == 19.78356596059272
+
+    dlat = math.radians(lat)
+    dlat = math.atan((math.tan(dlat) / ((3396190 / 3376200)**2)))
+    dlat = math.degrees(dlat)
+
+    assert math.isclose(lat_oc, dlat)
 
 
 def test_reproject():
