@@ -1,7 +1,10 @@
 import os
 from setuptools import setup, find_packages
 import autocnet
+from glob import glob
+
 from autocnet.examples import available
+
 #Grab the README.md for the long description
 with open('README.md', 'r') as f:
     long_description = f.read()
@@ -31,7 +34,7 @@ def setup_package():
         packages=find_packages(),
         include_package_data=True,
         package_data={'autocnet' : list(examples)},
-        scripts=['bin/acn_submit'],
+        scripts= glob("bin/*"), # [ 'bin/acn_submit'],
         zip_safe=False,
         install_requires=[],
         classifiers=[
