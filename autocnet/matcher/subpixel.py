@@ -637,6 +637,34 @@ def subpixel_register_measure(measureid,
                               threshold=0.005,
                               ncg=None,
                               **kwargs):
+    """
+    Given a measure, subpixel register to the reference measure of its associated point.
+
+    Parameters
+    ----------
+    ncg : obj
+          the network candidate graph that the point is associated with; used for
+          the DB session that is able to access the point.
+
+    measureid : int or obj
+              The identifier of the measure in the DB or a Measures object
+
+    iterative_phase_kwargs : dict
+                             Any keyword arguments passed to the phase matcher
+
+    subpixel_template_kwargs : dict
+                               Ay keyword arguments passed to the template matcher
+
+    cost : func
+           A generic cost function accepting two arguments (x,y), where x is the
+           distance that a point has shifted from the original, sensor identified
+           intersection, and y is the correlation coefficient coming out of the
+           template matcher.
+
+    threshold : numeric
+                measures with a cost <= the threshold are marked as ignore=True in
+                the database.
+    """
 
 
 
@@ -709,9 +737,11 @@ def subpixel_register_measure(measureid,
     return result
 
 
-def subpixel_register_point(pointid, iterative_phase_kwargs={},
+def subpixel_register_point(pointid,
+                            iterative_phase_kwargs={},
                             subpixel_template_kwargs={},
-                            cost_func=lambda x,y: 1/x**2 * y, threshold=0.005,
+                            cost_func=lambda x,y: 1/x**2 * y,
+                            threshold=0.005,
                             ncg=None,
                             **kwargs):
 
