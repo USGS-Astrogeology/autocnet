@@ -450,7 +450,7 @@ def propagate_control_network(Session,
         elif len(res) == 1:
             for i in indices:
                 row = ground.loc[i]
-                pid = res[0][0]
+                pid = res[0].id
                 meas = session.query(Measures.serial).filter(Measures.pointid == pid).all()
                 serialnumbers = [m[0] for m in meas]
 
