@@ -428,7 +428,7 @@ def geom_match(base_cube,
                phase_kwargs=None,
                verbose=True):
     """
-    Propagates a source measure into a destination images and then prefroms subpixel registration.
+    Propagates a source measure into destination images and then perfroms subpixel registration.
     Measure creation is done by projecting the (lon, lat) associated with the source measure into the
     destination image. The created measure is then matched to the source measure using a quick projection
     of the destination image into source image space (using an affine transformation) and a naive
@@ -653,7 +653,7 @@ def subpixel_register_measure(measureid,
                              Any keyword arguments passed to the phase matcher
 
     subpixel_template_kwargs : dict
-                               Ay keyword arguments passed to the template matcher
+                               Any keyword arguments passed to the template matcher
 
     cost : func
            A generic cost function accepting two arguments (x,y), where x is the
