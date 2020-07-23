@@ -50,7 +50,7 @@ from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
 from autocnet.spatial.overlap import compute_overlaps_sql
 from autocnet.spatial.isis import point_info
-from autocnet.transformation.spatial import reproject
+from autocnet.transformation.spatial import reproject, og2oc
 
 #np.warnings.filterwarnings('ignore')
 
@@ -2020,7 +2020,8 @@ class NetworkCandidateGraph(CandidateGraph):
 
             row = cnetpoint.iloc[0]
             x,y,z= row.adjustedX, row.adjustedY, row.adjustedZ
-            lon, lat, alt = reproject([x, y, z], semi_major, semi_minor, 'geocent', 'latlon')
+            lon_og, lat_og, alt = reproject([x, y, z], semi_major, semi_minor, 'geocent', 'latlon')
+            lon, lat = og2oc(lon_og, lat_og, semi_major, semi_minor)
 
 
             point = Points(identifier=id,

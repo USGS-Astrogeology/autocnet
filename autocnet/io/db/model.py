@@ -18,7 +18,7 @@ from geoalchemy2.shape import from_shape, to_shape
 import osgeo
 import shapely
 from shapely.geometry import Point
-from autocnet.transformation.spatial import reproject
+from autocnet.transformation.spatial import reproject, og2oc
 from autocnet.utils.serializers import JsonEncoder
 
 Base = declarative_base()
@@ -328,10 +328,11 @@ class Points(BaseMixin, Base):
     def adjusted(self, adjusted):
         if adjusted:
             self._adjusted = from_shape(adjusted, srid=self.rectangular_srid)
-            lat, lon, _ = reproject([adjusted.x, adjusted.y, adjusted.z],
+            lon_og, lat_og, _ = reproject([adjusted.x, adjusted.y, adjusted.z],
                                     self.semimajor_rad, self.semiminor_rad,
                                     'geocent', 'latlon')
-            self._geom = from_shape(Point(lat, lon), self.latitudinal_srid)
+            lon, lat = og2oc(lon_og, lat_og, self.semimajor_rad, self.semiminor_rad)
+            self._geom = from_shape(Point(lon, lat), srid=self.latitudinal_srid)
         else:
             self._adjusted = adjusted
             self._geom = None

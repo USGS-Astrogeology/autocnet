@@ -47,7 +47,7 @@ from autocnet.io.db.model import Images, Points, Measures, JsonEncoder
 from autocnet.cg.cg import distribute_points_in_geom, xy_in_polygon
 from autocnet.io.db.connection import new_connection
 from autocnet.spatial import isis
-from autocnet.transformation.spatial import reproject
+from autocnet.transformation.spatial import reproject, oc2og
 from autocnet.matcher.cpu_extractor import extract_most_interesting
 from autocnet.transformation import roi
 from autocnet.matcher.subpixel import geom_match
@@ -168,8 +168,77 @@ def propagate_point(Session,
                     size_x=40,
                     size_y=40,
                     template_kwargs={'image_size': (39, 39), 'template_size': (21, 21)},
-                    verbose=False):
+                    verbose=False,
+                    cost=lambda x, y: y == np.max(x)):
     """
+    Conditionally propagate a point into a stack of images. The point and all corresponding measures
+    are matched against database network (to which you are propagating), best result(s) is(are) kept.
+
+    Parameters
+    ----------
+    Session   : sqlalchemy.sessionmaker
+                session maker associated with the database you want to propagate to
+
+    config    : dict
+                configuation file associated with database you want to propagate to
+                In the form: {'username':'somename',
+                              'password':'somepassword',
+                              'host':'somehost',
+                              'pgbouncer_port':6543,
+                              'name':'somename'}
+
+    dem       : plio.io.io_gdal.GeoDataset
+                digital elevation model of target body
+
+    lon       : np.float
+                longitude of point you want to project
+
+    lat       : np.float
+                planetocentric latitude of point you want to project
+
+    pointid   : int
+                clerical input used to trace point from generate_ground_points output
+
+    paths     : list of str
+                absolute paths pointing to the image(s) from which you want to try porpagating the point
+
+    lines     : list of np.float
+                apriori line(s) corresponding to point projected in 'paths' image(s)
+
+    samples   : list of np.float
+                apriori sample(s) corresponding to point projected in 'paths' image(s)
+
+    size_x    : int
+                half width of GeoDataset that is cut from full image and affinely transfromed in geom_match;
+                must be larger than 1/2 template_kwargs 'image_size'
+
+    size_y    : int
+                half height of GeoDataset that is cut from full image and affinely transfromed in geom_match;
+                must be larger than 1/2 template_kwargs 'image_size'
+
+    template_kwargs : dict
+                      kwargs passed through to control matcher.subpixel_template()
+
+    verbose   : boolean
+                If True, this will print out the results of each propagation, including prints of the
+                matcher areas and their correlation map.
+
+    cost      : anonymous function
+                determines to which image(s) the point should be propagated. x corresponds to a list
+                of all match correlation metrics, while y corresponds to each indiviudal element
+                of the x array.
+                Example:
+                cost = lambda x,y: y == np.max(x) will get you one result corresponding to the image that
+                has the maximum correlation with the source image
+                cost = lambda x,y: y > 0.6 will propagate the point to all images whose correlation
+                result is greater than 0.6
+
+
+    Returns
+    -------
+    new_measures : pd.DataFrame
+                   Dataframe containing pointid, imageid, image serial number, line, sample, and ground location (both latlon
+                   and cartesian) of successfully propagated points
 
     """
     session = Session()
@@ -184,17 +253,20 @@ def propagate_point(Session,
     p = Point(lon, lat)
     new_measures = []
 
+    # list of matching results in the format:
+    # [measure_index, x_offset, y_offset, offset_magnitude]
+    match_results = []
     # lazily iterate for now
-    for i,image in images.iterrows():
-        dest_image = GeoDataset(image["path"])
+    for k,m in image_measures.iterrows():
+        base_image = GeoDataset(m["path"])
 
-        # list of matching results in the format:
-        # [measure_index, x_offset, y_offset, offset_magnitude]
-        match_results = []
-        for k,m in image_measures.iterrows():
-            base_image = GeoDataset(m["path"])
+        sx, sy = m["sample"], m["line"]
 
-            sx, sy = m["sample"], m["line"]
+        for i,image in images.iterrows():
+            dest_image = GeoDataset(image["path"])
+
+            if os.path.basename(m['path']) == os.path.basename(image['path']):
+                continue
 
             try:
                 x,y, dist, metrics, corrmap = geom_match(base_image, dest_image, sx, sy, \
@@ -207,65 +279,85 @@ def propagate_point(Session,
                 continue
 
             match_results.append([k, x, y,
-                                     metrics, dist, corrmap, m["path"], image["path"]])
+                                 metrics, dist, corrmap, m["path"], image["path"],
+                                 image['id'], image['serial']])
 
-        # get best offsets, if possible we need better metric for what a
-        # good match looks like
-        match_results = np.asarray([res for res in match_results if isinstance(res, list)])
-        if match_results.shape[0] == 0:
-            # no matches
-            continue
+    # get best offsets
+    match_results = np.asarray([res for res in match_results if isinstance(res, list) and all(r is not None for r in res)])
+    if match_results.shape[0] == 0:
+        # no matches
+        return new_measures
 
-        best_results = match_results[np.argwhere(match_results[:,3] == match_results[:,3].max())][0][0]
+    # column index 3 is the metric returned by the geom matcher
+    best_results = np.asarray([match for match in match_results if cost(match_results[:,3], match[3])])
+    if best_results.shape[0] == 0:
+        # no matches satisfying cost
+        return new_measures
 
-        # apply offsets
-        sample = best_results[1]
-        line = best_results[2]
+    if verbose:
+        print("match_results final length: ", len(match_results))
+        print("best_results length: ", len(best_results))
+        print("Full results: ", best_results)
+        print("Winning CORRs: ", best_results[:,3], "Themis Pixel shifts: ", best_results[:,4])
+        print("Themis Images: ", best_results[:,6], "CTX images:", best_results[:,7])
+        print("Themis Sample: ", sx, "CTX Samples: ", best_results[:,1])
+        print("Themis Line: ", sy, "CTX Lines: ", best_results[:,2])
+        print('\n')
 
-        if verbose:
-          print("Full results: ", best_results)
-          print("Winning CORR: ", best_results[3], "Themis Pixel shift: ", best_results[4])
-          print("Themis Image: ", best_results[6], "CTX image:", best_results[7])
-          print("Themis S,L: ", f"{sx},{sy}", "CTX S,L: ", f"{sample},{line}")
-          print('\n')
+    # if the single best results metric (returned by geom_matcher) is None
+    if len(best_results[:,3])==1 and best_results[:,3][0] is None:
+        return new_measures
 
-        # hardcoded for now
-        if best_results[3] == None or best_results[3] < 0.7:
-            continue
+    px, py = dem.latlon_to_pixel(lat, lon)
+    height = dem.read_array(1, [px, py, 1, 1])[0][0]
 
-        px, py = dem.latlon_to_pixel(lat, lon)
-        height = dem.read_array(1, [px, py, 1, 1])[0][0]
-
-        semi_major = config['spatial']['semimajor_rad']
-        semi_minor = config['spatial']['semiminor_rad']
-        # The CSM conversion makes the LLA/ECEF conversion explicit
-        x, y, z = reproject([lon, lat, height],
+    semi_major = config['spatial']['semimajor_rad']
+    semi_minor = config['spatial']['semiminor_rad']
+    # The CSM conversion makes the LLA/ECEF conversion explicit
+    # reprojection takes ographic lat
+    lon_og, lat_og = oc2og(lon, lat, semi_major, semi_minor)
+    x, y, z = reproject([lon_og, lat_og, height],
                          semi_major, semi_minor,
                          'latlon', 'geocent')
 
+    for row in best_results:
+        sample = row[1]
+        line = row[2]
+
         new_measures.append({
-                'pointid' : pointid,
-                'imageid' : image['id'],
-                'serial' : image['serial'],
-                'line' : line,
-                'sample' : sample,
-                'point_latlon' : p,
-                'point_ground' : Point(x*1000, y*1000, z*1000)
-        })
+            'pointid' : pointid,
+            'imageid' : row[8],
+            'serial' : row[9],
+            'path': row[7],
+            'line' : line,
+            'sample' : sample,
+            'point' : p,
+            'point_ecef' : Point(x, y, z)
+            })
 
     return new_measures
 
-def propagate_control_network(Session, config, dem, base_cnet,
-        size_x=40, size_y=40,
-        template_kwargs={'image_size': (39,39), 'template_size': (21,21)}, verbose=False):
+def propagate_control_network(Session,
+        config,
+        dem,
+        base_cnet,
+        size_x=40,
+        size_y=40,
+        template_kwargs={'image_size': (39,39), 'template_size': (21,21)},
+        verbose=False,
+        cost=lambda x,y: y == np.max(x)):
     """
+    Loops over a base control network's measure information (line, sample, image path) and uses image matching
+    algorithms (autocnet.matcher.subpixel.geom_match) to find the corresponding line(s)/sample(s) in database images.
+
+
     Parameters
     ----------
-    Session   : sqlalchemy session maker
-                session maker associated with the database you want to propagate to
+    Session   : sqlalchemy.sessionmaker
+                session maker associated with the database containing the images you want to propagate to
 
     config    : dict
-                configuation file associated with database you want to propagate to
+                configuation file associated with database containing the images you want to propagate to
                 In the form: {'username':'somename',
                               'password':'somepassword',
                               'host':'somehost',
@@ -276,16 +368,28 @@ def propagate_control_network(Session, config, dem, base_cnet,
                 Digital elevation model of target body
 
     base_cnet : pd.DataFrame
-                Dataframe representing the points you want to propagate. Must contain line, sample, path.
+                Dataframe representing the points you want to propagate. Must contain 'line', 'sample' location of
+                the measure and the 'path' to the corresponding image
 
     verbose   : boolean
                 Increase the level of print outs/plots recieved during propagation
 
+    cost      : anonymous function
+                determines to which image(s) the point should be propagated. x corresponds to a list
+                of all match correlation metrics, while y corresponds to each indiviudal element
+                of the x array.
+                Example:
+                cost = lambda x,y: y == np.max(x) will get you one result corresponding to the image that
+                has the maximum correlation with the source image
+                cost = lambda x,y: y > 0.6 will propegate the point to all images whose correlation
+                result is greater than 0.6
 
-    Output
-    ------
+
+    Returns
+    -------
     ground   : pd.DataFrame
-               Dataframe containing successfully propagated points
+               Dataframe containing pointid, imageid, image serial number, line, sample, and ground location (both latlon
+               and cartesian) of successfully propagated points
 
     """
     warnings.warn('This function is not well tested. No tests currently exists \
@@ -317,37 +421,69 @@ def propagate_control_network(Session, config, dem, base_cnet,
                                       size_x,
                                       size_y,
                                       template_kwargs,
-                                      verbose=verbose)
+                                      verbose=verbose,
+                                      cost=cost)
 
+        # do not append if propagate_point is unable to find result
+        if len(gp_measures) == 0:
+            continue
         constrained_net.extend(gp_measures)
 
-    ground = gpd.GeoDataFrame.from_dict(constrained_net).set_geometry('point_latlon')
+    ground = gpd.GeoDataFrame.from_dict(constrained_net).set_geometry('point')
     groundpoints = ground.groupby('pointid').groups
 
     points = []
 
-    # upload new points
+    # conditionally upload a new point to DB or updated existing point with new measures
+    lat_srid = config['spatial']['latitudinal_srid']
+    session = Session()
     for p,indices in groundpoints.items():
         point = ground.loc[indices].iloc[0]
-        p = Points()
-        p.pointtype = 3
-        p.apriori = point['point_ground']
-        p.adjusted = point['point_ground']
+        # if point already exists in DB
+        lon = point.point.x
+        lat = point.point.y
+        res = session.query(Points).filter(functions.ST_Intersects(Points.geom, functions.ST_Buffer(functions.ST_SetSRID(functions.ST_Point(lon,lat), lat_srid), 10e-10))).all()
 
-        for i in indices:
-            m = ground.loc[i]
-            p.measures.append(Measures(line=float(m['line']),
-                                       sample = float(m['sample']),
-                                       aprioriline = float(m['line']),
-                                       apriorisample = float(m['sample']),
-                                       imageid = int(m['imageid']),
-                                       serial = m['serial'],
+        if len(res) > 1:
+            warnings.warn(f"There is more than one point at lon: {lon}, lat: {lat}")
+
+        elif len(res) == 1:
+            for i in indices:
+                row = ground.loc[i]
+                pid = res[0].id
+                meas = session.query(Measures.serial).filter(Measures.pointid == pid).all()
+                serialnumbers = [m[0] for m in meas]
+
+                if row['serial'] in serialnumbers:
+                    continue
+
+                points.append(Measures(pointid = pid,
+                                       line=float(row['line']),
+                                       sample = float(row['sample']),
+                                       aprioriline = float(row['line']),
+                                       apriorisample = float(row['sample']),
+                                       imageid = int(row['imageid']),
+                                       serial = row['serial'],
                                        measuretype=3))
-        points.append(p)
+        else:
+            p = Points()
+            p.pointtype = 3
+            p.apriori = point['point_ecef']
+            p.adjusted = point['point_ecef']
+            for i in indices:
+                row = ground.loc[i]
+                p.measures.append(Measures(line=float(row['line']),
+                                           sample = float(row['sample']),
+                                           aprioriline = float(row['line']),
+                                           apriorisample = float(row['sample']),
+                                           imageid = int(row['imageid']),
+                                           serial = row['serial'],
+                                           measuretype=3))
+            points.append(p)
 
-    session = Session()
     session.add_all(points)
     session.commit()
+    session.close()
 
     return ground
 

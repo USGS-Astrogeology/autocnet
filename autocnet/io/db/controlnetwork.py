@@ -82,6 +82,6 @@ ORDER BY measures."pointid", measures."id";
                     row['adjustedX'] = adjusted_geom.x
                     row['adjustedY'] = adjusted_geom.y
                     row['adjustedZ'] = adjusted_geom.z
-            df[i] = row
-            
+                df.iloc[i] = row
+
         return df

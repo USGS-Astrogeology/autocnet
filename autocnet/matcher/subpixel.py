@@ -418,9 +418,82 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(51, 51), reduction=11, c
     return dx, dy, metrics
 
 
-def geom_match(base_cube, input_cube, bcenter_x, bcenter_y, size_x=60, size_y=60,
+def geom_match(base_cube,
+               input_cube,
+               bcenter_x,
+               bcenter_y,
+               size_x=60,
+               size_y=60,
                template_kwargs={"image_size":(59,59), "template_size":(31,31)},
-               phase_kwargs=None, verbose=True):
+               phase_kwargs=None,
+               verbose=True):
+    """
+    Propagates a source measure into destination images and then perfroms subpixel registration.
+    Measure creation is done by projecting the (lon, lat) associated with the source measure into the
+    destination image. The created measure is then matched to the source measure using a quick projection
+    of the destination image into source image space (using an affine transformation) and a naive
+    template match with optional phase template match.
+
+    Parameters
+    ----------
+    base_cube:  plio.io.io_gdal.GeoDataset
+                source image
+
+    input_cube: plio.io.io_gdal.GeoDataset
+                destination image; gets matched to the source image
+
+    bcenter_x:  int
+                sample location of source measure in base_cube
+
+    bcenter_y:  int
+                line location of source measure in base_cube
+
+    size_x:     int
+                half-height of the subimage used in the affine transformation
+
+    size_y:     int
+                half-width of the subimage used in affine transformation
+
+    template_kwargs: dict
+                     contains keywords necessary for autocnet.matcher.subpixel.subpixel_template
+
+    phase_kwargs:    dict
+                     contains kwargs for autocnet.matcher.subpixel.subpixel_phase
+
+    verbose:    boolean
+                indicates level of print out desired. If True, two subplots are output; the first subplot contains
+                the source subimage and projected destination subimage, the second subplot contains the registered
+                measure's location in the base subimage and the unprojected destination subimage with the corresponding
+                template metric correlation map.
+
+
+    Returns
+    -------
+    sample: int
+            sample of new measure in destination image space
+
+    line:   int
+            line of new measures in destination image space
+
+    dist:   np.float or tuple of np.float
+            distance matching algorithm moved measure
+            if template matcher only (default): returns dist_template
+            if template and phase matcher:      returns (dist_template, dist_phase)
+
+    metric: np.float or tuple of np.float
+            matching metric output by the matcher
+            if template matcher only (default): returns maxcorr
+            if template and phase matcher:      returns (maxcorr, perror, pdiff)
+
+    temp_corrmap: np.ndarray
+                  correlation map of the naive template matcher
+
+    See Also
+    --------
+    autocnet.matcher.subpixel.subpixel_template: for list of kwargs that can be passed to the matcher
+    autocnet.matcher.subpixel.subpixel_phase: for list of kwargs that can be passed to the matcher
+
+    """
 
     if not isinstance(input_cube, GeoDataset):
         raise Exception("input cube must be a geodataset obj")
@@ -564,6 +637,34 @@ def subpixel_register_measure(measureid,
                               threshold=0.005,
                               ncg=None,
                               **kwargs):
+    """
+    Given a measure, subpixel register to the reference measure of its associated point.
+
+    Parameters
+    ----------
+    ncg : obj
+          the network candidate graph that the point is associated with; used for
+          the DB session that is able to access the point.
+
+    measureid : int or obj
+              The identifier of the measure in the DB or a Measures object
+
+    iterative_phase_kwargs : dict
+                             Any keyword arguments passed to the phase matcher
+
+    subpixel_template_kwargs : dict
+                               Any keyword arguments passed to the template matcher
+
+    cost : func
+           A generic cost function accepting two arguments (x,y), where x is the
+           distance that a point has shifted from the original, sensor identified
+           intersection, and y is the correlation coefficient coming out of the
+           template matcher.
+
+    threshold : numeric
+                measures with a cost <= the threshold are marked as ignore=True in
+                the database.
+    """
 
 
 
@@ -636,9 +737,11 @@ def subpixel_register_measure(measureid,
     return result
 
 
-def subpixel_register_point(pointid, iterative_phase_kwargs={},
+def subpixel_register_point(pointid,
+                            iterative_phase_kwargs={},
                             subpixel_template_kwargs={},
-                            cost_func=lambda x,y: 1/x**2 * y, threshold=0.005,
+                            cost_func=lambda x,y: 1/x**2 * y,
+                            threshold=0.005,
                             ncg=None,
                             **kwargs):
 

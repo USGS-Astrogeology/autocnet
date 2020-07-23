@@ -19,7 +19,7 @@ We suggest using Anaconda Python to install Autocnet within a virtual environmen
 1. [Download](https://www.continuum.io/downloads) and install the Python 3.x Miniconda installer.  Respond ``Yes`` when prompted to add conda to your BASH profile.  
 2. Install the autocnet environment using the supplied environment.yml file: `conda env create -n autocnet -f environment.yml` 
 3. Activate your environment: `conda activate autocnet`
-4. If you are doing to develop autocnet or would like to use the bleeding edge version: `python setup.py develop`. Otherwise, `conda install -c usgs-astrogeology` autocnet.
+4. If you are doing to develop autocnet or would like to use the bleeding edge version: `python setup.py develop`. Otherwise, `conda install -c usgs-astrogeology autocnet`
 
 ## How to run the test suite locally
 

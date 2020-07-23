@@ -17,7 +17,7 @@ from autocnet.matcher import subpixel as sp
 from autocnet.matcher import cpu_ring_matcher
 from autocnet.transformation import fundamental_matrix as fm
 from autocnet.transformation import homography as hm
-from autocnet.transformation.spatial import reproject
+from autocnet.transformation.spatial import reproject, og2oc
 from autocnet.vis.graph_view import plot_edge, plot_node, plot_edge_decomposition, plot_matches
 from autocnet.cg import cg
 from autocnet.io.db.model import Images, Keypoints, Matches,\
@@ -237,8 +237,10 @@ class Edge(dict, MutableMapping):
             ic = csmapi.ImageCoord(coords[i][0], coords[i][1])
             ground = camera.imageToGround(ic, 0)
             gnd[i] = [ground.x, ground.y, ground.z]
-        lon, lat, alt = reproject(gnd.T, semimajor, semiminor,
+        lon_og, lat_og, alt = reproject(gnd.T, semimajor, semiminor,
                                     'geocent', 'latlon')
+        lon, lat = og2oc(lon_og, lat_og, semimajor, semiminor)
+
         if srid:
             geoms = []
             for coord in zip(lon, lat, alt):
@@ -964,7 +966,8 @@ class NetworkEdge(Edge):
                 session.add(edge)
 
     def get_overlapping_indices(self, kps):
-        lons, lats, alts = reproject([kps.xm.values, kps.ym.values, kps.zm.values], semi_major, semi_minor, 'geocent', 'latlon')
+        lons_og, lats_og, alts = reproject([kps.xm.values, kps.ym.values, kps.zm.values], semi_major, semi_minor, 'geocent', 'latlon')
+        lons, lats = og2oc(lons_og, lats_og, semi_major, semi_minor)
         points = [Point(lons[i], lats[i]) for i in range(len(lons))]
         mask = [i for i in range(len(points)) if self.intersection.contains(points[i])]
         return mask
