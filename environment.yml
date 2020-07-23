@@ -22,7 +22,6 @@ dependencies:
   - pip
   - pip:
     - redis
-    - pysis
   - plio >= 1.1.0
   - plurmy
   - psycopg2
