@@ -64,7 +64,11 @@ script:
 
 after_success:
   - coveralls
- 
+
+
+before_deploy:
+  - pip install travis-wait-improved
+
 deploy:
   provider: script
   skip_cleanup: true
