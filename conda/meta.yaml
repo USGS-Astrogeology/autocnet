@@ -13,39 +13,25 @@ source:
 
 requirements:
     build:
-      - python>=3
-      - csmapi
-      - cyvlfeat
-      - dill
-      - geoalchemy2
-      - geopandas
-      - imageio
-      - ipykernel
-      - jupyter
-      - knoten
-      - ncurses
-      - networkx
-      - numpy
+      - pyyaml=5.3.1
+      - sqlalchemy-utils=0.36.6
+      - geopandas=0.8.1
+      - dill=0.3.2
+      - pysis>=0.1.1
+      - networkx=2.4
+      - plurmy>=0.1.1
       - opencv<=3.5
-      - pillow
+      - shapely=1.7.0
+      - scikit-image=0.17.2
+      - scipy=1.5.1
+      - plio>=1.2.3
+      - knoten>=0.2.1
+      - csmapi>=1.0.1
+
+    host:
+      - python>=3
       - pip
-      - plio>=1.1.0
-      - plurmy
-      - psycopg2
-      - pyproj
-      - pytest
-      - pytest-cov
-      - pysis
-      - scikit-image
-      - scikit-learn
-      - scipy<=1.2.1
-      - shapely
-      - sqlalchemy
-      - sqlalchemy-utils
-      - usgscsm
-      - vlfeat
     run:
-      - python>=3
       - csmapi
       - cyvlfeat
       - dill
@@ -60,7 +46,6 @@ requirements:
       - numpy
       - opencv<=3.5
       - pillow
-      - pip
       - plio>=1.1.0
       - plurmy
       - psycopg2
@@ -68,6 +53,7 @@ requirements:
       - pytest
       - pytest-cov
       - pysis
+      - pyyaml
       - scikit-image
       - scikit-learn
       - scipy<=1.2.1

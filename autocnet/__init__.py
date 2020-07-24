@@ -8,8 +8,6 @@ from sqlalchemy.event import listen
 
 from pkg_resources import get_distribution, DistributionNotFound
 
-from plio.io.io_gdal import GeoDataset
-
 try:
     _dist = get_distribution('autocnet')
     # Normalize case for Windows systems
