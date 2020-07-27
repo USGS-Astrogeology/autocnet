@@ -90,6 +90,52 @@ class Roi():
 
         return list(map(int, [left_x, right_x, top_y, bottom_y]))
 
+    def geotransform(other):
+        """
+
+        """
+
+        startx, starty, stopx, stopy = self.image_extent()
+        other_size = other.raster_size
+
+        # specifically not putting this in a try/except, this should never fail
+        mlat, mlon = spatial.isis.image_to_ground(self.geodataset.file_name, self.x, self.y)
+        center_x, center_y = spatial.isis.ground_to_image(other.file_name, mlon, mlat)[::-1]
+
+        base_corners = [(startx, starty),
+                        (startx, stopy),
+                        (stopx, stopy),
+                        (stopx, starty)]
+
+        dst_corners = []
+        for x,y in base_corners:
+            try:
+                lat, lon = spatial.isis.image_to_ground(self.geodataset.file_name, x, y)
+                dst_corners.append(spatial.isis.ground_to_image(other.file_name, lon, lat)[::-1])
+            except ProcessError as e:
+                if 'Requested position does not project in camera model' in e.stderr:
+                    print(f'Skip geom_match; Region of interest corner located at ({lon}, {lat}) does not project to image {input_cube.base_name}')
+                    return None, None, None, None, None
+
+
+        base_gcps = np.array([*base_corners])
+        base_gcps[:,0] -= startx
+        base_gcps[:,1] -= starty
+
+        dst_gcps = np.array([*dst_corners])
+        startx = dst_gcps[:,0].min()
+        starty = dst_gcps[:,1].min()
+        stopx = dst_gcps[:,-1].max()
+        stopy = dst_gcps[:,1].max()
+        dst_gcps[:,0] -= startx
+        dst_gcps[:,1] -= starty
+
+        affine = tf.estimate_transform('affine', np.array([*base_gcps]), np.array([*dst_gcps]))
+
+        otherRoi = Roi(other, centerx, centery, max(dst_gcps[:,0])//2, max(dst_gcps[:,1])//2)
+        return otherRoi, affine
+
+
     def clip(self, dtype=None):
         pixels = self.image_extent
         if isinstance(self.geodataset, np.ndarray):
