@@ -12,25 +12,33 @@ matrix:
       env: PYTHON_VERSION=3.6
     - os: linux
       env: PYTHON_VERSION=3.7
-    
+    - os: mac
+      env: PYTHON_VERSION=3.6
+    - os: mac
+      env: PYTHON_VERSION=3.7
 
 # Setup a postgresql instance w/postgis
 services:
   - postgresql
+
 addons:
   postgresql: 9.6
   apt:
     packages:
     - postgresql-9.6-postgis-2.4
+  on:
+    os: linux
 
 before_install:
   # Create the template database that is used to instantiate the test DB 
-  - psql -c 'create database template_postgis;' -U postgres
-  - psql template_postgis -U postgres -c "create extension postgis"
-  - psql template_postgis -c "create extension postgis_topology"
-  - psql -d template_postgis -c "GRANT ALL ON geometry_columns TO PUBLIC;"
-  - psql -d template_postgis -c "GRANT ALL ON geography_columns TO PUBLIC;"
-  - psql -d template_postgis -c "GRANT ALL ON spatial_ref_sys TO PUBLIC;"
+  - if [ "$TRAVIS_OS_NAME" == "linux" ]; then
+      psql -c 'create database template_postgis;' -U postgres;
+      psql template_postgis -U postgres -c 'create extension postgis';
+      psql template_postgis -c 'create extension postgis_topology';
+      psql -d template_postgis -c 'GRANT ALL ON geometry_columns TO PUBLIC;';
+      psql -d template_postgis -c 'GRANT ALL ON geography_columns TO PUBLIC;';
+      psql -d template_postgis -c 'GRANT ALL ON spatial_ref_sys TO PUBLIC;';
+    fi
 
 install:
   # We do this conditionally because it saves us some downloading if the
@@ -38,9 +46,10 @@ install:
   - if [ "$TRAVIS_OS_NAME" == "linux" ]; then
       wget https://repo.continuum.io/miniconda/Miniconda3-latest-Linux-x86_64.sh -O miniconda.sh;
     else
-      curl -o miniconda.sh  https://repo.continuum.io/miniconda/Miniconda3-latest-MacOSX-x86_64.sh;
+      curl -o miniconda.sh  https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-x86_64.sh;
     fi
   - bash miniconda.sh -b -p $HOME/miniconda
+  - ls $HOME/miniconda/bin
   - export PATH="$HOME/miniconda/bin:$PATH"
   - hash -r
   - conda config --set always_yes yes --set changeps1 no

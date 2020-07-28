@@ -2,6 +2,7 @@ channels:
   - conda-forge
   - usgs-astrogeology
   - menpo
+
 dependencies:
   - python >= 3
   - coveralls

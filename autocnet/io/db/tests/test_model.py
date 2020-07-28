@@ -1,5 +1,6 @@
 from datetime import datetime
 import json
+import sys
 
 import numpy as np
 import pandas as pd
@@ -11,6 +12,9 @@ from autocnet.io.db import model
 from autocnet.graph.network import NetworkCandidateGraph
 
 from shapely.geometry import MultiPolygon, Polygon, Point
+
+if sys.platform.startswith("darwin"):
+    pytest.skip("skipping DB tests for MacOS", allow_module_level=True)
 
 @pytest.fixture
 def session(tables, request, ncg):

@@ -71,7 +71,7 @@ def default_configuration():
                   'username': 'postgres',
                   'password': 'NotTheDefault',
                   'host': 'localhost',
-                  'port': 5432, 
+                  'port': 5432,
                   'pgbouncer_port': 5432,
                   'name': 'travis_ci_test',
                   'timeout': 500},
@@ -205,7 +205,7 @@ def session(tables, request, ncg):
         num_con = session.execute('SELECT sum(numbackends) FROM pg_stat_database;').scalar()
         assert num_con == 1
         session.close()
-        
+
     request.addfinalizer(cleanup)
 
     return session
@@ -224,16 +224,16 @@ def db_controlnetwork(session):
         if j == 4:
             ptype=3  # Ground
         model.Points.create(session,
-                            id=i, 
-                            _pointtype=ptype, 
+                            id=i,
+                            _pointtype=ptype,
                             measures=[model.Measures(id=k+j,
-                                                    imageid=k, 
-                                                    serial='None', 
-                                                    _measuretype=3, 
-                                                    sample=k, 
+                                                    imageid=k,
+                                                    serial='None',
+                                                    _measuretype=3,
+                                                    sample=k,
                                                     line=k,
                                                     aprioriline=k,
-                                                    apriorisample=k) for k in range(2)]) 
+                                                    apriorisample=k) for k in range(2)])
     session.close()
 
 """@pytest.fixture(scope='session')
