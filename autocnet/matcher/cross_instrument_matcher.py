@@ -82,7 +82,7 @@ def generate_ground_points(Session, ground_mosaic, nspts_func=lambda x: int(roun
     if isinstance(ground_mosaic, str):
         ground_mosaic = GeoDataset(ground_mosaic)
 
-    warnings.warn('This function is not well tested. No tests currently exists \
+    warnings.warn('This function is not well tested. No tests currently exist \
     in the test suite for this version of the function.')
 
     session = Session()
@@ -269,6 +269,9 @@ def propagate_point(Session,
                 continue
 
             try:
+                print(f'prop point: base_image: {base_image}')
+                print(f'prop point: dest_image: {dest_image}')
+                print(f'prop point: (sx, sy): ({sx}, {sy})')
                 x,y, dist, metrics, corrmap = geom_match(base_image, dest_image, sx, sy, \
                         size_x=size_x, size_y=size_y, \
                         template_kwargs=template_kwargs, \
@@ -392,7 +395,7 @@ def propagate_control_network(Session,
                and cartesian) of successfully propagated points
 
     """
-    warnings.warn('This function is not well tested. No tests currently exists \
+    warnings.warn('This function is not well tested. No tests currently exist \
     in the test suite for this version of the function.')
 
     groups = base_cnet.groupby('pointid').groups

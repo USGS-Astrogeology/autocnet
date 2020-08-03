@@ -520,8 +520,16 @@ def geom_match(base_cube,
         raise Exception(f"Window: {base_starty} < 0, center: {bcenter_x},{bcenter_y}")
 
     # specifically not putting this in a try/except, this should never fail
-    mlat, mlon = spatial.isis.image_to_ground(base_cube.file_name, bcenter_x, bcenter_y)
-    center_x, center_y = spatial.isis.ground_to_image(input_cube.file_name, mlon, mlat)[::-1]
+    # 07/28 - putting it in a try/except because of how we ground points
+    try:
+        mlat, mlon = spatial.isis.image_to_ground(base_cube.file_name, bcenter_x, bcenter_y)
+        center_x, center_y = spatial.isis.ground_to_image(input_cube.file_name, mlon, mlat)
+    except ProcessError as e:
+            if 'Requested position does not project in camera model' in e.stderr:
+                print(f'Skip geom_match; Region of interest center located at ({mlon}, {mlat}) does not project to image {input_cube.base_name}')
+                print('This should only appear when propagating ground points')
+                return None, None, None, None, None
+
 
     base_corners = [(base_startx,base_starty),
                     (base_startx,base_stopy),
@@ -570,17 +578,7 @@ def geom_match(base_cube,
     dst_arr = tf.warp(dst_arr, affine)
     dst_arr = dst_arr[:size_y*2, :size_x*2]
 
-    if verbose:
-      fig, axs = plt.subplots(1, 2)
-      axs[0].set_title("Base")
-      axs[0].imshow(bytescale(base_arr), cmap="Greys_r")
-      axs[1].set_title("Projected Image")
-      axs[1].imshow(bytescale(dst_arr), cmap="Greys_r")
-      plt.show()
-
-
     # Run through one step of template matching then one step of phase matching
-    # These parameters seem to work best, should pass as kwargs later
     restemplate = subpixel_template(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
 
     if phase_kwargs:
@@ -605,27 +603,70 @@ def geom_match(base_cube,
         x,y,maxcorr,temp_corrmap = restemplate
         if x is None or y is None:
             return None, None, None, None, None
+        if verbose:
+            image_size = template_kwargs['image_size']
+            template_size = template_kwargs['template_size']
+            image_size = check_image_size(image_size)
+            template_size = check_image_size(template_size)
+            image_chip = roi.Roi(bytescale(base_arr), size_x, size_y, size_x=image_size[0], size_y=image_size[1]).clip()
+            temp_chip = roi.Roi(bytescale(dst_arr), size_x, size_y, size_x=template_size[0], size_y=template_size[1]).clip()
+            fig, axs = plt.subplots(1, 3, figsize=(15,15))
+            axs[0].set_title("Image Chip")
+            axs[0].imshow(bytescale(image_chip), cmap="Greys_r")
+            axs[1].set_title("Template Chip")
+            axs[1].imshow(bytescale(temp_chip), cmap="Greys_r")
+            pcm = axs[2].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
+            plt.show()
+
+            fig, axs = plt.subplots(1, 3, figsize=(15,15))
+            axs[0].set_title("Base")
+            axs[0].imshow(bytescale(base_arr), cmap="Greys_r")
+            axs[0].scatter(size_x, size_y, s=10, color='red')
+            axs[0].plot([0, size_x*2], [size_y, size_y], linewidth=0.75, color='red')
+            axs[0].plot([size_x, size_x], [0, size_y*2], linewidth=0.75, color='red')
+            axs[0].set_xlim([0, base_arr.shape[0]])
+            axs[0].set_ylim([0, base_arr.shape[1]])
+            axs[1].set_title("Projected Image\n w/ original point")
+            axs[1].imshow(bytescale(dst_arr[2:]), cmap="Greys_r")
+            axs[1].scatter(size_x, size_y, s=10, color='red')
+            axs[1].plot([0, size_x*2], [size_y, size_y], linewidth=0.75, color='red')
+            axs[1].plot([size_x, size_x], [0, size_y*2], linewidth=0.75, color='red')
+            axs[1].set_xlim([0, dst_arr[2:].shape[0]])
+            axs[1].set_ylim([0, dst_arr[2:].shape[1]])
+            axs[2].set_title("Projected Image\n w/ registered point")
+            axs[2].imshow(bytescale(dst_arr[2:]), cmap="Greys_r")
+            axs[2].scatter(x, y, s=10, color='red')
+            axs[2].plot([0, size_x*2], [y, y], linewidth=0.75, color='red')
+            axs[2].plot([x, x], [0, size_y*2], linewidth=0.75, color='red')
+            axs[2].set_xlim([0, dst_arr[2:].shape[0]])
+            axs[2].set_ylim([0, dst_arr[2:].shape[1]])
+
+            plt.show()
+
+
         metric = maxcorr
         sample, line = affine([x, y])[0]
         sample += start_x
         line += start_y
         dist = np.linalg.norm([center_x-sample, center_y-line])
 
+        if verbose:
+            fig, axs = plt.subplots(1, 2, figsize=(10,5))
+            # clip the image around the new line, sample
+            new_size_x = round(size_x*100/6) # 100/6 is a scaling between tehmis and CTX resolution
+            new_size_y = round(size_y*100/6)
+            new_dst_arr = roi.Roi(input_cube, sample, line, size_x=new_size_x, size_y=new_size_y).clip()
+            axs[0].imshow(new_dst_arr, cmap='Greys_r');
+            axs[0].scatter(new_size_x, new_size_y, s=10, color='red');
+            axs[0].set_title("Absolute\n Unprojected Image \nw/ registered point");
 
-    if verbose:
-      fig, axs = plt.subplots(1, 3)
-      fig.set_size_inches((30,30))
-      darr = roi.Roi(input_cube.read_array(dtype=dst_type), sample, line, 100, 100).clip()
-      axs[1].imshow(darr, cmap="Greys_r")
-      axs[1].scatter(x=[darr.shape[1]/2], y=[darr.shape[0]/2], s=10, c="red")
-      axs[1].set_title("Original Registered Image")
+            dst_arr_org = input_cube.read_array(pixels=dst_pixels, dtype=dst_type)
+            ssample, lline = affine([x, y])[0]
+            axs[1].imshow(dst_arr_org, cmap="Greys_r")
+            axs[1].scatter(ssample, lline, s=10, color='blue')
+            axs[1].set_title("Relative\n Unprojected Image\nw/registered point")
+            plt.show()
 
-      axs[0].imshow(base_arr, cmap="Greys_r")
-      axs[0].scatter(x=[base_arr.shape[1]/2], y=[base_arr.shape[0]/2], s=10, c="red")
-      axs[0].set_title("Base")
-
-      pcm = axs[2].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
-      plt.show()
 
     return sample, line, dist, metric, temp_corrmap
 
@@ -809,18 +850,18 @@ def subpixel_register_point(pointid,
             destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
             destination_node.parent = ncg
 
+            print('geom_match image:', res.path)
             new_x, new_y, dist, metric,  _ = geom_match(source_node.geodata, destination_node.geodata,
                                                         source.sample, source.line,
                                                         template_kwargs=subpixel_template_kwargs,
                                                         phase_kwargs=iterative_phase_kwargs, size_x=100, size_y=100)
 
             if new_x == None or new_y == None:
-                measure.ignore = True # Unable to phase match
+                measure.ignore = True # Unable to geom match
                 currentlog['status'] = 'Failed to geom match.'
                 resultlog.append(currentlog)
                 continue
-            # cost = cost_func(dist, template_metric)
-            cost = 1
+            cost = cost_func(dist, template_metric)
 
             if cost <= threshold:
                 measure.ignore = True # Threshold criteria not met
