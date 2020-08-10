@@ -14,7 +14,6 @@ from autocnet.cg import change_detection as cd
 from autocnet.examples import get_path
 from autocnet.graph.network import CandidateGraph
 from autocnet.graph.edge import Edge
-from autocnet.spatial.isis import point_info
 from autocnet.utils import hirise
 from autocnet.utils.utils import bytescale
 from autocnet.examples import get_path

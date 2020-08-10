@@ -3,7 +3,9 @@ import warnings
 from cv2 import ORB_create, FastFeatureDetector_create
 import numpy as np
 import pandas as pd
+
 from autocnet.utils.utils import bytescale
+from autocnet.transformation import roi
 
 try:
     import cyvlfeat as vl
@@ -88,7 +90,8 @@ def extract_features(array, extractor_method='sift', extractor_parameters={}):
 
     return keypoints, descriptors
 
-def extract_most_interesting(image, extractor_method='orb', extractor_parameters={'nfeatures':10}):
+
+def extract_most_interesting(image, size=5, n=1, extractor_method='orb', extractor_parameters={'nfeatures': 15, 'edgeThreshold': 2}):
     """
     Given an image, extract the most interesting feature. Interesting is defined
     as the feature descriptor that has the maximum variance. By default, this func
@@ -98,6 +101,9 @@ def extract_most_interesting(image, extractor_method='orb', extractor_parameters
     ----------
     image : ndarray
             of DN values
+
+    n : int
+        Number of keypoints to return in increasing score value (1 mean return one keypoint with highest score)
 
     extractor_method : str
                        Any valid, autocnet extractor. Default (orb)
@@ -111,10 +117,14 @@ def extract_most_interesting(image, extractor_method='orb', extractor_parameters
        The keypoints row with the higest variance. The row has 'x' and 'y' columns to
        get the location.
     """
-    kps, desc = extract_features(image,
-                                 extractor_method=extractor_method,
-                                 extractor_parameters=extractor_parameters)
+    score_func = lambda r: np.var(roi.Roi(image, r.x, r.y, size, size).clip())
 
-    # Naively assume that the maximum variance is the most unique feature
-    vari = np.var(desc, axis=1)
-    return kps.iloc[np.argmax(vari)]
+    kps, desc = extract_features(image,
+                                  extractor_method=extractor_method,
+                                  extractor_parameters=extractor_parameters)
+
+    kps['score'] = kps.apply(score_func, axis=1)
+    kps = kps.sort_values(by=['score'], ascending=False).iloc[0:n]
+
+    return kps
+

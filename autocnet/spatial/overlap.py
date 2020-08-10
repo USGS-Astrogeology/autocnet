@@ -5,14 +5,16 @@ from redis import StrictRedis
 import numpy as np
 import pyproj
 import shapely
+from shapely import ops
 import sqlalchemy
 from plio.io.io_gdal import GeoDataset
 from pysis.exceptions import ProcessError
+from pysis import sugar
 
+from autocnet.spatial import project as pj
 from autocnet.cg import cg as compgeom
 from autocnet.graph.node import NetworkNode
 from autocnet.io.db.model import Images, Measures, Overlay, Points, JsonEncoder
-from autocnet.spatial import isis
 from autocnet.matcher.cpu_extractor import extract_most_interesting
 from autocnet.transformation.spatial import reproject, og2oc, oc2og
 from autocnet.transformation import roi
@@ -44,6 +46,7 @@ INSERT INTO overlay(intersections, geom) SELECT row.intersections, row.geom FROM
 def place_points_in_overlaps(size_threshold=0.0007,
                              distribute_points_kwargs={},
                              cam_type='csm',
+                             proj=None,
                              ncg=None):
     """
     Place points in all of the overlap geometries by back-projecing using
@@ -80,6 +83,7 @@ def place_points_in_overlap(overlap,
                             size=71,
                             distribute_points_kwargs={},
                             ncg=None,
+                            proj=None,
                             **kwargs):
     """
     Place points into an overlap geometry by back-projecing using sensor models.
@@ -122,7 +126,14 @@ def place_points_in_overlap(overlap,
 
     # Determine the point distribution in the overlap geom
     geom = overlap.geom
-    valid = compgeom.distribute_points_in_geom(geom, **distribute_points_kwargs, **kwargs)
+
+    if proj:
+      ngeom = ops.transform(proj, geom)
+      valid = compgeom.distribute_points_in_geom(ngeom, **distribute_points_kwargs, **kwargs)
+      valid = [proj(p[0], p[1], inverse=True) for p in valid] if valid else None
+    else:
+      valid = compgeom.distribute_points_in_geom(geom, **distribute_points_kwargs, **kwargs)
+
     if not valid:
         warnings.warn('Failed to distribute points in overlap')
         return []
@@ -150,7 +161,7 @@ def place_points_in_overlap(overlap,
         node = nodes[0]
         if cam_type == "isis":
             try:
-                line, sample = isis.ground_to_image(node["image_path"], lon, lat)
+                line, sample = pj.latlon_to_pixel(node["image_path"], lat=lat, lon=lon)
             except ProcessError as e:
                 if 'Requested position does not project in camera model' in e.stderr:
                     print(f'point ({geocent_lon}, {geocent_lat}) does not project to reference image {node["image_path"]}')
@@ -183,7 +194,7 @@ def place_points_in_overlap(overlap,
         # Get the updated lat/lon from the feature in the node
         if cam_type == "isis":
             try:
-                p = isis.point_info(node["image_path"], newsample, newline, point_type="image")
+                p = sugar.point_info(node["image_path"], newsample, newline, point_type="image")
             except ProcessError as e:
                 if 'Requested position does not project in camera model' in e.stderr:
                     print(node["image_path"])
@@ -244,7 +255,7 @@ def place_points_in_overlap(overlap,
                 sample, line = image_coord.samp, image_coord.line
             if cam_type == "isis":
                 try:
-                    line, sample = isis.ground_to_image(node["image_path"], updated_lon, updated_lat)
+                    line, sample = sugar.ground_to_image(node["image_path"], updated_lon, updated_lat)
                 except ProcessError as e:
                     if 'Requested position does not project in camera model' in e.stderr:
                         print(f'interesting point ({geocent_lon},{geocent_lat}) does not project to image {node["image_path"]}')

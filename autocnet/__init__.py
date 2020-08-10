@@ -6,6 +6,7 @@ import socket
 from sqlalchemy import create_engine, pool, orm
 from sqlalchemy.event import listen
 
+import setuptools
 from pkg_resources import get_distribution, DistributionNotFound
 
 try:

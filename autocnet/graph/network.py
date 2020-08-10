@@ -29,8 +29,9 @@ from plio.io.io_gdal import GeoDataset
 from plio.io.isis_serial_number import generate_serial_number
 from plio.io import io_controlnetwork as cnet
 
-
 from plurmy import Slurm
+
+from pysis.sugar import point_info
 
 import autocnet
 from autocnet.config_parser import parse_config
@@ -49,7 +50,6 @@ from autocnet.matcher import cross_instrument_matcher as cim
 from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
 from autocnet.spatial.overlap import compute_overlaps_sql
-from autocnet.spatial.isis import point_info
 from autocnet.transformation.spatial import reproject, og2oc
 
 #np.warnings.filterwarnings('ignore')

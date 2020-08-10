@@ -10,7 +10,6 @@ from plio.io.io_gdal import GeoDataset
 
 from matplotlib import pyplot as plt
 
-
 from autocnet.matcher.naive_template import pattern_match, pattern_match_autoreg
 from autocnet.matcher import ciratefi
 from autocnet.io.db.model import Measures, Points, Images, JsonEncoder
@@ -110,13 +109,11 @@ class Roi():
         """
 
         """
-
         other_size = other.raster_size
 
         # specifically not putting this in a try/except, this should never fail
-        mlat, mlon = spatial.isis.image_to_ground(self.geodataset.file_name, self.x, self.y)
-        p = spatial.isis.ground_to_image(other.file_name, mlon, mlat)[::-1]
-        centerx, centery = p
+        mlat, mlon = spatial.pixel_to_latlon(self.geodataset.file_name, sample=self.x, line=self.y)
+        centery, centerx = spatial.latlon_to_pixel(other.file_name, lon=mlon, lat=mlat)
 
         startx, stopx, starty, stopy = self.image_extent
         base_corners = [(startx, starty),
@@ -127,8 +124,9 @@ class Roi():
         dst_corners = []
         for x,y in base_corners:
             try:
-                lat, lon = spatial.isis.image_to_ground(self.geodataset.file_name, x, y)
-                dst_corners.append(spatial.isis.ground_to_image(other.file_name, lon, lat)[::-1])
+                lat, lon = spatial.pixel_to_latlon(self.geodataset.file_name, sample=x, line=y)
+                line, sample = spatial.latlon_to_pixel(other.file_name, lon=lon, lat=lat)
+                dst_corners.append((line, sample))
             except ProcessError as e:
                 if 'Requested position does not project in camera model' in e.stderr:
                     print(f'Skip geom_match; Region of interest corner located at ({lon}, {lat}) does not project to image {other.base_name}')
@@ -148,7 +146,6 @@ class Roi():
         dst_gcps[:,1] -= starty
 
         affine = tf.estimate_transform('affine', np.array([*base_gcps]), np.array([*dst_gcps]))
-
         otherRoi = Roi(other, centerx, centery, int(max(dst_gcps[:,0])//2), int(max(dst_gcps[:,1])//2))
         return otherRoi, affine
 

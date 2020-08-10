@@ -3,7 +3,6 @@ from math import modf, floor
 import numpy as np
 
 from skimage.feature import register_translation
-
 from skimage import transform as tf
 
 from matplotlib import pyplot as plt
@@ -12,6 +11,7 @@ from plio.io.io_gdal import GeoDataset
 from pysis.exceptions import ProcessError
 
 from autocnet.matcher.naive_template import pattern_match, pattern_match_autoreg
+from autocnet.matcher.cpu_extractor import extract_most_interesting
 from autocnet.matcher import ciratefi
 from autocnet.io.db.model import Measures, Points, Images, JsonEncoder
 from autocnet.graph.node import NetworkNode
@@ -418,12 +418,63 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(51, 51), reduction=11, c
     return dx, dy, metrics
 
 
+def find_common_feature(roi1, roi2, thresh=5, n=10, extractor_parameters={'nfeatures': 15, 'edgeThreshold': 1, 'scaleFactor':1.2}):
+    """
+    Find a single feature that is similar enough between the two images. Essentially, feature extraction and
+    basic matching between two regions of interst that are projected on eachother.
+
+    Parameters
+    ----------
+
+    roi1 : np.array
+           array object of image 1 used as the base
+    roi2 : np.array
+           array object of image 2, projected to match roi1
+    thresh : float
+             distance threshold, point pairs below this threshold are rejected.
+    n : int
+        nuber of candidate points to attempt to extract
+    geom : bool
+           If true, runs roi2 through the projection step. Otherwise, uses roi1 as is. Default is True
+
+    Returns
+    -------
+
+    : pd.Series
+      Single DF row containing the passsing point and associated metadata
+
+    """
+    p1 = extract_most_interesting(roi1, n=n, extractor_method='orb', extractor_parameters=extractor_parameters)
+    p2 = extract_most_interesting(roi2, n=n, extractor_method='orb', extractor_parameters=extractor_parameters)
+
+    if n == 1:
+        dist = np.linalg.norm([p1.x-p2.x, p1.y-p2.y])
+        return p1 if dist < thresh else None
+
+    # sometimes, the extractor fails to exract enough points from either one image or the other,
+    # so throw out the extra features to make them parrallel
+    n_matches = min(len(p1), len(p2))
+
+    # Drop index, enabling parallel subtraction
+    p1 = p1.iloc[:n_matches].reset_index(drop=True)
+    p2 = p2.iloc[:n_matches].reset_index(drop=True)
+
+    dist = np.linalg.norm(list(zip(p1.x-p2.x, p1.y-p2.y)), axis=1)
+    p1['dist'] = dist
+
+    # return the lower dist in the thresh
+    p1 = p1.sort_values(by=['dist'], ascending=True).iloc[0]
+    if p1['dist'] < thresh:
+        return p1
+
+
 def geom_match(base_cube,
                input_cube,
                bcenter_x,
                bcenter_y,
                size_x=60,
                size_y=60,
+               find_common_feature_kwargs={},
                template_kwargs={"image_size":(59,59), "template_size":(31,31)},
                phase_kwargs=None,
                verbose=True):
@@ -501,57 +552,6 @@ def geom_match(base_cube,
     if not isinstance(base_cube, GeoDataset):
         raise Exception("match cube must be a geodataset obj")
 
-    base_startx = int(bcenter_x - size_x)
-    base_starty = int(bcenter_y - size_y)
-    base_stopx = int(bcenter_x + size_x)
-    base_stopy = int(bcenter_y + size_y)
-
-    image_size = input_cube.raster_size
-    match_size = base_cube.raster_size
-
-    # for now, require the entire window resides inside both cubes.
-    if base_stopx > match_size[0]:
-        raise Exception(f"Window: {base_stopx} > {match_size[0]}, center: {bcenter_x},{bcenter_y}")
-    if base_startx < 0:
-        raise Exception(f"Window: {base_startx} < 0, center: {bcenter_x},{bcenter_y}")
-    if base_stopy > match_size[1]:
-        raise Exception(f"Window: {base_stopy} > {match_size[1]}, center: {bcenter_x},{bcenter_y} ")
-    if base_starty < 0:
-        raise Exception(f"Window: {base_starty} < 0, center: {bcenter_x},{bcenter_y}")
-
-    # specifically not putting this in a try/except, this should never fail
-    mlat, mlon = spatial.isis.image_to_ground(base_cube.file_name, bcenter_x, bcenter_y)
-    center_x, center_y = spatial.isis.ground_to_image(input_cube.file_name, mlon, mlat)[::-1]
-
-    base_corners = [(base_startx,base_starty),
-                    (base_startx,base_stopy),
-                    (base_stopx,base_stopy),
-                    (base_stopx,base_starty)]
-
-    dst_corners = []
-    for x,y in base_corners:
-        try:
-            lat, lon = spatial.isis.image_to_ground(base_cube.file_name, x, y)
-            dst_corners.append(spatial.isis.ground_to_image(input_cube.file_name, lon, lat)[::-1])
-        except ProcessError as e:
-            if 'Requested position does not project in camera model' in e.stderr:
-                print(f'Skip geom_match; Region of interest corner located at ({lon}, {lat}) does not project to image {input_cube.base_name}')
-                return None, None, None, None, None
-
-    base_gcps = np.array([*base_corners])
-    base_gcps[:,0] -= base_startx
-    base_gcps[:,1] -= base_starty
-
-    dst_gcps = np.array([*dst_corners])
-    start_x = dst_gcps[:,0].min()
-    start_y = dst_gcps[:,1].min()
-    stop_x = dst_gcps[:,0].max()
-    stop_y = dst_gcps[:,1].max()
-    dst_gcps[:,0] -= start_x
-    dst_gcps[:,1] -= start_y
-
-    affine = tf.estimate_transform('affine', np.array([*base_gcps]), np.array([*dst_gcps]))
-
     # read_array not getting correct type by default
     isis2np_types = {
             "UnsignedByte" : "uint8",
@@ -559,16 +559,29 @@ def geom_match(base_cube,
             "Real" : "float64"
     }
 
-    base_pixels = list(map(int, [base_corners[0][0], base_corners[0][1], size_x*2, size_y*2]))
     base_type = isis2np_types[pvl.load(base_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
-    base_arr = base_cube.read_array(pixels=base_pixels, dtype=base_type)
-
-    dst_pixels = list(map(int, [start_x, start_y, stop_x-start_x, stop_y-start_y]))
     dst_type = isis2np_types[pvl.load(input_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
-    dst_arr = input_cube.read_array(pixels=dst_pixels, dtype=dst_type)
 
-    dst_arr = tf.warp(dst_arr, affine)
-    dst_arr = dst_arr[:size_y*2, :size_x*2]
+    roi1 = roi.Roi(base_cube, bcenter_x, bcenter_y, size_x, size_y)
+    roi2, affine = roi1.geotransform(input_cube)
+
+    if roi2 is None:
+      raise Exception("Faled to project ROI")
+
+    bstart_x, _, bstart_y, _ = roi1.image_extent
+    dstart_x, _, dstart_y, _ = roi2.image_extent
+
+    dst_arr = tf.warp(roi2.clip(dtype=dst_type), affine, output_shape=(roi1.size_x*2, roi1.size_y*2), order=1)
+    base_arr = roi1.clip(dtype=base_type)
+
+    if find_common_feature_kwargs:
+        p = find_common_feature(base_arr, dst_arr, **find_common_feature_kwargs)
+        if p is None:
+            raise Exception("Failed find a common feature")
+        x,y = p.x, p.y
+    else:
+        # default to center
+        x,y = size_x, size_y
 
     if verbose:
       fig, axs = plt.subplots(1, 2)
@@ -578,56 +591,62 @@ def geom_match(base_cube,
       axs[1].imshow(bytescale(dst_arr), cmap="Greys_r")
       plt.show()
 
-
     # Run through one step of template matching then one step of phase matching
     # These parameters seem to work best, should pass as kwargs later
-    restemplate = subpixel_template(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
+    restemplate = subpixel_template(x, y, x, y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
 
     if phase_kwargs:
         _,_,maxcorr, temp_corrmap = restemplate
         sample_template, line_template = affine([restemplate[0], restemplate[1]])[0]
-        sample_template += start_x
-        line_template += start_y
+        sample_template += dstart_x
+        line_template += dstart_y
         dist_temp = np.linalg.norm([center_x-sample_template, center_y-line_template])
 
-        resphase = subpixel_phase(size_x, size_y, restemplate[0], restemplate[1], base_arr, dst_arr, **phase_kwargs)
+        resphase = subpixel_phase(x, y, restemplate[0], restemplate[1], base_arr, dst_arr, **phase_kwargs)
         x,y,(perror, pdiff) = resphase
         if x is None or y is None:
             return None, None, None, None, None
         sample, line = affine([x, y])[0]
-        sample += start_x
-        line += start_y
+        sample += dstart_x
+        line += dstart_y
         phase_dist = np.linalg.norm([sample_template-sample, line_template-line])
 
         dist = (dist_temp, dist_phase)
         metric = (maxcorr, perror, pdiff)
     else:
-        x,y,maxcorr,temp_corrmap = restemplate
-        if x is None or y is None:
+        newx,newy,maxcorr,temp_corrmap = restemplate
+        if newx is None or newy is None:
             return None, None, None, None, None
         metric = maxcorr
-        sample, line = affine([x, y])[0]
-        sample += start_x
-        line += start_y
-        dist = np.linalg.norm([center_x-sample, center_y-line])
-
+        sample, line = affine([newx, newy])[0]
+        sample += dstart_x
+        line += dstart_y
+        x += bstart_x
+        y += bstart_y
+        dist = np.linalg.norm([roi2.x-sample, roi2.y-line])
 
     if verbose:
-      fig, axs = plt.subplots(1, 3)
+      fig, axs = plt.subplots(1, 4)
       fig.set_size_inches((30,30))
-      darr = roi.Roi(input_cube.read_array(dtype=dst_type), sample, line, 100, 100).clip()
-      axs[1].imshow(darr, cmap="Greys_r")
-      axs[1].scatter(x=[darr.shape[1]/2], y=[darr.shape[0]/2], s=10, c="red")
-      axs[1].set_title("Original Registered Image")
+      darr = roi.Roi(input_cube.read_array(dtype=dst_type), sample, line, 400, 400).clip()
+
+      dst_arr[dst_arr==dst_arr.min()] = np.nan
+      axs[1].imshow(dst_arr, cmap="Greys_r")
+      axs[1].scatter(x=newx, y=newy, s=10, c="red")
+      axs[1].set_title("Projected Registered Image")
+
+      axs[2].imshow(darr, cmap="Greys_r")
+      axs[2].scatter(x=[darr.shape[1]/2], y=[darr.shape[0]/2], s=10, c="red")
+      axs[2].set_title("Original Registered Image")
 
       axs[0].imshow(base_arr, cmap="Greys_r")
-      axs[0].scatter(x=[base_arr.shape[1]/2], y=[base_arr.shape[0]/2], s=10, c="red")
+      axs[0].scatter(x=x-bstart_x, y=y-bstart_y, s=10, c="red")
       axs[0].set_title("Base")
 
-      pcm = axs[2].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
+      pcm = axs[3].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
       plt.show()
 
-    return sample, line, dist, metric, temp_corrmap
+    return sample, line, x, y, dist, metric, temp_corrmap
 
 
 def subpixel_register_measure(measureid,
@@ -740,6 +759,7 @@ def subpixel_register_measure(measureid,
 def subpixel_register_point(pointid,
                             iterative_phase_kwargs={},
                             subpixel_template_kwargs={},
+                            geom_match_kwargs = {},
                             cost_func=lambda x,y: 1/x**2 * y,
                             threshold=0.005,
                             ncg=None,
@@ -797,7 +817,6 @@ def subpixel_register_point(pointid,
         source_node.parent = ncg
 
         print(f'Attempting to subpixel register {len(measures)} measures for point {pointid}')
-
         resultlog = []
         for measure in measures[1:]:
             currentlog = {'measureid':measure.id,
@@ -809,16 +828,23 @@ def subpixel_register_point(pointid,
             destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
             destination_node.parent = ncg
 
-            new_x, new_y, dist, metric,  _ = geom_match(source_node.geodata, destination_node.geodata,
+            try:
+                new_x, new_y, dist, metric, _ = geom_match(source_node.geodata, destination_node.geodata,
                                                         source.sample, source.line,
                                                         template_kwargs=subpixel_template_kwargs,
-                                                        phase_kwargs=iterative_phase_kwargs, size_x=100, size_y=100)
+                                                        phase_kwargs=iterative_phase_kwargs,
+                                                        size_x=100, size_y=100)
+            except Exception as e:
+                currentlog['status'] = f"Failed to register measure {measure.id}"
+                measure.ignore = True
+                continue
 
             if new_x == None or new_y == None:
                 measure.ignore = True # Unable to phase match
                 currentlog['status'] = 'Failed to geom match.'
                 resultlog.append(currentlog)
                 continue
+
             # cost = cost_func(dist, template_metric)
             cost = 1
 

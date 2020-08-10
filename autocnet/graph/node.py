@@ -514,7 +514,7 @@ class NetworkNode(Node):
 
     def populate_db(self):
         with self.parent.session_scope() as session:
-            res = session.query(Images).filter(Images.path == kwargs['image_path']).first()
+            res = session.query(Images).filter(Images.path == self['image_path']).first()
             if res:
                 # Image already exists
                 return
@@ -522,21 +522,21 @@ class NetworkNode(Node):
         kpspath = io_keypoints.create_output_path(self.geodata.file_name)
         # Create the keypoints entry
         kps = Keypoints(path=kpspath, nkeypoints=0)
-        
+
         try:
             fp, cam_type = self.footprint
         except Exception as e:
             warnings.warn('Unable to generate image footprint.\n{}'.format(e))
             fp = None
         # Create the image
-        i = Images(name=kwargs['image_name'],
-                   path=kwargs['image_path'],
+        i = Images(name=self['image_name'],
+                   path=self['image_path'],
                    geom=fp,
                    keypoints=kps,
                    #cameras=cam,
                    serial=self.isis_serial,
                    cam_type=cam_type)
-        
+
         session = self.parent.Session()
         i.create(session)
         session.close()
@@ -563,7 +563,7 @@ class NetworkNode(Node):
             res = session.query(table_obj).filter(getattr(table_obj,key) == self['node_id']).first()
             session.expunge_all()
         return res
-    
+
     @property
     def parent(self):
         return getattr(self, '_parent', None)
@@ -590,7 +590,7 @@ class NetworkNode(Node):
     def keypoints(self, kps):
         session = Session()
         io_keypoints.to_hdf(self.keypoint_file, keypoints=kps)
-        
+
 
         res = self._from_db(Keypoints)
         with self.parent.session_scope() as session:
@@ -670,7 +670,7 @@ class NetworkNode(Node):
     def footprint(self):
         with self.parent.session_scope() as session:
             res = session.query(Images).filter(Images.id == self['node_id']).first()
-        
+
         # not in database, create footprint
         if res is None:
             # get ISIS footprint if possible
@@ -684,7 +684,7 @@ class NetworkNode(Node):
             else:
                 boundary = generate_boundary(self.geodata.raster_size[::-1])  # yx to xy
                 footprint_latlon = generate_latlon_footprint(self.camera,
-                                                             boundary, 
+                                                             boundary,
                                                              dem=parent.dem)
                 footprint_latlon.FlattenTo2D()
                 cam_type = 'csm'
