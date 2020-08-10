@@ -87,5 +87,5 @@ spatial:
 ### Working Directories ###
 directories:
     # The directory where VRTs should be created
-    vrt_dir: '/sratch/vrts'
+    vrt_dir: '/scratch/vrts'
 

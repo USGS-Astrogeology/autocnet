@@ -128,3 +128,54 @@ def extract_most_interesting(image, size=5, n=1, extractor_method='orb', extract
 
     return kps
 
+
+def find_common_feature(roi1, roi2, thresh=5, n=10, extractor_parameters={'nfeatures': 15, 'edgeThreshold': 1, 'scaleFactor':1.2}):
+    """
+    Find a single feature that is similar enough between the two images. Essentially, feature extraction and
+    basic matching between two regions of interst that are projected on eachother.
+
+    Parameters
+    ----------
+
+    roi1 : np.array
+           array object of image 1 used as the base
+    roi2 : np.array
+           array object of image 2, projected to match roi1
+    thresh : float
+             distance threshold, point pairs below this threshold are rejected.
+    n : int
+        nuber of candidate points to attempt to extract
+    geom : bool
+           If true, runs roi2 through the projection step. Otherwise, uses roi1 as is. Default is True
+
+    Returns
+    -------
+
+    : pd.Series
+      Single DF row containing the passsing point and associated metadata
+
+    """
+    p1 = extract_most_interesting(roi1, n=n, extractor_method='orb', extractor_parameters=extractor_parameters)
+    p2 = extract_most_interesting(roi2, n=n, extractor_method='orb', extractor_parameters=extractor_parameters)
+
+    if n == 1:
+        dist = np.linalg.norm([p1.x-p2.x, p1.y-p2.y])
+        return p1 if dist < thresh else None
+
+    # sometimes, the extractor fails to exract enough points from either one image or the other,
+    # so throw out the extra features to make them parrallel
+    n_matches = min(len(p1), len(p2))
+
+    # Drop index, enabling parallel subtraction
+    p1 = p1.iloc[:n_matches].reset_index(drop=True)
+    p2 = p2.iloc[:n_matches].reset_index(drop=True)
+
+    dist = np.linalg.norm(list(zip(p1.x-p2.x, p1.y-p2.y)), axis=1)
+    p1['dist'] = dist
+
+    # return the lower dist in the thresh
+    p1 = p1.sort_values(by=['dist'], ascending=True).iloc[0]
+    if p1['dist'] < thresh:
+        return p1
+
+

@@ -567,6 +567,47 @@ def geom_match(base_cube,
         newx,newy,maxcorr,temp_corrmap = restemplate
         if newx is None or newy is None:
             return None, None, None, None, None
+        if verbose:
+            image_size = template_kwargs['image_size']
+            template_size = template_kwargs['template_size']
+            image_size = check_image_size(image_size)
+            template_size = check_image_size(template_size)
+            image_chip = roi.Roi(bytescale(base_arr), size_x, size_y, size_x=image_size[0], size_y=image_size[1]).clip()
+            temp_chip = roi.Roi(bytescale(dst_arr), size_x, size_y, size_x=template_size[0], size_y=template_size[1]).clip()
+            fig, axs = plt.subplots(1, 3, figsize=(15,15))
+            axs[0].set_title("Image Chip")
+            axs[0].imshow(bytescale(image_chip), cmap="Greys_r")
+            axs[1].set_title("Template Chip")
+            axs[1].imshow(bytescale(temp_chip), cmap="Greys_r")
+            pcm = axs[2].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
+            plt.show()
+
+            fig, axs = plt.subplots(1, 3, figsize=(15,15))
+            axs[0].set_title("Base")
+            axs[0].imshow(bytescale(base_arr), cmap="Greys_r")
+            axs[0].scatter(size_x, size_y, s=10, color='red')
+            axs[0].plot([0, size_x*2], [size_y, size_y], linewidth=0.75, color='red')
+            axs[0].plot([size_x, size_x], [0, size_y*2], linewidth=0.75, color='red')
+            axs[0].set_xlim([0, base_arr.shape[0]])
+            axs[0].set_ylim([0, base_arr.shape[1]])
+            axs[1].set_title("Projected Image\n w/ original point")
+            axs[1].imshow(bytescale(dst_arr[2:]), cmap="Greys_r")
+            axs[1].scatter(size_x, size_y, s=10, color='red')
+            axs[1].plot([0, size_x*2], [size_y, size_y], linewidth=0.75, color='red')
+            axs[1].plot([size_x, size_x], [0, size_y*2], linewidth=0.75, color='red')
+            axs[1].set_xlim([0, dst_arr[2:].shape[0]])
+            axs[1].set_ylim([0, dst_arr[2:].shape[1]])
+            axs[2].set_title("Projected Image\n w/ registered point")
+            axs[2].imshow(bytescale(dst_arr[2:]), cmap="Greys_r")
+            axs[2].scatter(x, y, s=10, color='red')
+            axs[2].plot([0, size_x*2], [y, y], linewidth=0.75, color='red')
+            axs[2].plot([x, x], [0, size_y*2], linewidth=0.75, color='red')
+            axs[2].set_xlim([0, dst_arr[2:].shape[0]])
+            axs[2].set_ylim([0, dst_arr[2:].shape[1]])
+
+            plt.show()
+
+
         metric = maxcorr
         sample, line = affine([newx, newy])[0]
         sample += dstart_x
@@ -576,26 +617,21 @@ def geom_match(base_cube,
         dist = np.linalg.norm([roi2.x-sample, roi2.y-line])
 
     if verbose:
-      fig, axs = plt.subplots(1, 4)
-      fig.set_size_inches((30,30))
-      darr = roi.Roi(input_cube.read_array(dtype=dst_type), sample, line, 400, 400).clip()
+        fig, axs = plt.subplots(1, 2, figsize=(10,5))
+        # clip the image around the new line, sample
+        new_size_x = round(size_x*100/6) # 100/6 is a scaling between tehmis and CTX resolution
+        new_size_y = round(size_y*100/6)
+        new_dst_arr = roi.Roi(input_cube, sample, line, size_x=new_size_x, size_y=new_size_y).clip()
+        axs[0].imshow(new_dst_arr, cmap='Greys_r');
+        axs[0].scatter(new_size_x, new_size_y, s=10, color='red');
+        axs[0].set_title("Absolute\n Unprojected Image \nw/ registered point");
 
-      dst_arr[dst_arr==dst_arr.min()] = np.nan
-      axs[1].imshow(dst_arr, cmap="Greys_r")
-      axs[1].scatter(x=newx, y=newy, s=10, c="red")
-      axs[1].set_title("Projected Registered Image")
-
-      axs[2].imshow(darr, cmap="Greys_r")
-      axs[2].scatter(x=[darr.shape[1]/2], y=[darr.shape[0]/2], s=10, c="red")
-      axs[2].set_title("Original Registered Image")
-
-      axs[0].imshow(base_arr, cmap="Greys_r")
-      axs[0].scatter(x=x-bstart_x, y=y-bstart_y, s=10, c="red")
-      axs[0].set_title("Base")
-
-      pcm = axs[3].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
-      plt.show()
-
+        dst_arr_org = input_cube.read_array(pixels=dst_pixels, dtype=dst_type)
+        ssample, lline = affine([x, y])[0]
+        axs[1].imshow(dst_arr_org, cmap="Greys_r")
+        axs[1].scatter(ssample, lline, s=10, color='blue')
+        axs[1].set_title("Relative\n Unprojected Image\nw/registered point")
+        plt.show()
     return sample, line, x, y, dist, metric, temp_corrmap
 
 
@@ -790,13 +826,11 @@ def subpixel_register_point(pointid,
                 continue
 
             if new_x == None or new_y == None:
-                measure.ignore = True # Unable to phase match
+                measure.ignore = True # Unable to geom match
                 currentlog['status'] = 'Failed to geom match.'
                 resultlog.append(currentlog)
                 continue
-
-            # cost = cost_func(dist, template_metric)
-            cost = 1
+            cost = cost_func(dist, template_metric)
 
             if cost <= threshold:
                 measure.ignore = True # Threshold criteria not met
