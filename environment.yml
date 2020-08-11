@@ -26,7 +26,7 @@ dependencies:
   - pyproj
   - pytest
   - pytest-cov
-  - pysis
+  - pysis >= 0.6.4
   - scikit-image
   - scikit-learn
   - scipy<=1.2.1
