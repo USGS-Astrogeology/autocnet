@@ -125,7 +125,6 @@ def generate_ground_points(Session, ground_mosaic, nspts_func=lambda x: int(roun
 
         newlat, newlon = pj.pixel_to_latlon(ground_mosaic, sample=newsample, line=newline)
         p = Point(newlon, newlat)
-        print(p)
         if not (xy_in_polygon(p.x, p.y, fp_poly)):
                 print('Interesting point not in mosaic area, ignore')
                 continue
@@ -277,9 +276,7 @@ def propagate_point(Session,
                     lat, lon = pj.pixel_to_latlon(base_image.file_name, sample=bx, line=by)
                     p = Point(lon, lat)
 
-                print("metrics", metrics)
             except Exception as e:
-                print("Failed in loop: ", e)
                 match_results.append(e)
                 continue
 
@@ -296,9 +293,7 @@ def propagate_point(Session,
 
     # column index 3 is the metric returned by the geom matcher
     best_results = np.asarray([match for match in match_results if cost(match_results[:,3], match[3])])
-    print(best_results)
     if best_results.shape[0] == 0:
-        print("cost too low")
         # no matches satisfying cost
         return new_measures
 
@@ -448,7 +443,6 @@ def propagate_control_network(Session,
             continue
         constrained_net.extend(gp_measures)
 
-    print(constrained_net)
     ground = gpd.GeoDataFrame.from_dict(constrained_net).set_geometry('point')
     groundpoints = ground.groupby('pointid').groups
 
