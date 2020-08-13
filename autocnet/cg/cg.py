@@ -515,13 +515,13 @@ def distribute_points_in_geom(geom, method="classic",
            The geometry object
 
     nspts_func : obj
-                 Function taking a Number and returning an int
+                 Function taking a Number and returning an int, if proj is passed in, these have to be in projection coords
 
     ewpts_func : obj
-                 Function taking a Number and returning an int
+                 Function taking a Number and returning an int, if proj is passed in, these have to be in projection coords
 
     proj : pyproj.Proj
-           pyproj Projection object used to project the polygon into before placeing points
+           pyproj Projection object used to project the polygon into before placing points
     Returns
     -------
     valid : list

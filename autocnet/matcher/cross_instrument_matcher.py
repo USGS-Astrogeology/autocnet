@@ -103,7 +103,6 @@ def generate_ground_points(Session, ground_mosaic, nspts_func=lambda x: int(roun
     for i, coord in enumerate(coords):
         # res = ground_session.execute(formated_sql)
         p = Point(*coord)
-        print(f'point {i}')
 
         line, sample = pj.latlon_to_pixel(ground_mosaic, lon=p.x, lat=p.y)
         lat, lon = pj.pixel_to_latlon(ground_mosaic, sample=sample, line=line)
