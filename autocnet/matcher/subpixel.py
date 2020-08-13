@@ -815,7 +815,7 @@ def subpixel_register_point(pointid,
             destination_node.parent = ncg
 
             try:
-                new_x, new_y, dist, metric, _ = geom_match(source_node.geodata, destination_node.geodata,
+                new_x, new_y, _, _, dist, metric, _ = geom_match(source_node.geodata, destination_node.geodata,
                                                         source.sample, source.line,
                                                         template_kwargs=subpixel_template_kwargs,
                                                         phase_kwargs=iterative_phase_kwargs,
