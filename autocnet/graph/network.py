@@ -1499,15 +1499,6 @@ class NetworkCandidateGraph(CandidateGraph):
             warnings.warn('Use of filters and query_string are mutually exclusive.')
 
         with self.session_scope() as session:
-            query = session.query(query_obj)
-
-            # Now apply any filters that might be passed in.
-            for attr, value in filters.items():
-                query = query.filter(getattr(query_obj, attr)==value)
-
-            # Execute the query to get the rows to be processed
-            res = query.all()
-
             # Support either an SQL query string, or a simple dict based query
             if query_string:
                 res = session.execute(query_string).fetchall()
@@ -1519,7 +1510,7 @@ class NetworkCandidateGraph(CandidateGraph):
                     query = query.filter(getattr(query_obj, attr)==value)
 
                 # Execute the query to get the rows to be processed
-                res = query.all()
+                res = query.order_by(query_obj.id).all()
 
             if len(res) == 0:
                 raise ValueError('Query returned zero results.')
@@ -1533,9 +1524,10 @@ class NetworkCandidateGraph(CandidateGraph):
                 msg['config'] = self.config  # Hacky for now, just passs the whole config dict
                 self.redis_queue.rpush(self.processing_queue,
                                     json.dumps(msg, cls=JsonEncoder))
+            assert len(res) == self.queue_length
         return len(res)
 
-    def apply(self, function, on='edge', args=(), walltime='01:00:00', chunksize=1000, filters={}, query_string='', **kwargs):
+    def apply(self, function, on='edge', args=(), walltime='01:00:00', chunksize=1000, arraychunk=25, filters={}, query_string='', **kwargs):
         """
         A mirror of the apply function from the standard CandidateGraph object. This implementation
         dispatches the job to the cluster as an independent operation instead of applying an arbitrary function
@@ -1566,6 +1558,10 @@ class NetworkCandidateGraph(CandidateGraph):
                     The maximum number of jobs to submit per job array. Defaults to 1000.
                     This number may be have an actualy higher or lower limited based on
                     how the cluster has been configured.
+
+        arraychunk : int
+                     The number of concurrent jobs to run per job array. e.g. chunksize=100 and
+                     arraychunk=25 gives the job array 1-100%25
 
         filters : dict
                   Of simple filters to apply on database rows where the key is the attribute and
@@ -1640,7 +1636,7 @@ class NetworkCandidateGraph(CandidateGraph):
                      time=walltime,
                      partition=self.config['cluster']['queue'],
                      output=self.config['cluster']['cluster_log_dir']+f'/autocnet.{function}-%j')
-        submitter.submit(array='1-{}%25'.format(job_counter), chunksize=chunksize)
+        submitter.submit(array='1-{}%{}'.format(job_counter,arraychunk), chunksize=chunksize)
         return job_counter
 
     def generic_callback(self, msg):
@@ -1743,8 +1739,8 @@ class NetworkCandidateGraph(CandidateGraph):
         # Ingest isis control net as a df and do some massaging
         data = cnet.from_isis(path)
         data_to_update = data[['id', 'serialnumber', 'measureJigsawRejected', 'sampleResidual', 'lineResidual', 'samplesigma', 'linesigma', 'adjustedCovar', 'apriorisample', 'aprioriline']]
-        data_to_update['adjustedCovar'] = data_to_update['adjustedCovar'].apply(lambda row : list(row))
-        data_to_update['id'] = data_to_update['id'].apply(lambda row : int(row))
+        data_to_update.loc[:,'adjustedCovar'] = data_to_update['adjustedCovar'].apply(lambda row : list(row))
+        data_to_update.loc[:,'id'] = data_to_update['id'].apply(lambda row : int(row))
 
         # Generate a temp table, update the real table, then drop the temp table
         data_to_update.to_sql('temp_measures', self.engine, if_exists='replace', index_label='serialnumber', index = False)
@@ -1821,6 +1817,7 @@ class NetworkCandidateGraph(CandidateGraph):
             images = session.query(Images).all()
             for obj in images:
                 oldpath = obj.path
+                print(f'graph/network line 1820 oldpath: {oldpath}')
                 filename = os.path.basename(oldpath)
                 obj.path = os.path.join(newdir, filename)
                 if oldpath != obj.path:
