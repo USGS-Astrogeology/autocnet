@@ -1817,7 +1817,6 @@ class NetworkCandidateGraph(CandidateGraph):
             images = session.query(Images).all()
             for obj in images:
                 oldpath = obj.path
-                print(f'graph/network line 1820 oldpath: {oldpath}')
                 filename = os.path.basename(oldpath)
                 obj.path = os.path.join(newdir, filename)
                 if oldpath != obj.path:
