@@ -784,6 +784,7 @@ def subpixel_register_measure(measureid,
 def subpixel_register_point(pointid,
                             iterative_phase_kwargs={},
                             subpixel_template_kwargs={},
+                            size_x=100, size_y=100,
                             cost_func=lambda x,y: 1/x**2 * y,
                             threshold=0.005,
                             ncg=None,
@@ -858,7 +859,7 @@ def subpixel_register_point(pointid,
                                                         source.sample, source.line,
                                                         template_kwargs=subpixel_template_kwargs,
                                                         phase_kwargs=iterative_phase_kwargs,
-                                                        size_x=100, size_y=100)
+                                                        size_x=size_y, size_y=size_x)
             except Exception as e:
                 print(f'geom_match failed on measure {measure.id} with exception -> {e}')
                 measure.ignore = True

@@ -379,6 +379,7 @@ class Measures(BaseMixin, Base):
     aprioriline = Column(Float)
     sampler = Column(Float)  # Sample Residual
     liner = Column(Float)  # Line Residual
+    residual = Column(Float)
     jigreject = Column("measureJigsawRejected", Boolean, default=False)  # jigsaw rejected
     samplesigma = Column(Float)
     linesigma = Column(Float)

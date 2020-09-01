@@ -1,5 +1,7 @@
 import pandas as pd
 import shapely.wkb as swkb
+from plio.io import io_controlnetwork as cnet
+from autocnet.io.db.model import Measures
 
 
 def db_to_df(engine, sql = """
@@ -85,3 +87,60 @@ ORDER BY measures."pointid", measures."id";
                 df.iloc[i] = row
 
         return df
+
+
+def update_measure_from_jigsaw(point, path, ncg=None, **kwargs):
+    """
+    Updates the database (associated with ncg) with a single measure's
+    jigsaw line and sample residuals.
+
+    Parameters
+    ----------
+    ncg     : obj
+              the network candidate graph associated with the measure/database
+              being updated.
+
+    path    : str
+              absolute path and network name of control network used to update the measure/database.
+
+    point   : obj
+              point identifying object as defined by autocnet.io.db.model.Points
+    """
+
+    if not ncg.Session:
+        BrokenPipeError('This function requires a database session from a NetworkCandidateGraph.')
+
+    data = cnet.from_isis(path)
+    data_to_update = data[['id', 'serialnumber', 'measureJigsawRejected', 'sampleResidual', 'lineResidual', 'samplesigma', 'linesigma', 'adjustedCovar', 'apriorisample', 'aprioriline']]
+    data_to_update.loc[:,'adjustedCovar'] = data_to_update['adjustedCovar'].apply(lambda row : list(row))
+    data_to_update.loc[:,'id'] = data_to_update['id'].apply(lambda row : int(row))
+
+    res = data_to_update[(data_to_update['id']==point.id)]
+    if res.empty:
+        print(f'Point {point.id} does not exist in input network.')
+        return
+
+    # update
+    resultlog = []
+    with ncg.session_scope() as session:
+        for row in res.iterrows():
+            row = row[1]
+            currentlog = {'measure':row["serialnumber"],
+                          'status':''}
+
+            residual = np.linalg.norm([row["sampleResidual"], row["lineResidual"]])
+            session.query(Measures).\
+                    filter(Measures.pointid==point.id, Measures.serial==row["serialnumber"]).\
+                    update({"jigreject": row["measureJigsawRejected"],
+                        "sampler": row["sampleResidual"],
+                        "liner": row["lineResidual"],
+                        "residual": residual,
+                        "samplesigma": row["samplesigma"],
+                        "linesigma": row["linesigma"],
+                        "apriorisample": row["apriorisample"],
+                        "aprioriline": row["aprioriline"]})
+            currentlog['status'] = 'success'
+            resultlog.append(currentlog)
+
+        session.commit()
+
