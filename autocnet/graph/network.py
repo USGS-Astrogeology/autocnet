@@ -1527,7 +1527,7 @@ class NetworkCandidateGraph(CandidateGraph):
             assert len(res) == self.queue_length
         return len(res)
 
-    def apply(self, function, on='edge', args=(), walltime='01:00:00', chunksize=1000, arraychunk=25, filters={}, query_string='', **kwargs):
+    def apply(self, function, on='edge', args=(), walltime='01:00:00', chunksize=1000, arraychunk=25, filters={}, query_string='', reapply=False, **kwargs):
         """
         A mirror of the apply function from the standard CandidateGraph object. This implementation
         dispatches the job to the cluster as an independent operation instead of applying an arbitrary function
@@ -1575,6 +1575,9 @@ class NetworkCandidateGraph(CandidateGraph):
                        This is usable only when applying to measures, points, or overlays.
                        The query_string can not be used with a filter and is appropriate for
                        any queries.
+        reapply : bool
+                  Flag indicating whether you want to resubmit jobs that are still on the queue
+                  after an initial apply due to an slurm launching errors.
 
         kwargs : dict
                  Of keyword arguments passed to the function being applied
@@ -1602,16 +1605,19 @@ class NetworkCandidateGraph(CandidateGraph):
             on='overlaps', distribute_points_kwargs=distribute_points_kwargs)
         """
 
-        # Determine which obj will be called
-        onobj = self.apply_iterable_options[on]
-        res = []
+        job_counter = self.queue_length()
 
-        if not isinstance(function, (str, bytes)):
-            raise TypeError('Function argument must be a string or bytes object.')
-        if isinstance(onobj, DeclarativeMeta):
-            job_counter = self._push_row_messages(onobj, on, function, walltime, filters, query_string, args, kwargs)
-        else:
-            job_counter = self._push_obj_messages(onobj, function, walltime, args, kwargs)
+        if not reapply:
+            # Determine which obj will be called
+            onobj = self.apply_iterable_options[on]
+            res = []
+
+            if not isinstance(function, (str, bytes)):
+                raise TypeError('Function argument must be a string or bytes object.')
+            if isinstance(onobj, DeclarativeMeta):
+                job_counter = self._push_row_messages(onobj, on, function, walltime, filters, query_string, args, kwargs)
+            else:
+                job_counter = self._push_obj_messages(onobj, function, walltime, args, kwargs)
 
 
         # Submit the jobs

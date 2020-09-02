@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 import shapely.wkb as swkb
 from plio.io import io_controlnetwork as cnet
 from autocnet.io.db.model import Measures
@@ -96,15 +97,15 @@ def update_measure_from_jigsaw(point, path, ncg=None, **kwargs):
 
     Parameters
     ----------
-    ncg     : obj
-              the network candidate graph associated with the measure/database
-              being updated.
+    point   : obj
+              point identifying object as defined by autocnet.io.db.model.Points
 
     path    : str
               absolute path and network name of control network used to update the measure/database.
 
-    point   : obj
-              point identifying object as defined by autocnet.io.db.model.Points
+    ncg     : obj
+              the network candidate graph associated with the measure/database
+              being updated.
     """
 
     if not ncg.Session:
@@ -143,4 +144,4 @@ def update_measure_from_jigsaw(point, path, ncg=None, **kwargs):
             resultlog.append(currentlog)
 
         session.commit()
-
+    return resultlog
