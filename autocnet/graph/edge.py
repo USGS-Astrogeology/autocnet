@@ -1010,7 +1010,9 @@ class NetworkEdge(Edge):
                       Measures.sample,
                       Measures.line,
                       Measures.measuretype,
-                      Measures.imageid).\
+                      Measures.imageid,
+                      Measures.apriorisample,
+                      Measures.aprioriline).\
                 filter(Points.ignore==ignore_point,
                        Measures.ignore==ignore_measure,
                        Measures.jigreject==rejected_jigsaw,
@@ -1019,10 +1021,13 @@ class NetworkEdge(Edge):
 
             df = pd.read_sql(q.statement, self.parent.engine)
             matches = []
-            columns = ['point_id', 'source_measure_id', 'destin_measure_id', 'source', 'source_idx', 'destination', 'destination_idx',
-                   'lat', 'lon', 'geom', 'source_x', 'source_y', 'destination_x',
-                   'destination_y', 'shift_x', 'shift_y', 'original_destination_x',
-                   'original_destination_y']
+            columns = ['point_id', 'source_measure_id', 'destin_measure_id', 'source',
+                       'source_idx', 'destination', 'destination_idx',
+                       'lat', 'lon', 'geom',
+                       'source_x', 'source_y', 'source_apriori_x', 'source_apriori_y',
+                       'destination_x','destination_y', 'destination_apriori_x', 'destination_apriori_y', 
+                       'shift_x', 'shift_y', 'original_destination_x',
+                       'original_destination_y']
 
         def net2matches(grp, matches, source, destin):
             # Grab the image ids and then get the cartesian product of the ids to know which
@@ -1035,7 +1040,8 @@ class NetworkEdge(Edge):
             match = [int(imagea.id), int(imagea.mid), int(imageb.mid),
                      source, 0, destin, 0,
                      None, None, None,
-                     imagea['sample'], imagea['line'], imageb['sample'], imageb['line'],
+                     imagea['sample'], imagea['line'], imagea['apriorisample'], imagea['aprioriline'],
+                     imageb['sample'], imageb['line'], imageb['apriorisample'], imageb['aprioriline'],
                      None, None, None, None]
             matches.append(match)
 
