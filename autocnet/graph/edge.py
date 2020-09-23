@@ -805,13 +805,12 @@ class NetworkEdge(Edge):
         with self.parent.session_scope() as session:
             res = session.query(Costs).filter(Costs.match_id.in_(ids)).all()
             #qf = q.filter(Costs.match_id.in_(ids))
-        if res:
-        # Parse the JSON dicts in the cost field into a full dimension dataframe
-            costs = {r.match_id:r._cost for r in res}
-            df = pd.DataFrame.from_records(costs).T  # From records is important because from_dict drops rows with empty dicts
-        else:
-            df = pd.DataFrame(index=ids)
-
+            if res:
+                # Parse the JSON dicts in the cost field into a full dimension dataframe
+                costs = {r.match_id:r._cost for r in res}
+                df = pd.DataFrame.from_records(costs).T  # From records is important because from_dict drops rows with empty dicts
+            else:
+                df = pd.DataFrame(index=ids)
         df.index.name = 'match_id'
         return DbDataFrame(df, parent=self, name='costs')
 
