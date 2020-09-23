@@ -98,13 +98,15 @@ def compute_reprojection_error(F, x, x1, index=None):
               n,1 vector of reprojection errors
     """
 
-    if not x.shape[1] == 3 or not x1.shape[1] == 3:
-        raise ValueError('The input points must be homogenous with shape (n,3)')
-
     if isinstance(x, (pd.Series, pd.DataFrame)):
         x = x.values
     if isinstance(x1, (pd.Series, pd.DataFrame)):
         x1 = x1.values
+
+    if x.shape[1] != 3:
+        x = make_homogeneous(x)
+    if x1.shape[1] != 3:
+        x1 = make_homogeneous(x1)
 
     # Compute the epipolar lines
     lines1 = compute_epipolar_lines(F,x)
