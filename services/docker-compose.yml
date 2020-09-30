@@ -16,7 +16,7 @@ services:
      - default
   
   admin:
-    image: dpage/pgadmin4:latest
+    image: dpage/pgadmin4:4.1
     environment:
       - PGADMIN_DEFAULT_EMAIL=blah@blah.com
       - PGADMIN_DEFAULT_PASSWORD=thepassword
@@ -32,7 +32,7 @@ services:
       - default
       - traefik-public
     volumes:
-      - /data/big/pgadmin:/var/lib/pgadmin
+        - pgadm:/var/lib/pgadmin:rw
 
   pgbouncer:
     image: brainsam/pgbouncer
