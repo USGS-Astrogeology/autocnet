@@ -145,3 +145,53 @@ def update_measure_from_jigsaw(point, path, ncg=None, **kwargs):
 
         session.commit()
     return resultlog
+
+
+
+from scipy.stats import zscore
+from plio.io.io_gdal import GeoDataset
+from autocnet.io.db.model import Images
+import pvl
+def null_measure_ignore(point, size_x, size_y, valid_tol, verbose=False, ncg=None, **kwargs):
+    isis2np_types = {
+            "UnsignedByte" : "uint8",
+            "SignedWord" : "int16",
+            "Real" : "float64"}
+
+    resultlog = []
+    with ncg.session_scope() as session:
+        pid = point.id
+        print('point id: ', pid)
+        measures = session.query(Measures).filter(Measures.pointid==pid).order_by(Measures.id).all()
+        print('number of measures: ', len(measures))
+        for measure in measures:
+            currentlog = {'measureid': measure.id,
+                          'status': 'No change'}
+            m_imageid = measure.imageid
+            m_image = session.query(Images).filter(Images.id==m_imageid).one()
+            cube = GeoDataset(m_image.path)
+
+            center_x = measure.sample
+            center_y = measure.line
+
+            start_x = int(center_x - size_x)
+            start_y = int(center_y - size_y)
+            stop_x = int(center_x + size_x)
+            stop_y = int(center_y + size_y)
+
+            pixels = list(map(int, [start_x, start_y, stop_x-start_x, stop_y-start_y]))
+            dtype = isis2np_types[pvl.load(cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
+            arr = cube.read_array(pixels=pixels, dtype=dtype)
+
+            z = zscore(arr, axis=0)
+            nn= sum(sum(np.isnan(z)))
+            percent_valid = (1 - nn/z.size)*100
+            if percent_valid < valid_tol:
+                session.query(Measures).\
+                        filter(Measures.pointid==pid, Measures.id==measure.id).\
+                        update({'ignore': True})
+                currentlog['status'] = 'Ignored'
+
+            resultlog.append(currentlog)
+    return resultlog
+

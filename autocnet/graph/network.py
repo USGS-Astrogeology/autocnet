@@ -1351,7 +1351,11 @@ class NetworkCandidateGraph(CandidateGraph):
                 'overlaps': Overlay,
                 'overlap' : Overlay,
                 'o' :Overlay,
-                4: Overlay
+                4: Overlay,
+                'image': Images,
+                'images': Images,
+                'i': Images,
+                5: Images
             }
 
     def config_from_file(self, filepath):
@@ -1428,7 +1432,7 @@ class NetworkCandidateGraph(CandidateGraph):
     def _setup_edges(self):
         with self.session_scope() as session:
             res = session.query(Edges).all()
-            
+
             edges = []
             for e in res:
                 s = e.source
@@ -1436,7 +1440,7 @@ class NetworkCandidateGraph(CandidateGraph):
                 if s > d:
                     s,d = d,s
                 edges.append((s,d))
-            
+
             to_add = []
             for e in self.edges:
                 s = e[0]
@@ -1568,7 +1572,18 @@ class NetworkCandidateGraph(CandidateGraph):
                                    json.dumps(msg, cls=JsonEncoder))
         return job_counter + 1
 
-    def apply(self, function, on='edge', args=(), walltime='01:00:00', chunksize=1000, arraychunk=25, filters={}, query_string='', reapply=False, **kwargs):
+    def apply(self,
+            function,
+            on='edge',
+            args=(),
+            walltime='01:00:00',
+            chunksize=1000,
+            arraychunk=25,
+            filters={},
+            query_string='',
+            reapply=False,
+            log_dir=None,
+            **kwargs):
         """
         A mirror of the apply function from the standard CandidateGraph object. This implementation
         dispatches the job to the cluster as an independent operation instead of applying an arbitrary function
@@ -1622,6 +1637,9 @@ class NetworkCandidateGraph(CandidateGraph):
         reapply : bool
                   Flag indicating whether you want to resubmit jobs that are still on the queue
                   after an initial apply due to an slurm launching errors.
+        log_dir: str
+                 absolute path of directory used to store the jobs logs, defaults to location
+                 indicated in the configuration file.
 
         kwargs : dict
                  Of keyword arguments passed to the function being applied
@@ -1648,6 +1666,8 @@ class NetworkCandidateGraph(CandidateGraph):
         >>> njobs = ncg.apply('spatial.overlap.place_points_in_overlap',\
             on='overlaps', distribute_points_kwargs=distribute_points_kwargs)
         """
+        if log_dir is None:
+            log_dir=self.config['cluster']['cluster_log_dir']
 
         job_counter = self.queue_length
 
@@ -1657,7 +1677,7 @@ class NetworkCandidateGraph(CandidateGraph):
                 onobj = self.apply_iterable_options[on]
             elif isinstance(on, list):
                 onobj = on
-                
+
             # This method support arbitrary functions. The name needs to be a string for the log name.
             if not isinstance(function, (str, bytes)):
                 function_name = function.__name__
@@ -1695,7 +1715,7 @@ class NetworkCandidateGraph(CandidateGraph):
                      mem_per_cpu=self.config['cluster']['processing_memory'],
                      time=walltime,
                      partition=self.config['cluster']['queue'],
-                     output=self.config['cluster']['cluster_log_dir']+f'/autocnet.{function_name}-%j')
+                     output=log_dir+f'/autocnet.{function}-%j')
         submitter.submit(array='1-{}%{}'.format(job_counter,arraychunk), chunksize=chunksize)
         return job_counter
 
@@ -2019,7 +2039,7 @@ class NetworkCandidateGraph(CandidateGraph):
 
         # Add nodes that do not overlap any images
         self.__init__(adjacency, node_id_map=adjacency_lookup)
-        
+
         # Setup the edges
         self._setup_edges()
 

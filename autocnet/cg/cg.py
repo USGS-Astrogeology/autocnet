@@ -11,7 +11,7 @@ from skimage import transform as tf
 from scipy.spatial import ConvexHull
 from scipy.spatial import Voronoi
 import shapely.geometry
-from shapely.geometry import Polygon, Point
+from shapely.geometry import Polygon, MultiPolygon, Point
 from shapely.affinity import scale
 from shapely import wkt
 
@@ -269,13 +269,14 @@ def nearest(pt, search):
 
 def find_side(side, Session):
     """
+    Find the east or west most side of east or west most cube in Session database
+
     Parameters
     ----------
     side: str
             describes which extrema you cube you want; can equal 'east' or 'west'
 
-    geom : obj
-           A shapely geom object
+    Session: database session
 
     Returns
     -------
@@ -393,8 +394,8 @@ def distribute_points_classic(geom, nspts, ewpts, **kwargs):
     valid : list
             of point coordinates in the form [(x1,y1), (x2,y2), ..., (xn, yn)]
     """
-    geom_coords = np.column_stack(geom.exterior.xy)
 
+    geom_coords = np.column_stack(geom.envelope.exterior.xy)
     coords = np.array(list(zip(*geom.envelope.exterior.xy))[:-1])
 
     ll = coords[0]
@@ -458,6 +459,7 @@ def distribute_points_new(geom, nspts, ewpts, Session):
             of point coordinates in the form [(x1,y1), (x2,y2), ..., (xn, yn)]
     """
     coords = np.array(list(zip(*geom.envelope.exterior.xy))[:-1])
+
     ll = coords[0]
     lr = coords[1]
     ur = coords[2]

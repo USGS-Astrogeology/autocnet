@@ -54,7 +54,7 @@ def main(msg):
     ncg.config_from_dict(msg['config'])
     if msg['along'] in ['node', 'edge']:
         obj = _instantiate_obj(msg, ncg)
-    elif msg['along'] in ['points', 'measures', 'overlaps']:
+    elif msg['along'] in ['points', 'measures', 'overlaps', 'images']:
         obj = _instantiate_row(msg, ncg)
     else:
         obj = msg['along']

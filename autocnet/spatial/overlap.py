@@ -297,21 +297,20 @@ def place_points_in_image(image,
     if cam_type not in cam_type:
         raise Exception(f'{cam_type} is not one of valid camera: {avail_cams}')
 
-    if not isinstance(image, Images):
-        raise TypeError('image argument must be of type Images')
+    points = []
+    semi_major = ncg.config['spatial']['semimajor_rad']
+    semi_minor = ncg.config['spatial']['semiminor_rad']
 
     # Logic
     geom = image.geom
     # Put down a grid of points over the image; the density is intentionally high
     valid = compgeom.distribute_points_in_geom(geom, **distribute_points_kwargs)
-    
-    points = []
     print(f'Have {len(valid)} potential points to place.')
     for v in valid:
         lon = v[0]
         lat = v[1]
         point_geometry = f'SRID=949900;POINT({v[0]} {v[1]})'
-        
+
         # Calculate the height, the distance (in meters) above or
         # below the aeroid (meters above or below the BCBF spheroid).
         px, py = ncg.dem.latlon_to_pixel(lat, lon)
@@ -327,7 +326,7 @@ def place_points_in_image(image,
                 nn = NetworkNode(node_id=nid, image_path=image_path)
                 nn.parent = ncg
                 nodes.append(nn)
-                
+
         # Need to get the first node and then convert from lat/lon to image space
         node = nodes[0]
         if cam_type == "isis":
@@ -411,7 +410,7 @@ def place_points_in_image(image,
             updated_lon, updated_lat = og2oc(updated_lon_og, updated_lat_og, semi_major, semi_minor)
 
         point_geom = shapely.geometry.Point(x, y, z)
-        
+
         # Insert a spatial query to find which overlap this is in.
         with ncg.session_scope() as session:
             oid = session.query(Overlay.id).filter(Overlay.geom.ST_Contains(point_geometry)).one()[0]
@@ -421,7 +420,7 @@ def place_points_in_image(image,
                        adjusted=point_geom,
                        pointtype=2, # Would be 3 or 4 for ground
                        cam_type=cam_type)
-        
+
         for node in nodes:
             insert = True
             if cam_type == "csm":
@@ -434,7 +433,7 @@ def place_points_in_image(image,
                     if 'Requested position does not project in camera model' in e.stderr:
                         print(f'interesting point ({lon},{lat}) does not project to image {node["image_path"]}')
                         insert = False
-            
+
             point.measures.append(Measures(sample=sample,
                                            line=line,
                                            apriorisample=sample,
