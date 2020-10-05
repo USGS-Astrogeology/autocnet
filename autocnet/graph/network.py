@@ -1689,7 +1689,7 @@ class NetworkCandidateGraph(CandidateGraph):
                 job_counter = self._push_row_messages(onobj, on, function, walltime, filters, query_string, args, kwargs)
             elif isinstance(onobj, list):
                 job_counter = self._push_iterable_message(onobj, function, walltime, args, kwargs)
-            elif isinstance(onobj, (Node, NetworkNode, Edge, NetworkEdge)):
+            elif isinstance(onobj, (nx.classes.reportviews.EdgeView, nx.classes.reportviews.NodeView)):
                 job_counter = self._push_obj_messages(onobj, function, walltime, args, kwargs)
             else:
                 raise TypeError('The type of the `on` argument is not understood. Must be a database model, iterable, Node or Edge.')
