@@ -365,7 +365,7 @@ def subpixel_transformed_template(sx, sy, dx, dy,
     shift_x, shift_y, metrics, corrmap = func(bytescale(buffered_template), s_image, **kwargs)
 
     # Hard check here to see if we are on the absolute edge of the template
-    max_coord = np.unravel_index(corrmap.argmax(), corrmap.shape)
+    max_coord = np.unravel_index(corrmap.argmax(), corrmap.shape)[::-1]
     if 0 in max_coord or corrmap.shape[0]-1 == max_coord[0] or corrmap.shape[1]-1 == max_coord[1]:
         warnings.warn('Maximum correlation is at the edge of the template. Results are ambiguous.', UserWarning)
         return [None] * 4
@@ -1013,15 +1013,17 @@ def subpixel_register_point(pointid,
                                                         phase_kwargs=iterative_phase_kwargs)
             except Exception as e:
                 print(f'geom_match failed on measure {measure.id} with exception -> {e}')
-                measure.ignore = True
                 currentlog['status'] = f"geom_match failed on measure {measure.id}"
                 resultlog.append(currentlog)
+                if measure.weight is None:
+                    measure.ignore = True # Geom match failed and no previous sucesses
                 continue
 
             if new_x == None or new_y == None:
-                measure.ignore = True # Unable to geom match
                 currentlog['status'] = f'Failed to register measure {measure.id}.'
                 resultlog.append(currentlog)
+                if measure.weight is None:
+                    measure.ignore = True # Unable to geom match and no previous sucesses
                 continue
 
             if iterative_phase_kwargs:
@@ -1041,15 +1043,16 @@ def subpixel_register_point(pointid,
                 currentlog['status'] = f'Previous match provided better correlation. {measure.weight} > {cost}.'
                 resultlog.append(currentlog)
                 continue
-            if cost == measure.weight:
+            if measure.weight and cost == measure.weight:
                 currentlog['status'] = f'WTF old and new cost are equal for measure {measure.id}. {measure.weight} = {cost}.'
                 resultlog.append(currentlog)
                 continue
 
             if cost <= threshold:
-                measure.ignore = True # Threshold criteria not met
-                currentlog['status'] = f'Cost failed. Distance shifted: {measure.template_shift}. Metric: {measure.template_metric}.'
+                currentlog['status'] = f'Cost failed. Distance calculated: {measure.template_shift}. Metric calculated: {measure.template_metric}.'
                 resultlog.append(currentlog)
+                if measure.weight is None:
+                    measure.ignore = True # Threshold criteria not met and no previous sucesses
                 continue
 
             # Update the measure
@@ -1062,7 +1065,7 @@ def subpixel_register_point(pointid,
             # measures passed. Also, set the source measure back to ignore=False
             measure.ignore = False
             source.ignore = False
-            currentlog['status'] = f'Success.'
+            currentlog['status'] = f'Success. Distance shifted: {measure.template_shift}. Metric: {measure.template_metric}.'
             resultlog.append(currentlog)
 
     return resultlog

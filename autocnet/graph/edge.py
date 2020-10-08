@@ -1116,9 +1116,12 @@ class NetworkEdge(Edge):
                 bad[o.destin_measure_id] = 1
         return Counter(bad)
 
-    def find_outliers(self, scaling=1.5, filters={}):
+    def find_IQR_outliers(self,
+                          scaling=1.5,
+                          filters={'template_metric': 1, 'template_shift': 0},
+                          n_tolerance=10):
         """
-        Based on IQR, find the measure outliers from line and sample shifts.
+        Based on the interquartile range, find the measure outliers from line and sample shifts.
 
         Parameters
         ----------
@@ -1126,12 +1129,16 @@ class NetworkEdge(Edge):
                  scaling factor to use on IQR when determining outlier range
 
         filters: dict
-                 filters used to choose which points outlier are determined from
+                 filters used to choose measures from which outliers are determined. By defualt
+                 only reference measures whose reference is the source image
+
+        n_tolerance: int
+                     minimum number of measures needed to calculate outliers
 
         Returns
         -------
         measure_ids: list
-                     list of measure ids corresponding to edge outliers
+                     list of measure ids corresponding to outliers
 
         resultlog:  dict
                     status of finding outlier
@@ -1155,8 +1162,8 @@ class NetworkEdge(Edge):
             currentlog['status'] = 'no filtered measures in edge.'
             resultlog.append(currentlog)
             return None, resultlog
-        elif len(new_match_idx) < 10:
-            currentlog['status'] = f'{len(new_match_idx)} < 10 filtered measures are not statistically signigicant.'
+        elif len(new_match_idx) < n_tolerance:
+            currentlog['status'] = f'{len(new_match_idx)} < {n_tolerance} filtered measures are not statistically signigicant.'
             resultlog.append(currentlog)
             return None, resultlog
 
@@ -1185,20 +1192,33 @@ class NetworkEdge(Edge):
         return measure_ids, resultlog
 
 
-    def ignore_outliers(self, scaling=1.5, **kwargs):
+    def ignore_outliers(self, outlier_method='IQR', **kwargs):
         """
+
+
+
         Parameters
         ----------
+        outlier_method: str
+                        method used to determine outliers.
+                        Current methods:
+                           - interquartile range ('IQR')
 
         Returns
         -------
+        resultlog: dict
+                   status of finding and ignoring outliers
+
 
         """
-        # only use matches taht contain a reference source node
+        # only use matches that contain a reference source node
         filters = {'template_metric': 1,
                    'template_shift': 0}
 
-        outlier_destination_mids, resultlog = self.find_outliers(scaling, filters=filters)
+        outlier_dict = {'IQR': 'find_IQR_outliers'}
+        outlier_func = outlier_dict[outier_method]
+
+        outlier_destination_mids, resultlog = self.outlier_func(filters=filters, **kwargs)
 
         if outlier_destination_mids is None:
             return resultlog

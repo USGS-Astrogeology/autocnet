@@ -267,62 +267,6 @@ def nearest(pt, search):
     """
     return np.argmin(np.sum((search - pt)**2, axis=1))
 
-def find_side(side, Session):
-    """
-    Find the east or west most side of east or west most cube in Session database
-
-    Parameters
-    ----------
-    side: str
-            describes which extrema you cube you want; can equal 'east' or 'west'
-
-    Session: database session
-
-    Returns
-    -------
-    lon : float
-            longitude
-
-    lat : float
-            latitude
-
-    """
-
-    side = side.lower()
-
-    func = {'east': 'st_xmax', 'west': 'st_xmin'}
-    func = func[side]
-    order = {'east': 'desc', 'west': 'asc'}
-    order = order[side]
-
-    query = f"""
-    select ST_AsText(geom) from images
-    order by {func}(geom) {order}
-    limit 1 """
-
-    session = Session()
-    geom = session.execute(query).first()
-    geom = wkt.loads(geom[0])
-    session.close()
-
-    #find eastern/wertern most side of east_geom/west_geom
-    fp = geom.minimum_rotated_rectangle
-    coords = np.column_stack(fp.exterior.xy)
-    fp_lon, fp_lat = zip(*coords)
-
-    # always a counter clockwise motion so find minimum/maximum lon index
-    # and use i and i+1 lat lons points as return value
-    if side == 'east':
-        i = np.argmax(fp_lon)
-        lon = fp_lon[i:i+2]
-        lat = fp_lat[i:i+2]
-    elif side == 'west':
-        i = np.argmin(fp_lon)
-        lon = fp_lon[i:i+2]
-        lat = fp_lat[i:i+2]
-
-    return np.array(lon), np.array(lat)
-
 def create_points_along_line(p1, p2, npts):
     """
     Compute a set of nodes equally spaced between
