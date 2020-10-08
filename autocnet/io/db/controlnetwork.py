@@ -153,6 +153,10 @@ from plio.io.io_gdal import GeoDataset
 from autocnet.io.db.model import Images
 import pvl
 def null_measure_ignore(point, size_x, size_y, valid_tol, verbose=False, ncg=None, **kwargs):
+
+    if not ncg.Session:
+        raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
+
     isis2np_types = {
             "UnsignedByte" : "uint8",
             "SignedWord" : "int16",

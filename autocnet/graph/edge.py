@@ -1129,8 +1129,8 @@ class NetworkEdge(Edge):
                  scaling factor to use on IQR when determining outlier range
 
         filters: dict
-                 filters used to choose measures from which outliers are determined. By defualt
-                 only reference measures whose reference is the source image
+                 filters used on a match's source measure, only source measures which
+                 satisfy filter will be used in outlier calculation
 
         n_tolerance: int
                      minimum number of measures needed to calculate outliers
@@ -1150,6 +1150,7 @@ class NetworkEdge(Edge):
         ref_measures = self.measures(filters=filters)
         ref_measure_ids = [m.id for m in ref_measures]
 
+        # use matches where the source measure is the reference measure
         matches = self.matches
         new_match_idx = []
         for i, row in matches.iterrows():
@@ -1194,7 +1195,7 @@ class NetworkEdge(Edge):
 
     def ignore_outliers(self, outlier_method='IQR', **kwargs):
         """
-
+        Find and ignore outlier measures as determined by outlier method
 
 
         Parameters
@@ -1202,7 +1203,7 @@ class NetworkEdge(Edge):
         outlier_method: str
                         method used to determine outliers.
                         Current methods:
-                           - interquartile range ('IQR')
+                           - interquartile range ('IQR') of line/sample shift
 
         Returns
         -------
@@ -1211,14 +1212,10 @@ class NetworkEdge(Edge):
 
 
         """
-        # only use matches that contain a reference source node
-        filters = {'template_metric': 1,
-                   'template_shift': 0}
-
-        outlier_dict = {'IQR': 'find_IQR_outliers'}
+        outlier_dict = {'IQR': self.find_IQR_outliers}
         outlier_func = outlier_dict[outier_method]
 
-        outlier_destination_mids, resultlog = self.outlier_func(filters=filters, **kwargs)
+        outlier_destination_mids, resultlog = outlier_func(**kwargs)
 
         if outlier_destination_mids is None:
             return resultlog

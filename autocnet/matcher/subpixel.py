@@ -502,7 +502,7 @@ def subpixel_template(sx, sy, dx, dy,
         plt.show()
 
     # Hard check here to see if we are on the absolute edge of the template
-    max_coord = np.unravel_index(corrmap.argmax(), corrmap.shape)
+    max_coord = np.unravel_index(corrmap.argmax(), corrmap.shape)[::-1]
     if 0 in max_coord or corrmap.shape[0]-1 == max_coord[0] or corrmap.shape[1]-1 == max_coord[1]:
         warnings.warn('Maximum correlation is at the edge of the template. Results are ambiguous.', UserWarning)
         return [None] * 4
