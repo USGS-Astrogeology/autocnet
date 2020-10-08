@@ -663,7 +663,6 @@ def geom_match(destination_cube,
                bcenter_x,
                bcenter_y,
                template_kwargs={"image_size":(59,59), "template_size":(31,31)},
-               phase_kwargs=None,
                verbose=True):
     """
     Propagates a source measure into destination images and then perfroms subpixel registration.
@@ -694,9 +693,6 @@ def geom_match(destination_cube,
 
     template_kwargs: dict
                      contains keywords necessary for autocnet.matcher.subpixel.subpixel_template
-
-    phase_kwargs:    dict
-                     contains kwargs for autocnet.matcher.subpixel.subpixel_phase
 
     verbose:    boolean
                 indicates level of print out desired. If True, two subplots are output; the first subplot contains
@@ -810,7 +806,6 @@ def geom_match(destination_cube,
 
 
 def subpixel_register_measure(measureid,
-                              iterative_phase_kwargs={},
                               subpixel_template_kwargs={},
                               size_x=100, size_y=100,
                               cost_func=lambda x,y: 1/x**2 * y,
@@ -828,9 +823,6 @@ def subpixel_register_measure(measureid,
 
     measureid : int or obj
               The identifier of the measure in the DB or a Measures object
-
-    iterative_phase_kwargs : dict
-                             Any keyword arguments passed to the phase matcher
 
     subpixel_template_kwargs : dict
                                Any keyword arguments passed to the template matcher
@@ -884,8 +876,7 @@ def subpixel_register_measure(measureid,
         try:
             new_x, new_y, dist, metric,  _ = geom_match(source_node.geodata, destination_node.geodata,
                                                         source.sample, source.line,
-                                                        template_kwargs=subpixel_template_kwargs,
-                                                        phase_kwargs=iterative_phase_kwargs)
+                                                        template_kwargs=subpixel_template_kwargs)
         except Exception as e:
             print(f'geom_match failed on measure {measureid} with exception -> {e}')
             destination.ignore = True # geom_match failed
@@ -899,15 +890,8 @@ def subpixel_register_measure(measureid,
             resultlog.append(currentlog)
             return resultlog
 
-        if iterative_phase_kwargs:
-            destination.template_metric = metric[0]
-            destination.template_shift = dist[0]
-            destination.phase_error = metric[1]
-            destination.phase_diff = metric[2]
-            destination.phase_shift = dist[1]
-        else:
-            destination.template_metric = metric
-            destination.template_shift = dist
+        destination.template_metric = metric
+        destination.template_shift = dist
 
         cost = cost_func(destination.template_shift, destination.template_metric)
 
@@ -935,7 +919,6 @@ def subpixel_register_measure(measureid,
 
 
 def subpixel_register_point(pointid,
-                            iterative_phase_kwargs={},
                             subpixel_template_kwargs={},
                             cost_func=lambda x,y: 1/x**2 * y,
                             threshold=0.005,
@@ -950,9 +933,6 @@ def subpixel_register_point(pointid,
     ----------
     pointid : int or obj
               The identifier of the point in the DB or a Points object
-
-    iterative_phase_kwargs : dict
-                             Any keyword arguments passed to the phase matcher
 
     subpixel_template_kwargs : dict
                                Ay keyword arguments passed to the template matcher
@@ -1009,8 +989,7 @@ def subpixel_register_point(pointid,
             try:
                 new_x, new_y, dist, metric,  _ = geom_match(source_node.geodata, destination_node.geodata,
                                                         source.apriorisample, source.aprioriline,
-                                                        template_kwargs=subpixel_template_kwargs,
-                                                        phase_kwargs=iterative_phase_kwargs)
+                                                        template_kwargs=subpixel_template_kwargs)
             except Exception as e:
                 print(f'geom_match failed on measure {measure.id} with exception -> {e}')
                 currentlog['status'] = f"geom_match failed on measure {measure.id}"
@@ -1026,15 +1005,8 @@ def subpixel_register_point(pointid,
                     measure.ignore = True # Unable to geom match and no previous sucesses
                 continue
 
-            if iterative_phase_kwargs:
-                measure.template_metric = metric[0]
-                measure.template_shift = dist[0]
-                measure.phase_error = metric[1]
-                measure.phase_diff = metric[2]
-                measure.phase_shift = dist[1]
-            else:
-                measure.template_metric = metric
-                measure.template_shift = dist
+            measure.template_metric = metric
+            measure.template_shift = dist
 
             cost = cost_func(measure.template_shift, measure.template_metric)
 
@@ -1070,8 +1042,7 @@ def subpixel_register_point(pointid,
 
     return resultlog
 
-def subpixel_register_points(iterative_phase_kwargs={'size': 251},
-                             subpixel_template_kwargs={'image_size':(251,251)},
+def subpixel_register_points(subpixel_template_kwargs={'image_size':(251,251)},
                              cost_kwargs={},
                              threshold=0.005,
                              Session=None):
@@ -1085,9 +1056,6 @@ def subpixel_register_points(iterative_phase_kwargs={'size': 251},
 
     pointid : int
               The identifier of the point in the DB
-
-    iterative_phase_kwargs : dict
-                             Any keyword arguments passed to the phase matcher
 
     subpixel_template_kwargs : dict
                                Ay keyword arguments passed to the template matcher
@@ -1109,7 +1077,6 @@ def subpixel_register_points(iterative_phase_kwargs={'size': 251},
     session.close()
     for pointid in pointids:
         subpixel_register_point(pointid,
-                                iterative_phase_kwargs=iterative_phase_kwargs,
                                 subpixel_template_kwargs=subpixel_template_kwargs,
                                 **cost_kwargs)
 
