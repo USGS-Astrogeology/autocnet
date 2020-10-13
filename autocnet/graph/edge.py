@@ -1213,7 +1213,7 @@ class NetworkEdge(Edge):
 
         """
         outlier_dict = {'IQR': self.find_IQR_outliers}
-        outlier_func = outlier_dict[outier_method]
+        outlier_func = outlier_dict[outlier_method]
 
         outlier_destination_mids, resultlog = outlier_func(**kwargs)
 

@@ -147,7 +147,8 @@ def update_measure_from_jigsaw(point, path, ncg=None, **kwargs):
     return resultlog
 
 
-
+# This is not a permanent placement for this function
+# TO DO: create a new module for parsing/cleaning points from a controlnetwork
 from scipy.stats import zscore
 from plio.io.io_gdal import GeoDataset
 from autocnet.io.db.model import Images
