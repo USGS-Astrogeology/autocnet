@@ -83,7 +83,7 @@ def main(msg):
     res = func(*msg['args'], **msg['kwargs'])
 
     # Update the message with the True/False
-    msg['success'] = res
+    msg['results'] = res
     # Update the message with the correct callback function
 
     return msg
