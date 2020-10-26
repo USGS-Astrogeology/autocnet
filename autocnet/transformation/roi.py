@@ -71,12 +71,32 @@ class Roi():
         pixels.
         """
         if hasattr(self.data, 'no_data_value'):
-            self._ndv = self.data.no_data_value   
+            self._ndv = self.data.no_data_value
         return self._ndv
 
     @ndv.setter
     def ndv(self, ndv):
         self._ndv = ndv
+
+    @property
+    def size_x(self):
+        return self._size_x
+
+    @size_x.setter
+    def size_x(self, size_x):
+        if not isinstance(size_x, int):
+            raise TypeError(f'size_x must be type integer, not {type(size_x)}')
+        self._size_x = size_x
+
+    @property
+    def size_y(self):
+        return self._size_y
+
+    @size_y.setter
+    def size_y(self, size_y):
+        if not isinstance(size_y, int):
+            raise TypeError(f'size_y must be type integer, not {type(size_y)}')
+        self._size_y = size_y
 
     @property
     def image_extent(self):
@@ -87,7 +107,7 @@ class Roi():
         try:
             # Geodataset object
             raster_size = self.data.raster_size
-        except: 
+        except:
             # Numpy array in y,x form
             raster_size = self.data.shape[::-1]
 
@@ -95,7 +115,7 @@ class Roi():
         left_x = self._x - self.size_x
         right_x = self._x + self.size_x
         top_y = self._y - self.size_y
-        bottom_y = self.y + self.size_y
+        bottom_y = self._y + self.size_y
 
         if self._x - self.size_x < 0:
             left_x = 0
@@ -116,7 +136,7 @@ class Roi():
     @property
     def is_valid(self):
         """
-        True if all elements in the clipped ROI are valid, i.e., 
+        True if all elements in the clipped ROI are valid, i.e.,
         no null pixels (as defined by the no data value (ndv)) are
         present.
         """
@@ -125,27 +145,27 @@ class Roi():
     @property
     def array(self):
         """
-        The clopped array associated with this ROI.
+        The clipped array associated with this ROI.
         """
         pixels = self.image_extent
         if isinstance(self.data, np.ndarray):
              return self.data[pixels[2]:pixels[3]+1,pixels[0]:pixels[1]+1]
         else:
             # Have to reformat to [xstart, ystart, xnumberpixels, ynumberpixels]
-            pixels = [pixels[0], pixels[2], pixels[1]-pixels[0], pixels[3]-pixels[2]]
+            pixels = [pixels[0], pixels[2], pixels[1]-pixels[0]+1, pixels[3]-pixels[2]+1]
             return self.data.read_array(pixels=pixels, dtype=self.dtype)
 
     def clip(self, dtype=None):
         """
-        Compatibility function that makes a call to the array property. 
-        
+        Compatibility function that makes a call to the array property.
+
         Warning: The dtype passed in via this function resets the dtype attribute of this
-        instance. 
+        instance.
 
         Parameters
         ----------
         dtype : str
-                The datatype to be used when reading the ROI information if the read 
+                The datatype to be used when reading the ROI information if the read
                 occurs through the data object using the read_array method. When using
                 this object when the data are a numpy array the dtype has not effect.
 
