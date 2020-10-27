@@ -1844,7 +1844,7 @@ class NetworkCandidateGraph(CandidateGraph):
                 session.commit()
 
     @classmethod
-    def from_filelist(cls, filelist, clear_db=False):
+    def from_filelist(cls, filelist, config, clear_db=False):
         """
         Parse a filelist to add nodes to the database. Using the
         information in the database, then instantiate a complete,
@@ -1856,11 +1856,42 @@ class NetworkCandidateGraph(CandidateGraph):
                    If a list, this is a list of paths. If a str, this is
                    a path to a file containing a list of image paths
                    that is newline ("\\n") delimited.
+        config : dict, str
+                 configuration information; either a path to a yaml
+                 file or a dictionary.
+
+        clear_db : boolean
+                   truncates all tables in the active database.
 
         Returns
         -------
         ncg : object
               A network candidate graph object
+
+        See Also:
+        --------
+        config_from_dict: config documentation
+        """
+        obj = cls()
+        if isinstance(config, str):
+            config = parse_config(config)
+        obj.config_from_dict(config)
+        obj.add_from_filelist(filelist, clear_db=clear_db)
+
+        return obj
+
+    def add_from_filelist(self, filelist, clear_db=False):
+        """
+        Parse a filelist to add nodes to the database.
+
+        Parameters
+        ----------
+        filelist : list, str
+                   If a list, this is a list of paths. If a str, this is
+                   a path to a file containing a list of image paths
+                   that is newline ("\\n") delimited.
+        clear_db : boolean
+                   truncates all tables in the active database.
         """
         if isinstance(filelist, list):
             pass
@@ -1870,7 +1901,7 @@ class NetworkCandidateGraph(CandidateGraph):
             warnings.warn('Unable to parse the passed filelist')
 
         if clear_db:
-            cls.clear_db()
+            self.clear_db()
 
         total=len(filelist)
         for cnt, f in enumerate(filelist):
@@ -1880,10 +1911,9 @@ class NetworkCandidateGraph(CandidateGraph):
             image_name = os.path.basename(f)
             NetworkNode(image_path=f, image_name=image_name)
 
-        obj = cls.from_database()
+        self.from_database()
         # Execute the computation to compute overlapping geometries
-        obj._execute_sql(compute_overlaps_sql)
-        return obj
+        self._execute_sql(compute_overlaps_sql)
 
     def copy_images(self, newdir):
         """
@@ -2121,13 +2151,39 @@ class NetworkCandidateGraph(CandidateGraph):
         session.close()
 
     @classmethod
-    def from_cnet(cls, cnet, filelist):
+    def from_cnet(cls, cnet, filelist, config):
         """
+        Instantiates and populates a NetworkCandidateGraph from an
+        ISIS control network and corresponding cube list.
 
+        Parameters
+        ----------
+        cnet:  str
+               path to control network file from which you want to populate
+               the NetworkCandidateGraph.
+
+        filelist:  str
+                   path to file containing list of cubes associated with
+                   the control network file.
+
+        config : dict, str
+                 configuration information; either a path to a yaml
+                 file or a dictionary.
+
+        Returns
+        -------
+        obj:  NetworkCandidateGraph
+             The NetworkCandidateGraph populated with the points and measures
+             from the control network and the images from the filelist.
+
+        See Also:
+        --------
+        config_from_dict: config documentation
         """
-        networkobj = cls.from_filelist(filelist)
-        networkobj.place_points_from_cnet(cnet)
-        return networkobj
+        obj = cls.from_filelist(filelist, config)
+        obj.place_points_from_cnet(cnet)
+
+        return obj
 
     @property
     def measures(self):
@@ -2137,10 +2193,11 @@ class NetworkCandidateGraph(CandidateGraph):
     @property
     def queue_length(self):
         """
-        Returns the length of the processing queue. Jobs are left on the
-        queue if a cluster job is cancelled. Those cancelled jobs are then
-        called on next cluster job launch, causing failures. This method provides
-        a quick check for left over jobs.
+        Returns the length of the processing queue.
+
+        Jobs are left on the queue if a cluster job is cancelled. Those cancelled
+        jobs are then called on next cluster job launch, causing failures. This
+        method provides a check for left over jobs.
         """
         llen = self.redis_queue.llen(self.config['redis']['processing_queue'])
         return llen
