@@ -1873,9 +1873,14 @@ class NetworkCandidateGraph(CandidateGraph):
         config_from_dict: config documentation
         """
         obj = cls()
+
         if isinstance(config, str):
             config = parse_config(config)
         obj.config_from_dict(config)
+
+        if clear_db:
+            obj.clear_db()
+
         obj.add_from_filelist(filelist, clear_db=clear_db)
 
         return obj
@@ -1909,11 +1914,28 @@ class NetworkCandidateGraph(CandidateGraph):
             # images in the DB
             print('loading {} of {}'.format(cnt+1, total))
             image_name = os.path.basename(f)
-            NetworkNode(image_path=f, image_name=image_name)
+            node = NetworkNode(image_path=f, image_name=image_name)
+            node.parent = self
+            node.populate_db()
 
         self.from_database()
         # Execute the computation to compute overlapping geometries
         self._execute_sql(compute_overlaps_sql)
+
+    def add_image(self, img_path):
+        """
+        Upload a single image to NetworkCandidateGraph associated DB.
+
+        Parameters
+        ----------
+        img_path: str
+                  absolute path to image
+        """
+        image_name = os.path.basename(img_path)
+        node = NetworkNode(image_path=f, image_name=image_name)
+        node.parent = self
+        node.populate_db()
+
 
     def copy_images(self, newdir):
         """
@@ -1971,11 +1993,6 @@ class NetworkCandidateGraph(CandidateGraph):
         query_string : str
                        An optional string to select a subset of the images in the
                        database specified in the config.
-
-        Returns
-        -------
-        obj : obj
-              A network candidate graph.
 
         Example
         -------
@@ -2073,8 +2090,7 @@ class NetworkCandidateGraph(CandidateGraph):
         # Setup the edges
         self._setup_edges()
 
-    @staticmethod
-    def clear_db(tables=None):
+    def clear_db(self, tables=None):
         """
         Truncate all of the database tables and reset any
         autoincrement columns to start with 1.
@@ -2084,23 +2100,23 @@ class NetworkCandidateGraph(CandidateGraph):
         table : str or list of str, optional
                 the table name of a list of table names to truncate
         """
-        session = Session()
-        session.rollback() # In case any transactions are not done
-        if tables:
-            if isinstance(tables, str):
-                tables = [tables]
-        else:
-            tables = self.engine.table_names()
+        with self.session_scope() as session:
+            if tables:
+                if isinstance(tables, str):
+                    tables = [tables]
+            else:
+                tables = self.engine.table_names()
 
-        for t in tables:
-          if t != 'spatial_ref_sys':
-            try:
-                session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
-            except Exception as e:
-                warnings.warn(f'Failed to truncate table {t}, {t} not modified')
-                session.rollback()
-        session.commit()
-        session.close()
+            for t in tables:
+                if t != 'spatial_ref_sys':
+                    try:
+                        session.execute(f'TRUNCATE TABLE {t} CASCADE')
+                    except Exception as e:
+                        raise RuntimeError(f'Failed to truncate table {t}, {t} not modified').with_traceback(e.__traceback__)
+                    try:
+                        session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
+                    except Exception as e:
+                        warnings.warn(f'Failed to reset primary id sequence for table {t}')
 
     def place_points_from_cnet(self, cnet):
         semi_major, semi_minor = self.config["spatial"]["semimajor_rad"], self.config["spatial"]["semiminor_rad"]

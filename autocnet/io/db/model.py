@@ -200,15 +200,10 @@ class Images(BaseMixin, Base):
     measures = relationship("Measures")
 
     def __repr__(self):
-        try:
-            footprint = to_shape(self.geom).__geo_interface__
-        except:
-            footprint = None
         return json.dumps({'id':self.id,
                 'name':self.name,
                 'path':self.path,
-                'geom':footprint,
-                'footprint_bodyfixed':self.footprint_bodyfixed})
+                'geom':self.geom.wkt})
 
     @hybrid_property
     def geom(self):
