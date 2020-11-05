@@ -36,5 +36,5 @@ dependencies:
   - sqlalchemy
   - sqlalchemy-utils
   - redis-py
-  - usgs-astrogeology/label/dev::usgscsm
+  - usgscsm
   - vlfeat

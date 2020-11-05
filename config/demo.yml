@@ -20,9 +20,9 @@ database:
     # Name of the database management system. For example, postgresql or sqlite
     type: 'postgresql'
     # Username used to log in to the database
-    username: 'jay'
+    username: 'username'
     # Password used to log in to the database
-    password: 'abcde'
+    password: 'password'
     # Host machine name (or localhost) where the database is running
     host: '127.0.0.1'
     # Port that the database is exposed on

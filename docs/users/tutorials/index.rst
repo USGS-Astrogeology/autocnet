@@ -3,6 +3,13 @@ Some of the data is stored remotely (due to the size).  In these cases the tutor
 All tutorials are rendered in plain text in the documentation, but are available for interactive use by cloning our github
 repository at <https://github.com/USGS-Astrogeology/autocnet>_.
 
+Working With ISIS Control Networks
+-------------------------------
+.. toctree::
+   :maxdepth: 1
+   Ingesting from ISIS control network<isis_ingest/from_cnet.ipynb>
+
+
 Working With Apollo Pan
 -----------------------
 .. toctree::

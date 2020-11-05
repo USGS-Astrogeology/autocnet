@@ -519,15 +519,20 @@ class NetworkNode(Node):
                 # Image already exists
                 return
 
-        kpspath = io_keypoints.create_output_path(self.geodata.file_name)
-        # Create the keypoints entry
-        kps = Keypoints(path=kpspath, nkeypoints=0)
+        # If the geodata is not valid, do no create an assocaited keypoints file
+        #  One instance when invalid is during testing.
+        if hasattr(self.geodata, 'file_name'):
+            kpspath = io_keypoints.create_output_path(self.geodata.file_name)
+            # Create the keypoints entry
+            kps = Keypoints(path=kpspath, nkeypoints=0)
+        else:
+            kps = None
 
         try:
             fp, cam_type = self.footprint
         except Exception as e:
             warnings.warn('Unable to generate image footprint.\n{}'.format(e))
-            fp = None
+            fp = cam_type = None
         # Create the image
         i = Images(name=self['image_name'],
                    path=self['image_path'],

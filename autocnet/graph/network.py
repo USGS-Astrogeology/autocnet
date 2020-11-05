@@ -1913,10 +1913,7 @@ class NetworkCandidateGraph(CandidateGraph):
             # Create the nodes in the graph. Really, this is creating the
             # images in the DB
             print('loading {} of {}'.format(cnt+1, total))
-            image_name = os.path.basename(f)
-            node = NetworkNode(image_path=f, image_name=image_name)
-            node.parent = self
-            node.populate_db()
+            self.add_image(f)
 
         self.from_database()
         # Execute the computation to compute overlapping geometries
@@ -1932,10 +1929,9 @@ class NetworkCandidateGraph(CandidateGraph):
                   absolute path to image
         """
         image_name = os.path.basename(img_path)
-        node = NetworkNode(image_path=f, image_name=image_name)
+        node = NetworkNode(image_path=img_path, image_name=image_name)
         node.parent = self
         node.populate_db()
-
 
     def copy_images(self, newdir):
         """

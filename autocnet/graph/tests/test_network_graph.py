@@ -61,3 +61,54 @@ def test_to_isis(db_controlnetwork, ncg, node_a, node_b, tmpdir):
     ncg.to_isis(outpath)
 
     assert os.path.exists(outpath)
+
+
+def test_from_filelist(session, default_configuration, tmp_path):
+    # Written as a list and not parametrized so that the fixture does not automatically clean
+    #  up the DB. Needed to test the functionality of the clear_db kwarg.
+    for filelist, clear_db in [(['bar1.cub', 'bar2.cub', 'bar3.cub'], False),
+                               ([], True),
+                               (['bar1.cub', 'bar2.cub', 'bar3.cub'], True)]:
+        filelist = [tmp_path/f for f in filelist]
+
+        # Since we have no overlaps (everything is faked), len(ncg) == 0
+        ncg = NetworkCandidateGraph.from_filelist(filelist, default_configuration, clear_db=clear_db)
+        
+        with ncg.session_scope() as session:
+            res = session.query(model.Images).all()
+            assert len(res) == len(filelist)
+
+def test_global_clear_db(session, ncg):
+    i = model.Images(name='foo', path='/fooland/foo.img')
+    with ncg.session_scope() as session:
+        session.add(i)
+
+        res = session.query(model.Images).all()
+        assert len(res) == 1
+
+    ncg.clear_db()
+
+    with ncg.session_scope() as session:
+        res = session.query(model.Images).all()
+        assert len(res) == 0
+
+def test_selective_clear_db(session, ncg):
+    i = model.Images(name='foo', path='fooland/foo.img')
+    p = model.Points(pointtype=2)
+
+    with ncg.session_scope() as session:
+        session.add(i)
+        session.add(p)
+
+        res = session.query(model.Images).all()
+        assert len(res) == 1
+        res =  session.query(model.Points).all()
+        assert len(res) == 1
+    
+    ncg.clear_db(tables=['Points'])
+
+    with ncg.session_scope() as session:
+        res = session.query(model.Images).all()
+        assert len(res) == 1
+        res = session.query(model.Points).all()
+        assert len(res) == 0
