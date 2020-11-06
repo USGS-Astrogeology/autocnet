@@ -2222,22 +2222,21 @@ class NetworkCandidateGraph(CandidateGraph):
         """
         self.redis_queue.flushdb()
 
-    def empty_overlays(self, filters={}, size_threshold=0.007):
+    def empty_overlays(self, filters={'ignore': False}, size_threshold=0):
         """
-        Find overlaps that do not contain any valid points. At minimum, valid points
+        Find overlaps that do not contain valid points. By default, valid points
         include not ignored points, but additional point properties can be used to
         further define a valid point. For example, to look at not ignored, free
-        (not ground) points; filters = {pointtype: 2}.
+        (not ground) points; filters = {'ignored': False, 'pointtype': 2}.
 
         Parameters
         ----------
         filters: dict
-                 Points object properties to filter on, excluding "ignore" which is
-                 always included.
+                 Points object properties for point filtering.
 
         size_threshold: float
-                        Minimum area requirment for returned overlaps. Helps filter
-                        out overlaps that have unreasonably small areas for points.
+                        Minimum area requirment for returned overlaps. Units are
+                        determined by spatial reference system.
 
         Returns
         -------
@@ -2251,7 +2250,7 @@ class NetworkCandidateGraph(CandidateGraph):
         """
         with self.session_scope() as session:
             # Find overlap ids that contain one or more valid points
-            sq = session.query(Overlay.id).join(Points, func.ST_Contains(Overlay.geom, Points.geom)).filter(Points.ignore==False)
+            sq = session.query(Overlay.id).join(Points, func.ST_Contains(Overlay.geom, Points.geom))
             for attr, value in filters.items():
                 sq = sq.filter(getattr(Points, attr)==value)
             sq = sq.group_by(Overlay.id)
@@ -2263,22 +2262,21 @@ class NetworkCandidateGraph(CandidateGraph):
             return overlays
 
 
-    def connected_overlays(self, filters={}, size_threshold=0.007):
+    def connected_overlays(self, filters={'ignore': False}, size_threshold=0):
         """
-        Find overlaps that contain valid points. At minimum, valid points
+        Find overlaps that contain valid points. By default, valid points
         include not ignored points, but additional point properties can be used to
         further define a valid point. For example, to look at not ignored, free
-        (not ground) points; filters = {pointtype: 2}.
+        (not ground) points; filters = {'ignored': False, 'pointtype': 2}.
 
         Parameters
         ----------
         filters: dict
-                 Points object properties to filter on, excluding "ignore" which is
-                 always included.
+                 Points object properties for point filtering.
 
         size_threshold: float
-                        Minimum area requirment for returned overlaps. Helps filter
-                        out overlaps that have unreasonably small areas for points.
+                        Minimum area requirment for returned overlaps. Units are
+                        determined by spatial reference system.
 
         Returns
         -------
@@ -2292,7 +2290,7 @@ class NetworkCandidateGraph(CandidateGraph):
         """
         with self.session_scope() as session:
             # Find overlap ids that contain one or more valid points
-            sq = session.query(Overlay.id).join(Points, func.ST_Contains(Overlay.geom, Points.geom)).filter(Points.ignore==False)
+            sq = session.query(Overlay.id).join(Points, func.ST_Contains(Overlay.geom, Points.geom))
             for attr, value in filters.items():
                 sq = sq.filter(getattr(Points, attr)==value)
             sq = sq.group_by(Overlay.id)

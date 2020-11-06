@@ -7,7 +7,8 @@ Working With ISIS Control Networks
 -------------------------------
 .. toctree::
    :maxdepth: 1
-   Ingesting from ISIS control network<isis_ingest/from_cnet.ipynb>
+
+    Ingesting from ISIS control network<isis_ingest/from_cnet.ipynb>
 
 
 Working With Apollo Pan
