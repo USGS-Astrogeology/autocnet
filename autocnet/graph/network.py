@@ -7,6 +7,7 @@ import os
 from shutil import copyfile
 from time import gmtime, strftime, time
 import warnings
+from itertools import combinations
 
 import networkx as nx
 import geopandas as gpd
@@ -14,6 +15,7 @@ import pandas as pd
 import numpy as np
 from redis import StrictRedis
 import shapely
+import scipy.special
 
 import geoalchemy2
 from sqlalchemy.ext.declarative.api import DeclarativeMeta
@@ -2222,6 +2224,32 @@ class NetworkCandidateGraph(CandidateGraph):
         """
         self.redis_queue.flushdb()
 
+    def overlays(self, size_threshold=0):
+        """
+        Return the overlays in a database
+
+        Parameters
+        ----------
+        size_threshold: float
+                        Minimum area requirment for returned overlaps. Units are
+                        determined by spatial reference system.
+
+        Returns
+        -------
+        overlays: list of Overlay objects
+                 Model information associated with overlaps that contain one or more valid points
+
+        See Also
+        --------
+        autocnet.io.db.model.Overlay: for description of information associated with Overlay class
+        """
+
+        with self.session_scope() as session:
+            q = session.query(Overlay).filter(func.ST_Area(Overlay.geom)>=size_threshold)
+            overlays = q.all()
+            session.expunge_all()
+            return overlays
+
     def empty_overlays(self, filters={'ignore': False}, size_threshold=0):
         """
         Find overlaps that do not contain valid points. By default, valid points
@@ -2261,45 +2289,60 @@ class NetworkCandidateGraph(CandidateGraph):
             session.expunge_all()
             return overlays
 
-
-    def connected_overlays(self, filters={'ignore': False}, size_threshold=0):
+    def overlay_connection(self, oid):
         """
-        Find overlaps that contain valid points. By default, valid points
-        include not ignored points, but additional point properties can be used to
-        further define a valid point. For example, to look at not ignored, free
-        (not ground) points; filters = {'ignored': False, 'pointtype': 2}.
+        Evaluate the connection status of an overlay. An overlap can be empty (no points),
+        fully connected (all images are connected by points), or partially connected. The
+        first two status return empty lists while partially connected overlaps will return
+        a list of image pairs that are missing point connections.
 
         Parameters
         ----------
-        filters: dict
-                 Points object properties for point filtering.
-
-        size_threshold: float
-                        Minimum area requirment for returned overlaps. Units are
-                        determined by spatial reference system.
+        overlay: int
+                 Database id of overlay of interest.
 
         Returns
         -------
-        overlays: list of Overlay objects
-                 Model information associated with overlaps that contain one or more valid points
-
-        See Also
-        --------
-        autocnet.io.db.model.Overlay: for description of information associated with Overlay class
-        autocnet.io.db.model.Points: for description of information associated with Points class
+        missing_edges: list of tuples
+                       tuples correspond to image ids that comprise an overlap
+                       but are not connected by a point.
         """
-        with self.session_scope() as session:
-            # Find overlap ids that contain one or more valid points
-            sq = session.query(Overlay.id).join(Points, func.ST_Contains(Overlay.geom, Points.geom))
-            for attr, value in filters.items():
-                sq = sq.filter(getattr(Points, attr)==value)
-            sq = sq.group_by(Overlay.id)
 
-            # find overlap information satisfying previous query
-            q = session.query(Overlay).filter(Overlay.id.in_(sq)).filter(func.ST_Area(Overlay.geom)>=size_threshold)
-            overlays = q.all()
-            session.expunge_all()
-            return overlays
+        graph = nx.Graph()
+
+        with self.session_scope() as session:
+            # create graph nodes
+            overlap = session.query(Overlay).filter(Overlay.id==oid).first()
+            ointersections = overlap.intersections
+            for ii in ointersections:
+                graph.add_node(ii)
+
+            # find measures in relevant overlap and images
+            geom = geoalchemy2.shape.from_shape(overlap.geom, srid=self.config['spatial']['latitudinal_srid'])
+            q = session.query(Measures).join(Points, Measures.pointid==Points.id).\
+                                        filter(func.ST_Contains(geom, Points.geom)).\
+                                        filter(Measures.imageid.in_(ointersections))
+            df = pd.read_sql(q.statement, session.bind)
+
+            # TO DO: RETURN ALL EDGES
+            if len(df) == 0:
+                print(f'Overlap {oid} is empty')
+                return []
+
+            # create graph edges
+            for pid, g in df.groupby('pointid'):
+                edge_pool = np.sort([row['imageid'] for i, row in g.iterrows()])
+                graph.add_edges_from(list(combinations(edge_pool, 2)))
+
+            # evaluate connectivity of overlap
+            fully_connected_number_of_edges = scipy.special.comb(graph.number_of_nodes(),2)
+            all_edges = list(combinations(graph.nodes, 2))
+            if graph.number_of_edges() == fully_connected_number_of_edges:
+                print(f'Overlap {oid} is fully connected')
+                return []
+
+            # return missing image id pairs
+            return [e for e in all_edges if e not in graph.edges]
 
     def cluster_propagate_control_network(self,
                                           base_cnet,
