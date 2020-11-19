@@ -8,8 +8,8 @@ Working With ISIS Control Networks
 .. toctree::
    :maxdepth: 1
 
-   Ingesting from ISIS control network<isis_ingest/from_cnet.ipynb>
-   Using outlier detection to check for bad measures<outlier_detection/outlier_detection.ipynb>
+    Ingesting from ISIS control network<isis_ingest/from_cnet.ipynb>
+    Using outlier detection to check for bad measures<outlier_detection/outlier_detection.ipynb>
 
 
 Working With Apollo Pan
