@@ -720,6 +720,8 @@ def estimate_affine_transformation(destination_coordinates, source_coordinates):
     source_coordinates = np.asarray(source_coordinates)
 
     return tf.estimate_transform('affine', destination_coordinates, source_coordinates)
+
+
 def geom_match_classic(base_cube,
                        input_cube,
                        bcenter_x,
@@ -1197,7 +1199,7 @@ def subpixel_register_measure(measureid,
                       'status': ''}
 
         try:
-            new_x, new_y, dist, metric,  _ = geom_match(source_node.geodata, destination_node.geodata,
+            new_x, new_y, dist, metric,  _ = geom_match_simple(source_node.geodata, destination_node.geodata,
                                                         source.sample, source.line,
                                                         template_kwargs=subpixel_template_kwargs)
         except Exception as e:
