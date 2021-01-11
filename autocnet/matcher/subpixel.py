@@ -18,7 +18,6 @@ import PIL
 from PIL import Image
 
 from autocnet.matcher.naive_template import pattern_match, pattern_match_autoreg
-from autocnet.matcher.subpixel import subpixel_template_classic
 from autocnet.matcher import ciratefi
 from autocnet.io.db.model import Measures, Points, Images, JsonEncoder
 from autocnet.graph.node import NetworkNode
@@ -789,8 +788,7 @@ def geom_match_simple(base_cube,
     autocnet.matcher.subpixel.subpixel_phase: for list of kwargs that can be passed to the matcher
     """
     print("in geommatch")
-    size_x = int(size_x)
-    size_y = int(size_y)
+    print("subpixel kwargs", template_kwargs)
 
     if not isinstance(input_cube, GeoDataset):
         raise Exception("input cube must be a geodataset obj")
@@ -836,7 +834,6 @@ def geom_match_simple(base_cube,
     base_gcps = np.array([*base_corners])
 
     dst_gcps = np.array([*dst_corners])
-    print(base_gcps, dst_gcps)
 
     start_x = dst_gcps[:,0].min()
     start_y = dst_gcps[:,1].min()
@@ -861,11 +858,9 @@ def geom_match_simple(base_cube,
     dst_arr = input_cube.read_array(dtype=dst_type)
 
     box = (0, 0, max(dst_arr.shape[1], base_arr.shape[1]), max(dst_arr.shape[0], base_arr.shape[0]))
-    dst_arr = np.array(Image.fromarray(arr).crop(box))
+    dst_arr = np.array(Image.fromarray(dst_arr).crop(box))
 
     dst_arr = tf.warp(dst_arr, affine)
-    print(base_arr.shape, dst_arr.shape )
-    print(bcenter_x, bcenter_y)
 
     if verbose:
         fig, axs = plt.subplots(1, 2)
@@ -880,7 +875,6 @@ def geom_match_simple(base_cube,
     restemplate = subpixel_template_classic(bcenter_x, bcenter_y, bcenter_x, bcenter_y, bytescale(base_arr, cmin=0), bytescale(dst_arr, cmin=0), **template_kwargs)
 
     x,y,maxcorr,temp_corrmap = restemplate
-    print("adjusted: ", x, y)
     if x is None or y is None:
         return None, None, None, None, None
     metric = maxcorr
@@ -979,9 +973,6 @@ def geom_match_classic(base_cube,
     autocnet.matcher.subpixel.subpixel_template: for list of kwargs that can be passed to the matcher
     autocnet.matcher.subpixel.subpixel_phase: for list of kwargs that can be passed to the matcher
     """
-
-    size_x = (int)size_x
-    size_y = (int)size_y
 
     if not isinstance(input_cube, GeoDataset):
         raise Exception("input cube must be a geodataset obj")

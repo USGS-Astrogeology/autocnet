@@ -245,6 +245,7 @@ def propagate_point(Session,
                    and cartesian) of successfully propagated points
 
     """
+    print("in prop point")
     session = Session()
     engine = session.get_bind()
     string = f"select * from images where ST_Intersects(geom, ST_SetSRID(ST_Point({lon}, {lat}), {config['spatial']['latitudinal_srid']}))"
@@ -277,7 +278,7 @@ def propagate_point(Session,
                 print(f'prop point: base_image: {base_image}')
                 print(f'prop point: dest_image: {dest_image}')
                 print(f'prop point: (sx, sy): ({sx}, {sy})')
-                x,y, dist, metrics, corrmap = geom_match_simple(base_image, dest_image, sx, sy, \
+                x,y, dist, metrics, corrmap = geom_match_simple(base_image, dest_image, sx, sy, 16, 16, \
                         template_kwargs=template_kwargs, \
                         verbose=verbose)
             except Exception as e:
