@@ -3,6 +3,7 @@ from math import modf, floor
 import numpy as np
 import warnings
 
+import sys
 from skimage.feature import register_translation
 from skimage import transform as tf
 
@@ -11,7 +12,13 @@ from matplotlib import pyplot as plt
 from plio.io.io_gdal import GeoDataset
 from pysis.exceptions import ProcessError
 
+import pvl
+
+import PIL
+from PIL import Image 
+
 from autocnet.matcher.naive_template import pattern_match, pattern_match_autoreg
+from autocnet.matcher.subpixel import subpixel_template_classic
 from autocnet.matcher import ciratefi
 from autocnet.io.db.model import Measures, Points, Images, JsonEncoder
 from autocnet.graph.node import NetworkNode
@@ -19,10 +26,7 @@ from autocnet.transformation import roi
 from autocnet import spatial
 from autocnet.utils.utils import bytescale
 
-import geopandas as gpd
-import pandas as pd
-
-import pvl
+PIL.Image.MAX_IMAGE_PIXELS = sys.float_info.max
 
 isis2np_types = {
         "UnsignedByte" : "uint8",
@@ -737,9 +741,9 @@ def geom_match_simple(base_cube,
     destination image. The created measure is then matched to the source measure using a quick projection
     of the destination image into source image space (using an affine transformation) and a naive
     template match with optional phase template match.
-    
-    This version projects the entirity of the input cube onto the base 
-    
+
+    This version projects the entirity of the input cube onto the base
+
     Parameters
     ----------
     base_cube:  plio.io.io_gdal.GeoDataset
@@ -784,6 +788,9 @@ def geom_match_simple(base_cube,
     autocnet.matcher.subpixel.subpixel_template: for list of kwargs that can be passed to the matcher
     autocnet.matcher.subpixel.subpixel_phase: for list of kwargs that can be passed to the matcher
     """
+    print("in geommatch")
+    size_x = int(size_x)
+    size_y = int(size_y)
 
     if not isinstance(input_cube, GeoDataset):
         raise Exception("input cube must be a geodataset obj")
@@ -810,7 +817,7 @@ def geom_match_simple(base_cube,
 
     # specifically not putting this in a try/except, this should never fail
     center_x, center_y = bcenter_x, bcenter_y
-    
+
     base_corners = [(base_startx,base_starty),
                     (base_startx,base_stopy),
                     (base_stopx,base_stopy),
@@ -829,6 +836,8 @@ def geom_match_simple(base_cube,
     base_gcps = np.array([*base_corners])
 
     dst_gcps = np.array([*dst_corners])
+    print(base_gcps, dst_gcps)
+
     start_x = dst_gcps[:,0].min()
     start_y = dst_gcps[:,1].min()
     stop_x = dst_gcps[:,0].max()
@@ -843,61 +852,73 @@ def geom_match_simple(base_cube,
                     "Real" : "float64"
     }
 
-    base_pixels = list(map(int, [base_corners[0][0], base_corners[0][1], size_x*2, size_y*2]))
+    #base_pixels = list(map(int, [base_corners[0][0], base_corners[0][1], size_x*2, size_y*2]))
     base_type = isis2np_types[pvl.load(base_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
     base_arr = base_cube.read_array(dtype=base_type)
 
-    dst_pixels = list(map(int, [start_x, start_y, stop_x-start_x, stop_y-start_y]))
+    #dst_pixels = list(map(int, [start_x, start_y, stop_x-start_x, stop_y-start_y]))
     dst_type = isis2np_types[pvl.load(input_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
     dst_arr = input_cube.read_array(dtype=dst_type)
     
+    box = (0, 0, max(dst_arr.shape[1], base_arr.shape[1]), max(dst_arr.shape[0], base_arr.shape[0]))
+    dst_arr = np.array(Image.fromarray(arr).crop(box))
+
     dst_arr = tf.warp(dst_arr, affine)
-    
+    print(base_arr.shape, dst_arr.shape )
+    print(bcenter_x, bcenter_y)
+
     if verbose:
-        plt.imshow(base_arr, alpha=.5)
-        plt.imshow(dst_arr, alpha=.5)
-        plt.show()
-    
         fig, axs = plt.subplots(1, 2)
         axs[0].set_title("Base")
-        axs[0].imshow(roi.Roi(bytescale(base_arr), bcenter_x, bcenter_y, 100, 100).clip(), cmap="Greys_r")
+        axs[0].imshow(roi.Roi(bytescale(base_arr, cmin=0), bcenter_x, bcenter_y, 25, 25).clip(), cmap="Greys_r")
         axs[1].set_title("Projected Image")
-        axs[1].imshow(roi.Roi(bytescale(dst_arr), bcenter_x, bcenter_y, 100, 100).clip(), cmap="Greys_r")
+        axs[1].imshow(roi.Roi(bytescale(dst_arr, cmin=0), bcenter_x, bcenter_y, 25, 25).clip(), cmap="Greys_r")
         plt.show()
 
     # Run through one step of template matching then one step of phase matching
     # These parameters seem to work best, should pass as kwargs later
-    restemplate = subpixel_template_classic(bcenter_x, bcenter_y, bcenter_x, bcenter_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
+    restemplate = subpixel_template_classic(bcenter_x, bcenter_y, bcenter_x, bcenter_y, bytescale(base_arr, cmin=0), bytescale(dst_arr, cmin=0), **template_kwargs)
 
     x,y,maxcorr,temp_corrmap = restemplate
+    print("adjusted: ", x, y)
     if x is None or y is None:
         return None, None, None, None, None
     metric = maxcorr
     sample, line = affine([x, y])[0]
-    dist = np.linalg.norm([center_x-sample, center_y-line])
-    
-    if verbose:
-        fig, axs = plt.subplots(1, 3)
-        fig.set_size_inches((30,30))
-        
-        darr = roi.Roi(dst_arr, x, y, 100, 100).clip()
-        axs[1].imshow(darr, cmap="Greys_r")
-        axs[1].axhline(y=darr.shape[1]/2, color="red", linestyle="-", alpha=.6)
-        axs[1].axvline(x=darr.shape[1]/2, color="red", linestyle="-", alpha=.6)
-        axs[1].set_title("Original Registered Image")
-        print(x,y,sample,line)
-        barr = roi.Roi(base_arr, bcenter_x, bcenter_y, 100, 100).clip()
-        axs[0].imshow(bytescale(barr), cmap="Greys_r")
-        axs[0].axhline(y=barr.shape[1]/2, color="red", linestyle="-", alpha=.6)
-        axs[0].axvline(x=barr.shape[1]/2, color="red", linestyle="-", alpha=.6)
-        
-        axs[0].set_title("Base")
+    dist = np.linalg.norm([bcenter_x-x, bcenter_y-y])
 
-        pcm = axs[2].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
+    if verbose:
+        fig, axs = plt.subplots(2, 3)
+        fig.set_size_inches((30,30))
+
+        oarr = roi.Roi(input_cube.read_array(), sample, line, 150, 150).clip()
+        axs[0][2].imshow(bytescale(oarr, cmin=0), cmap="Greys_r")
+        axs[0][2].axhline(y=oarr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][2].axvline(x=oarr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][2].set_title("Original Registered Image")
+        
+        darr = roi.Roi(dst_arr, x, y, size_x, size_y).clip()
+        axs[0][1].imshow(bytescale(darr, cmin=0), cmap="Greys_r")
+        axs[0][1].axhline(y=darr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][1].axvline(x=darr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][1].set_title("Projected Registered Image")
+
+        barr = roi.Roi(base_arr, bcenter_x, bcenter_y, size_x, size_y).clip()
+        axs[0][0].imshow(bytescale(barr, cmin=0), cmap="Greys_r")
+        axs[0][0].axhline(y=barr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][0].axvline(x=barr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][0].set_title("Base")
+        
+        axs[1][0].imshow(bytescale(darr.astype("f")/barr.astype("f")), cmap="Greys_r", alpha=.6)
+        axs[1][0].axhline(y=barr.shape[1]/2, color="red", linestyle="-", alpha=.5)
+        axs[1][0].axvline(x=barr.shape[1]/2, color="red", linestyle="-", alpha=.5)
+        axs[1][0].set_title("overlap")
+    
+        pcm = axs[1][1].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
         plt.show()
 
     return sample, line, dist, metric, temp_corrmap
-    
+
 
 def geom_match_classic(base_cube,
                        input_cube,
@@ -958,6 +979,9 @@ def geom_match_classic(base_cube,
     autocnet.matcher.subpixel.subpixel_template: for list of kwargs that can be passed to the matcher
     autocnet.matcher.subpixel.subpixel_phase: for list of kwargs that can be passed to the matcher
     """
+    
+    size_x = (int)size_x
+    size_y = (int)size_y
 
     if not isinstance(input_cube, GeoDataset):
         raise Exception("input cube must be a geodataset obj")

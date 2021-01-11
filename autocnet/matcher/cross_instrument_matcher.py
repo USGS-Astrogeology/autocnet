@@ -50,7 +50,7 @@ from autocnet.spatial import isis
 from autocnet.transformation.spatial import reproject, oc2og
 from autocnet.matcher.cpu_extractor import extract_most_interesting
 from autocnet.transformation import roi
-from autocnet.matcher.subpixel import geom_match
+from autocnet.matcher.subpixel import geom_match_simple
 from autocnet.utils.utils import bytescale
 
 import warnings
@@ -277,7 +277,7 @@ def propagate_point(Session,
                 print(f'prop point: base_image: {base_image}')
                 print(f'prop point: dest_image: {dest_image}')
                 print(f'prop point: (sx, sy): ({sx}, {sy})')
-                x,y, dist, metrics, corrmap = geom_match(base_image, dest_image, sx, sy, \
+                x,y, dist, metrics, corrmap = geom_match_simple(base_image, dest_image, sx, sy, \
                         template_kwargs=template_kwargs, \
                         verbose=verbose)
             except Exception as e:
