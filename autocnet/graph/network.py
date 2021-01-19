@@ -1708,7 +1708,7 @@ class NetworkCandidateGraph(CandidateGraph):
         isisroot = env['ISISROOT']
         isisdata = env['ISISDATA']
 
-        isissetup = f'export ISISROOT={isisroot} && export ISIS3DATA={isisdata}'
+        isissetup = f'export ISISROOT={isisroot} && export ISIS3DATA={isisdata} && export ISISDATA={isisdata}'
         condasetup = f'conda activate {condaenv}'
         job = f'acn_submit -r={rhost} -p={rport} {processing_queue}'
         command = f'{condasetup} && {isissetup} && {job}'

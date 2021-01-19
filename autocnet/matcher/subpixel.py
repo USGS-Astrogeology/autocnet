@@ -1474,7 +1474,8 @@ def subpixel_register_point(pointid,
 
     version = version.lower()
     geom_funcs = {"classic": geom_match_classic,
-                "new": geom_match
+                "new": geom_match,
+                "simple": geom_match_simple
                 }
     if version not in geom_funcs.keys():
         raise Exception(f"{version} not a valid geom_match function version.")
