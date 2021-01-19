@@ -961,8 +961,7 @@ def geom_match_classic(base_cube,
                        bcenter_y,
                        size_x=60,
                        size_y=60,
-                       match_func=subpixel_template_classic,
-                       match_kwargs = {"image_size":(101,101), "template_size":(31,31)},
+                       template_kwargs={"image_size":(59,59), "template_size":(31,31)},
                        phase_kwargs=None,
                        verbose=True):
     """
@@ -971,9 +970,6 @@ def geom_match_classic(base_cube,
     destination image. The created measure is then matched to the source measure using a quick projection
     of the destination image into source image space (using an affine transformation) and a naive
     template match with optional phase template match.
-
-    This version projects the entirity of the input cube onto the base
-
     Parameters
     ----------
     base_cube:  plio.io.io_gdal.GeoDataset
@@ -1043,7 +1039,8 @@ def geom_match_classic(base_cube,
         raise Exception(f"Window: {base_starty} < 0, center: {bcenter_x},{bcenter_y}")
 
     # specifically not putting this in a try/except, this should never fail
-    center_x, center_y = bcenter_x, bcenter_y
+    mlat, mlon = spatial.isis.image_to_ground(base_cube.file_name, bcenter_x, bcenter_y)
+    center_x, center_y = spatial.isis.ground_to_image(input_cube.file_name, mlon, mlat)[::-1]
 
     base_corners = [(base_startx,base_starty),
                     (base_startx,base_stopy),
@@ -1061,13 +1058,16 @@ def geom_match_classic(base_cube,
                 return None, None, None, None, None
 
     base_gcps = np.array([*base_corners])
+    base_gcps[:,0] -= base_startx
+    base_gcps[:,1] -= base_starty
 
     dst_gcps = np.array([*dst_corners])
-
     start_x = dst_gcps[:,0].min()
     start_y = dst_gcps[:,1].min()
     stop_x = dst_gcps[:,0].max()
     stop_y = dst_gcps[:,1].max()
+    dst_gcps[:,0] -= start_x
+    dst_gcps[:,1] -= start_y
 
     affine = tf.estimate_transform('affine', np.array([*base_gcps]), np.array([*dst_gcps]))
 
@@ -1080,71 +1080,52 @@ def geom_match_classic(base_cube,
 
     base_pixels = list(map(int, [base_corners[0][0], base_corners[0][1], size_x*2, size_y*2]))
     base_type = isis2np_types[pvl.load(base_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
-    base_arr = base_cube.read_array(dtype=base_type)
+    base_arr = base_cube.read_array(pixels=base_pixels, dtype=base_type)
 
     dst_pixels = list(map(int, [start_x, start_y, stop_x-start_x, stop_y-start_y]))
     dst_type = isis2np_types[pvl.load(input_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
-    dst_arr = input_cube.read_array(dtype=dst_type)
-
-    box = (0, 0, max(dst_arr.shape[1], base_arr.shape[1]), max(dst_arr.shape[0], base_arr.shape[0]))
-    dst_arr = np.array(Image.fromarray(dst_arr).crop(box))
+    dst_arr = input_cube.read_array(pixels=dst_pixels, dtype=dst_type)
 
     dst_arr = tf.warp(dst_arr, affine)
+    dst_arr = dst_arr[:size_y*2, :size_x*2]
 
     if verbose:
         fig, axs = plt.subplots(1, 2)
         axs[0].set_title("Base")
-        axs[0].imshow(roi.Roi(bytescale(base_arr, cmin=0), bcenter_x, bcenter_y, 25, 25).clip(), cmap="Greys_r")
+        axs[0].imshow(bytescale(base_arr), cmap="Greys_r")
         axs[1].set_title("Projected Image")
-        axs[1].imshow(roi.Roi(bytescale(dst_arr, cmin=0), bcenter_x, bcenter_y, 25, 25).clip(), cmap="Greys_r")
+        axs[1].imshow(bytescale(dst_arr), cmap="Greys_r")
         plt.show()
 
     # Run through one step of template matching then one step of phase matching
     # These parameters seem to work best, should pass as kwargs later
-    restemplate = match_func(bcenter_x, bcenter_y, bcenter_x, bcenter_y,
-                            bytescale(base_arr, cmin=0), bytescale(dst_arr, cmin=0),
-                            **match_kwargs)
+    restemplate = subpixel_template_classic(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
 
-
-    x,y,maxcorr = restemplate
-
+    x,y,maxcorr,temp_corrmap = restemplate
     if x is None or y is None:
         return None, None, None, None, None
     metric = maxcorr
     sample, line = affine([x, y])[0]
-    dist = np.linalg.norm([bcenter_x-x, bcenter_y-y])
+    sample += start_x
+    line += start_y
+    dist = np.linalg.norm([center_x-sample, center_y-line])
 
     if verbose:
-        fig, axs = plt.subplots(2, 3)
+        fig, axs = plt.subplots(1, 3)
         fig.set_size_inches((30,30))
+        darr = roi.Roi(input_cube.read_array(dtype=dst_type), sample, line, 100, 100).clip()
+        axs[1].imshow(darr, cmap="Greys_r")
+        axs[1].scatter(x=[darr.shape[1]/2], y=[darr.shape[0]/2], s=10, c="red")
+        axs[1].set_title("Original Registered Image")
 
-        oarr = roi.Roi(input_cube.read_array(), sample, line, 150, 150).clip()
-        axs[0][2].imshow(bytescale(oarr, cmin=0), cmap="Greys_r")
-        axs[0][2].axhline(y=oarr.shape[1]/2, color="red", linestyle="-", alpha=1)
-        axs[0][2].axvline(x=oarr.shape[1]/2, color="red", linestyle="-", alpha=1)
-        axs[0][2].set_title("Original Registered Image")
+        axs[0].imshow(base_arr, cmap="Greys_r")
+        axs[0].scatter(x=[base_arr.shape[1]/2], y=[base_arr.shape[0]/2], s=10, c="red")
+        axs[0].set_title("Base")
 
-        darr = roi.Roi(dst_arr, x, y, size_x, size_y).clip()
-        axs[0][1].imshow(bytescale(darr, cmin=0), cmap="Greys_r")
-        axs[0][1].axhline(y=darr.shape[1]/2, color="red", linestyle="-", alpha=1)
-        axs[0][1].axvline(x=darr.shape[1]/2, color="red", linestyle="-", alpha=1)
-        axs[0][1].set_title("Projected Registered Image")
-
-        barr = roi.Roi(base_arr, bcenter_x, bcenter_y, size_x, size_y).clip()
-        axs[0][0].imshow(bytescale(barr, cmin=0), cmap="Greys_r")
-        axs[0][0].axhline(y=barr.shape[1]/2, color="red", linestyle="-", alpha=1)
-        axs[0][0].axvline(x=barr.shape[1]/2, color="red", linestyle="-", alpha=1)
-        axs[0][0].set_title("Base")
-
-        axs[1][0].imshow(bytescale(darr.astype("f")/barr.astype("f")), cmap="Greys_r", alpha=.6)
-        axs[1][0].axhline(y=barr.shape[1]/2, color="red", linestyle="-", alpha=.5)
-        axs[1][0].axvline(x=barr.shape[1]/2, color="red", linestyle="-", alpha=.5)
-        axs[1][0].set_title("overlap")
-
-        # pcm = axs[1][1].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
+        pcm = axs[2].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
         plt.show()
 
-    return sample, line, dist, metric, None
+    return sample, line, dist, metric, temp_corrmap
 
 
 def geom_match(destination_cube,
