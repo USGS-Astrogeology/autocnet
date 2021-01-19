@@ -1406,14 +1406,11 @@ def subpixel_register_point(pointid,
     pointid : int or obj
               The identifier of the point in the DB or a Points object
 
-    subpixel_template_kwargs : dict
-                               Ay keyword arguments passed to the template matcher
-
-    cost : func
-           A generic cost function accepting two arguments (x,y), where x is the
-           distance that a point has shifted from the original, sensor identified
-           intersection, and y is the correlation coefficient coming out of the
-           template matcher.
+    cost_func : func
+                A generic cost function accepting two arguments (x,y), where x is the
+                distance that a point has shifted from the original, sensor identified
+                intersection, and y is the correlation coefficient coming out of the
+                template matcher.
 
     threshold : numeric
                 measures with a cost <= the threshold are marked as ignore=True in
@@ -1421,6 +1418,13 @@ def subpixel_register_point(pointid,
     ncg : obj
           the network candidate graph that the point is associated with; used for
           the DB session that is able to access the point.
+    
+    geom_func : callable
+                function used to tranform the source and/or destination image before 
+                running a matcher. 
+    
+    match_func : callable
+                 subpixel matching function to use registering measures      
     """
 
     geom_func=geom_func.lower()
