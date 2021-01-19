@@ -3,6 +3,8 @@ from math import modf, floor
 import numpy as np
 import warnings
 
+import numbers
+
 import sys
 from skimage.feature import register_translation
 from skimage import transform as tf
@@ -32,6 +34,41 @@ isis2np_types = {
         "SignedWord" : "int16",
         "Real" : "float64"
 }
+
+
+def check_geom_func(func):
+    # TODO: Pain. Stick with one of these and delete this function along with
+    # everything else
+    geom_funcs = {
+            "classic": geom_match_classic,
+            "new": geom_match,
+            "simple" : geom_match_simple,
+    }
+
+    if func in geom_funcs.values():
+        return func
+
+    if func in geom_funcs.keys():
+        return match_funcs[func]
+
+    raise Exception(f"{func} not a valid geometry function.")
+
+
+def check_match_func(func):
+    match_funcs = {
+        "classic": subpixel_template_classic,
+        "phase": iterative_phase,
+        "template": subpixel_template
+    }
+
+    if func in match_funcs.values():
+        return func
+
+    if func in match_funcs.keys():
+        return match_funcs[func]
+
+    raise Exception(f"{func} not a valid matching function.")
+
 
 # TODO: look into KeyPoint.size and perhaps use to determine an appropriately-sized search/template.
 def _prep_subpixel(nmatches, nstrengths=2):
@@ -86,8 +123,9 @@ def check_image_size(imagesize):
     imagesize : tuple
                 in the form (size_x, size_y)
     """
-    if isinstance(imagesize, int):
-        imagesize = (imagesize, imagesize)
+    if isinstance(imagesize, numbers.Number):
+        imagesize = (int(imagesize), int(imagesize))
+
 
     x = imagesize[0]
     y = imagesize[1]
@@ -99,6 +137,7 @@ def check_image_size(imagesize):
     x = floor(x/2)
     y = floor(y/2)
     return x,y
+
 
 def clip_roi(img, center_x, center_y, size_x=200, size_y=200, dtype="uint64"):
     """
@@ -156,6 +195,7 @@ def clip_roi(img, center_x, center_y, size_x=200, size_y=200, dtype="uint64"):
         except:
             return None, 0, 0
     return subarray, axr, ayr
+
 
 def subpixel_phase(sx, sy, dx, dy,
                    s_img, d_img,
@@ -228,7 +268,8 @@ def subpixel_phase(sx, sy, dx, dy,
     dx = d_roi.x - shift_x
     dy = d_roi.y - shift_y
 
-    return dx, dy, (error, diffphase)
+    return dx, dy, error
+
 
 def subpixel_transformed_template(sx, sy, dx, dy,
                                   s_img, d_img,
@@ -310,8 +351,8 @@ def subpixel_transformed_template(sx, sy, dx, dy,
     image_size = check_image_size(image_size)
     template_size = check_image_size(template_size)
 
-    template_size_x = template_size[0] * transform.scale[0]
-    template_size_y = template_size[1] * transform.scale[1]
+    template_size_x = int(template_size[0] * transform.scale[0])
+    template_size_y = int(template_size[1] * transform.scale[1])
 
     s_roi = roi.Roi(s_img, sx, sy, size_x=image_size[0], size_y=image_size[1])
     d_roi = roi.Roi(d_img, dx, dy, size_x=template_size_x, size_y=template_size_y)
@@ -402,6 +443,7 @@ def subpixel_transformed_template(sx, sy, dx, dy,
 
     return dx, dy, metrics, corrmap
 
+
 def subpixel_template_classic(sx, sy, dx, dy,
                               s_img, d_img,
                               image_size=(251, 251),
@@ -463,7 +505,7 @@ def subpixel_template_classic(sx, sy, dx, dy,
     dx = d_roi.x - shift_x
     dy = d_roi.y - shift_y
 
-    return dx, dy, metrics, corrmap
+    return dx, dy, metrics
 
 
 def subpixel_template(sx, sy, dx, dy,
@@ -580,6 +622,7 @@ def subpixel_template(sx, sy, dx, dy,
 
     return dx, dy, metrics, corrmap
 
+
 def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_size=51, **kwargs):
     """
     Uses a pattern-matcher on subsets of two images determined from the passed-in keypoints and optional sizes to
@@ -630,6 +673,7 @@ def subpixel_ciratefi(sx, sy, dx, dy, s_img, d_img, search_size=251, template_si
     dx += (x_offset + t_roi.axr)
     dy += (y_offset + t_roi.ayr)
     return dx, dy, strength
+
 
 def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(51, 51), reduction=11, convergence_threshold=1.0, max_dist=50, **kwargs):
     """
@@ -700,6 +744,7 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(51, 51), reduction=11, c
            abs(dist) <= max_dist:
            break
     return dx, dy, metrics
+
 
 def estimate_affine_transformation(destination_coordinates, source_coordinates):
     """
@@ -787,8 +832,6 @@ def geom_match_simple(base_cube,
     autocnet.matcher.subpixel.subpixel_template: for list of kwargs that can be passed to the matcher
     autocnet.matcher.subpixel.subpixel_phase: for list of kwargs that can be passed to the matcher
     """
-    print("in geommatch")
-    print("subpixel kwargs", template_kwargs)
 
     if not isinstance(input_cube, GeoDataset):
         raise Exception("input cube must be a geodataset obj")
@@ -849,11 +892,9 @@ def geom_match_simple(base_cube,
                     "Real" : "float64"
     }
 
-    #base_pixels = list(map(int, [base_corners[0][0], base_corners[0][1], size_x*2, size_y*2]))
     base_type = isis2np_types[pvl.load(base_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
     base_arr = base_cube.read_array(dtype=base_type)
 
-    #dst_pixels = list(map(int, [start_x, start_y, stop_x-start_x, stop_y-start_y]))
     dst_type = isis2np_types[pvl.load(input_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
     dst_arr = input_cube.read_array(dtype=dst_type)
 
@@ -920,7 +961,8 @@ def geom_match_classic(base_cube,
                        bcenter_y,
                        size_x=60,
                        size_y=60,
-                       template_kwargs={"image_size":(59,59), "template_size":(31,31)},
+                       match_func=subpixel_template_classic,
+                       match_kwargs = {"image_size":(101,101), "template_size":(31,31)},
                        phase_kwargs=None,
                        verbose=True):
     """
@@ -929,6 +971,9 @@ def geom_match_classic(base_cube,
     destination image. The created measure is then matched to the source measure using a quick projection
     of the destination image into source image space (using an affine transformation) and a naive
     template match with optional phase template match.
+
+    This version projects the entirity of the input cube onto the base
+
     Parameters
     ----------
     base_cube:  plio.io.io_gdal.GeoDataset
@@ -998,8 +1043,7 @@ def geom_match_classic(base_cube,
         raise Exception(f"Window: {base_starty} < 0, center: {bcenter_x},{bcenter_y}")
 
     # specifically not putting this in a try/except, this should never fail
-    mlat, mlon = spatial.isis.image_to_ground(base_cube.file_name, bcenter_x, bcenter_y)
-    center_x, center_y = spatial.isis.ground_to_image(input_cube.file_name, mlon, mlat)[::-1]
+    center_x, center_y = bcenter_x, bcenter_y
 
     base_corners = [(base_startx,base_starty),
                     (base_startx,base_stopy),
@@ -1017,16 +1061,13 @@ def geom_match_classic(base_cube,
                 return None, None, None, None, None
 
     base_gcps = np.array([*base_corners])
-    base_gcps[:,0] -= base_startx
-    base_gcps[:,1] -= base_starty
 
     dst_gcps = np.array([*dst_corners])
+
     start_x = dst_gcps[:,0].min()
     start_y = dst_gcps[:,1].min()
     stop_x = dst_gcps[:,0].max()
     stop_y = dst_gcps[:,1].max()
-    dst_gcps[:,0] -= start_x
-    dst_gcps[:,1] -= start_y
 
     affine = tf.estimate_transform('affine', np.array([*base_gcps]), np.array([*dst_gcps]))
 
@@ -1039,141 +1080,72 @@ def geom_match_classic(base_cube,
 
     base_pixels = list(map(int, [base_corners[0][0], base_corners[0][1], size_x*2, size_y*2]))
     base_type = isis2np_types[pvl.load(base_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
-    base_arr = base_cube.read_array(pixels=base_pixels, dtype=base_type)
+    base_arr = base_cube.read_array(dtype=base_type)
 
     dst_pixels = list(map(int, [start_x, start_y, stop_x-start_x, stop_y-start_y]))
     dst_type = isis2np_types[pvl.load(input_cube.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
-    dst_arr = input_cube.read_array(pixels=dst_pixels, dtype=dst_type)
+    dst_arr = input_cube.read_array(dtype=dst_type)
+
+    box = (0, 0, max(dst_arr.shape[1], base_arr.shape[1]), max(dst_arr.shape[0], base_arr.shape[0]))
+    dst_arr = np.array(Image.fromarray(dst_arr).crop(box))
 
     dst_arr = tf.warp(dst_arr, affine)
-    dst_arr = dst_arr[:size_y*2, :size_x*2]
 
     if verbose:
         fig, axs = plt.subplots(1, 2)
         axs[0].set_title("Base")
-        axs[0].imshow(bytescale(base_arr), cmap="Greys_r")
+        axs[0].imshow(roi.Roi(bytescale(base_arr, cmin=0), bcenter_x, bcenter_y, 25, 25).clip(), cmap="Greys_r")
         axs[1].set_title("Projected Image")
-        axs[1].imshow(bytescale(dst_arr), cmap="Greys_r")
+        axs[1].imshow(roi.Roi(bytescale(dst_arr, cmin=0), bcenter_x, bcenter_y, 25, 25).clip(), cmap="Greys_r")
         plt.show()
 
     # Run through one step of template matching then one step of phase matching
     # These parameters seem to work best, should pass as kwargs later
-    restemplate = subpixel_template_classic(size_x, size_y, size_x, size_y, bytescale(base_arr), bytescale(dst_arr), **template_kwargs)
+    restemplate = match_func(bcenter_x, bcenter_y, bcenter_x, bcenter_y,
+                            bytescale(base_arr, cmin=0), bytescale(dst_arr, cmin=0),
+                            **match_kwargs)
 
-    x,y,maxcorr,temp_corrmap = restemplate
+
+    x,y,maxcorr = restemplate
+
     if x is None or y is None:
         return None, None, None, None, None
     metric = maxcorr
     sample, line = affine([x, y])[0]
-    sample += start_x
-    line += start_y
-    dist = np.linalg.norm([center_x-sample, center_y-line])
+    dist = np.linalg.norm([bcenter_x-x, bcenter_y-y])
 
     if verbose:
-        fig, axs = plt.subplots(1, 3)
+        fig, axs = plt.subplots(2, 3)
         fig.set_size_inches((30,30))
-        darr = roi.Roi(input_cube.read_array(dtype=dst_type), sample, line, 100, 100).clip()
-        axs[1].imshow(darr, cmap="Greys_r")
-        axs[1].scatter(x=[darr.shape[1]/2], y=[darr.shape[0]/2], s=10, c="red")
-        axs[1].set_title("Original Registered Image")
 
-        axs[0].imshow(base_arr, cmap="Greys_r")
-        axs[0].scatter(x=[base_arr.shape[1]/2], y=[base_arr.shape[0]/2], s=10, c="red")
-        axs[0].set_title("Base")
+        oarr = roi.Roi(input_cube.read_array(), sample, line, 150, 150).clip()
+        axs[0][2].imshow(bytescale(oarr, cmin=0), cmap="Greys_r")
+        axs[0][2].axhline(y=oarr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][2].axvline(x=oarr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][2].set_title("Original Registered Image")
 
-        pcm = axs[2].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
+        darr = roi.Roi(dst_arr, x, y, size_x, size_y).clip()
+        axs[0][1].imshow(bytescale(darr, cmin=0), cmap="Greys_r")
+        axs[0][1].axhline(y=darr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][1].axvline(x=darr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][1].set_title("Projected Registered Image")
+
+        barr = roi.Roi(base_arr, bcenter_x, bcenter_y, size_x, size_y).clip()
+        axs[0][0].imshow(bytescale(barr, cmin=0), cmap="Greys_r")
+        axs[0][0].axhline(y=barr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][0].axvline(x=barr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][0].set_title("Base")
+
+        axs[1][0].imshow(bytescale(darr.astype("f")/barr.astype("f")), cmap="Greys_r", alpha=.6)
+        axs[1][0].axhline(y=barr.shape[1]/2, color="red", linestyle="-", alpha=.5)
+        axs[1][0].axvline(x=barr.shape[1]/2, color="red", linestyle="-", alpha=.5)
+        axs[1][0].set_title("overlap")
+
+        # pcm = axs[1][1].imshow(temp_corrmap**2, interpolation=None, cmap="coolwarm")
         plt.show()
 
-    return sample, line, dist, metric, temp_corrmap
+    return sample, line, dist, metric, None
 
-
-def geom_match(base_cube,
-               input_cube,
-               bcenter_x,
-               bcenter_y,
-               size_x=60,
-               size_y=60,
-               template_kwargs={"image_size":(59,59), "template_size":(31,31)},
-               phase_kwargs=None,
-               verbose=True):
-    """
-    Propagates a source measure into destination images and then perfroms subpixel registration.
-    Measure creation is done by projecting the (lon, lat) associated with the source measure into the
-    destination image. The created measure is then matched to the source measure using a quick projection
-    of the destination image into source image space (using an affine transformation) and a naive
-    template match with optional phase template match.
-    Parameters
-    ----------
-    base_cube:  plio.io.io_gdal.GeoDataset
-                source image
-    input_cube: plio.io.io_gdal.GeoDataset
-                destination image; gets matched to the source image
-    bcenter_x:  int
-                sample location of source measure in base_cube
-    bcenter_y:  int
-                line location of source measure in base_cube
-    size_x:     int
-                half-height of the subimage used in the affine transformation
-    size_y:     int
-                half-width of the subimage used in affine transformation
-    template_kwargs: dict
-                    contains keywords necessary for autocnet.matcher.subpixel.subpixel_template
-    phase_kwargs:   dict
-                    contains kwargs for autocnet.matcher.subpixel.subpixel_phase
-    verbose: boolean
-             indicates level of print out desired. If True, two subplots are output; the first subplot contains
-             the source subimage and projected destination subimage, the second subplot contains the registered
-             measure's location in the base subimage and the unprojected destination subimage with the corresponding
-             template metric correlation map.
-
-    Returns
-    -------
-    sample: int
-            sample of new measure in destination image space
-    line:   int
-            line of new measures in destination image space
-    dist:   np.float or tuple of np.float
-            distance matching algorithm moved measure
-            if template matcher only (default): returns dist_template
-            if template and phase matcher:      returns (dist_template, dist_phase)
-    metric: np.float or tuple of np.float
-            matching metric output by the matcher
-            if template matcher only (default): returns maxcorr
-            if template and phase matcher:      returns (maxcorr, perror, pdiff)
-    temp_corrmap: np.ndarray
-                  correlation map of the naive template matcher
-    See Also
-    --------
-    autocnet.matcher.subpixel.subpixel_template: for list of kwargs that can be passed to the matcher
-    autocnet.matcher.subpixel.subpixel_phase: for list of kwargs that can be passed to the matcher
-    """
-
-    if not isinstance(input_cube, GeoDataset):
-        raise Exception("input cube must be a geodataset obj")
-    if not isinstance(base_cube, GeoDataset):
-        raise Exception("match cube must be a geodataset obj")
-
-    base_startx = int(bcenter_x - size_x)
-    base_starty = int(bcenter_y - size_y)
-    base_stopx = int(bcenter_x + size_x)
-    base_stopy = int(bcenter_y + size_y)
-
-    image_size = input_cube.raster_size
-    match_size = base_cube.raster_size
-
-    # for now, require the entire window resides inside both cubes.
-    if base_stopx > match_size[0]:
-        raise Exception(f"Window: {base_stopx} > {match_size[0]}, center: {bcenter_x},{bcenter_y}")
-    if base_startx < 0:
-        raise Exception(f"Window: {base_startx} < 0, center: {bcenter_x},{bcenter_y}")
-    if base_stopy > match_size[1]:
-        raise Exception(f"Window: {base_stopy} > {match_size[1]}, center: {bcenter_x},{bcenter_y} ")
-    if base_starty < 0:
-        raise Exception(f"Window: {base_starty} < 0, center: {bcenter_x},{bcenter_y}")
-
-    # specifically not putting this in a try/except, this should never fail
-    mlat, mlon = spatial.isis.image_to_ground(base_cube.file_name, bcenter_x, bcenter_y)
-    center_x, center_y = spatial.isis.ground_to_image(input_cube.file_name, mlon, mlat)[::-1]
 
 def geom_match(destination_cube,
                source_cube,
@@ -1436,11 +1408,12 @@ def subpixel_register_measure(measureid,
 
 
 def subpixel_register_point(pointid,
-                            subpixel_template_kwargs={},
                             cost_func=lambda x,y: 1/x**2 * y,
                             threshold=0.005,
                             ncg=None,
-                            version='new',
+                            geom_func='simple',
+                            match_func='classic',
+                            match_kwargs={},
                             **kwargs):
 
     """
@@ -1469,16 +1442,16 @@ def subpixel_register_point(pointid,
           the DB session that is able to access the point.
     """
 
+    geom_func=geom_func.lower()
+    match_func=match_func.lower()
+
+    print(f"Using {geom_func} with the {match_func} matcher.")
+
     if not ncg.Session:
         raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
 
-    version = version.lower()
-    geom_funcs = {"classic": geom_match_classic,
-                "new": geom_match
-                }
-    if version not in geom_funcs.keys():
-        raise Exception(f"{version} not a valid geom_match function version.")
-    geom_func = geom_funcs[version]
+    match_func = check_match_func(match_func)
+    geom_func = check_geom_func(geom_func)
 
     if isinstance(pointid, Points):
         pointid = pointid.id
@@ -1513,9 +1486,16 @@ def subpixel_register_point(pointid,
 
             print('geom_match image:', res.path)
             try:
-                new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
+                # new geom_match has a incompatible API, until we devide on one, put in if.
+                if (geom_func == geom_match):
+                   new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
                                                         source.apriorisample, source.aprioriline,
-                                                        template_kwargs=subpixel_template_kwargs)
+                                                        template_kwargs=match_kwargs)
+                else:
+                    new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
+                                                        source.apriorisample, source.aprioriline,
+                                                        match_func=match_func,
+                                                        match_kwargs=match_kwargs)
             except Exception as e:
                 print(f'geom_match failed on measure {measure.id} with exception -> {e}')
                 currentlog['status'] = f"geom_match failed on measure {measure.id}"
@@ -1567,6 +1547,7 @@ def subpixel_register_point(pointid,
             resultlog.append(currentlog)
 
     return resultlog
+
 
 def subpixel_register_points(subpixel_template_kwargs={'image_size':(251,251)},
                              cost_kwargs={},
