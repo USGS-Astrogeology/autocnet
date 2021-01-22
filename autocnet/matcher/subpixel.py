@@ -1538,10 +1538,10 @@ def subpixel_register_point(pointid,
 
 
 def compute_reference_mesure(pointid,
-                             value_func=lambda x, y: y == np.max(x),
                              base_image, 
                              size_x, 
                              size_y,
+                             value_func=lambda x, y: y == np.max(x),
                              ncg=None,
                              geom_func='simple',
                              geom_kwargs={"size_x": 16, "size_Y": 16},
