@@ -78,6 +78,7 @@ def place_points_in_overlap(overlap,
                             cam_type="csm",
                             size=71,
                             distribute_points_kwargs={},
+                            point_type = 2, # free 
                             ncg=None,
                             **kwargs):
     """
@@ -227,7 +228,7 @@ def place_points_in_overlap(overlap,
         point = Points(overlapid=overlap.id,
                        apriori=point_geom,
                        adjusted=point_geom,
-                       pointtype=2, # Would be 3 or 4 for ground
+                       pointtype=pointType, # Would be 3 or 4 for ground
                        cam_type=cam_type)
 
         # Compute ground point to back project into measurtes
@@ -257,8 +258,14 @@ def place_points_in_overlap(overlap,
         if len(point.measures) >= 2:
             points.append(point)
     print(f'Able to place {len(points)} points.')
+
+    # default reference image to the first measure 
+    point.ref_measure = point.measuresp[0].id 
+
     Points.bulkadd(points, ncg.Session)
     return points
+
+
 
 def place_points_in_image(image,
                           cam_type="csm",

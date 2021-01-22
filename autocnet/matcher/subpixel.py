@@ -1326,7 +1326,9 @@ def subpixel_register_measure(measureid,
 
         # Get the point id and set up the reference measure
         pointid = destination.pointid
-        source = session.query(Measures).filter(Measures.pointid==pointid).order_by(Measures.id).first()
+        ref_measure_id = session.query(Points).filter(Points.id == pointid).one().ref_measure 
+        
+        source = session.query(Measures).filter(Measures.id==ref_measure_id).first()
         source.template_metric = 1
         source.template_shift = 0
         source.phase_error = 0
@@ -1393,6 +1395,7 @@ def subpixel_register_point(pointid,
                             threshold=0.005,
                             ncg=None,
                             geom_func='simple',
+                            geom_kwargs={},
                             match_func='classic',
                             match_kwargs={},
                             **kwargs):
@@ -1475,12 +1478,12 @@ def subpixel_register_point(pointid,
                 if (geom_func == geom_match):
                    new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
                                                         source.apriorisample, source.aprioriline,
-                                                        template_kwargs=match_kwargs)
+                                                        template_kwargs=match_kwargs, **geom_kwargs)
                 else:
                     new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
                                                         source.apriorisample, source.aprioriline,
                                                         match_func=match_func,
-                                                        match_kwargs=match_kwargs)
+                                                        match_kwargs=match_kwargs, **geom_kwargs)
             except Exception as e:
                 print(f'geom_match failed on measure {measure.id} with exception -> {e}')
                 currentlog['status'] = f"geom_match failed on measure {measure.id}"
@@ -1532,6 +1535,109 @@ def subpixel_register_point(pointid,
             resultlog.append(currentlog)
 
     return resultlog
+
+
+def compute_reference_mesure(pointid,
+                             value_func=lambda x, y: y == np.max(x),
+                             base_image, 
+                             size_x, 
+                             size_y,
+                             ncg=None,
+                             geom_func='simple',
+                             geom_kwargs={"size_x": 16, "size_Y": 16},
+                             match_func='classic',
+                             match_kwargs={},
+                             **kwargs):
+    """
+    """
+
+    match_func = check_match_func(match_func)
+    if not ncg.Session:
+     raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
+ 
+    session = ncg.Session()
+
+    if isinstance(pointid, Points):
+        point = pointid 
+        pointid = pointid.id
+
+    with ncg.session_scope() as session:
+        if isinstance(pointid, Points):
+            point = pointid
+            pointid = point.id
+        else:
+            point = session.query(Points).filter(Points.id == pointid).one()
+         
+        measures = session.query(Measures).filter(Measures.point_id == pointid).all()
+    
+        new_measures = []
+
+        # list of matching results in the format:
+        # [measure_id, x_offset, y_offset, offset_magnitude]
+        match_results = []
+        base_image = GeoDataset(base_image)
+
+        for m in measures:
+            measure_image = session.query(Images).filter(Images.id == m.imageid).one() 
+            measure_image = GeoDataset(measure_image.path)
+            
+            bpoint = isis.point_info(ground_mosaic.file_name, point.geom.x, point.geom.y, 'ground')
+            if bpoint is None:
+                print('unable to find point in ground image')
+                continue
+            
+            bline = linessamples[0].get('Line')
+            bsample = linessamples[0].get('Sample')
+
+            try:
+                print(f'prop point: base_image: {base_image}')
+                print(f'prop point: dest_image: {measure_image}')
+                print(f'prop point: (sx, sy): ({m.sample}, {m.line})')
+                x, y, dist, metrics, corrmap = geom_match_simple(base_image, measure_image, 
+                        bsample, bline, 
+                        match_func = match_func,
+                        match_kwargs=match_kwargs, 
+                        verbose=verbose, 
+                        geom_kwargs)
+            
+            except Exception as e:
+                raise Exception(e)
+                match_results.append(e)
+                continue
+
+            match_results.append([m.id, x, y,
+                                 metrics, dist, corrmap, m["path"], image["path"],
+                                 image['id'], image['serial']])
+
+    # get best offsets
+    match_results = np.asarray([res for res in match_results if isinstance(res, list) and all(r is not None for r in res)])
+    # if the single best results metric (returned by geom_matcher) is None
+    if len(best_results.shape[0] == 0 or (best_results[:,3])==1 and best_results[:,3][0] is None):
+        raise Excpetion("Point with id {pointid} has no measure that matches criteria, reference measure will remain unchanged")
+    
+    if verbose:
+        print("match_results final length: ", len(match_results))
+        print("best_results length: ", len(best_results))
+        print("Full results: ", best_results)
+        print("Winning CORRs: ", best_results[:,3], "Themis Pixel shifts: ", best_results[:,4])
+        print("Themis Images: ", best_results[:,6], "CTX images:", best_results[:,7])
+        print("Themis Sample: ", sx, "CTX Samples: ", best_results[:,1])
+        print("Themis Line: ", sy, "CTX Lines: ", best_results[:,2])
+        print('\n')
+
+    values = [match for match in match_results if value_func(match_results[:,3], match[3])]
+    # column index 3 is the metric returned by the geom matcher
+    best_results = match_results[np.argmax(values)]
+
+    px, py = dem.latlon_to_pixel(lat, lon)
+    height = dem.read_array(1, [px, py, 1, 1])[0][0]
+
+    with ncg.session_scope() as session:
+       measure = session.query(Measures).filter(Measures.id == best_results[0]).all() 
+       measure.sample = best_results[1]
+       measure.line = best_results[2]         
+       
+       point.ref_measure = measure.id
 
 
 def subpixel_register_points(subpixel_template_kwargs={'image_size':(251,251)},

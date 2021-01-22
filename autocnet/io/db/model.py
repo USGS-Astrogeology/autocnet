@@ -290,6 +290,7 @@ class Points(BaseMixin, Base):
     _apriori = Column("apriori", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
     _adjusted = Column("adjusted", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
     measures = relationship('Measures')
+    ref_measure = Column("refMeasure",  ForeignKey('measure.id'))
 
     @hybrid_property
     def geom(self):
