@@ -344,6 +344,8 @@ def propagate_point(Session,
             'path': row[7],
             'line' : line,
             'sample' : sample,
+            'template_metric' : row[3],
+            'template_shift' : row[4],
             'point' : p,
             'point_ecef' : Point(x, y, z)
             })
@@ -416,7 +418,7 @@ def propagate_control_network(Session,
     # append CNET info into structured Python list
     constrained_net = []
 
-    # easily parrallelized on the cpoint level, dummy serial for now
+    # easily parallelized on the cpoint level, dummy serial for now
     for cpoint, indices in groups.items():
         measures = base_cnet.loc[indices]
         measure = measures.iloc[0]
@@ -454,17 +456,25 @@ def propagate_control_network(Session,
     # conditionally upload a new point to DB or updated existing point with new measures
     lat_srid = config['spatial']['latitudinal_srid']
     session = Session()
-    for p,indices in groundpoints.items():
+    for gp_point, indices in groundpoints.items():
         point = ground.loc[indices].iloc[0]
-        # if point already exists in DB
+
+        # check DB for if point already exists there
         lon = point.point.x
         lat = point.point.y
-        res = session.query(Points).filter(functions.ST_Intersects(Points.geom, functions.ST_Buffer(functions.ST_SetSRID(functions.ST_Point(lon,lat), lat_srid), 10e-10))).all()
 
+        spatial_point = functions.ST_Point(lon, lat)
+        spatial_setSRID = functions.ST_SetSRID(spatial_point, lat_srid)
+        spatial_buffer = functions.ST_Buffer(spatial_setSRID, 10e-10)
+        spatial_intersects = functions.ST_Intersects(Points.geom, spatial_buffer)
+        
+        res = session.query(Points).filter(spatial_intersects).all()
+        
         if len(res) > 1:
             warnings.warn(f"There is more than one point at lon: {lon}, lat: {lat}")
 
         elif len(res) == 1:
+            # update existing point with new measures
             for i in indices:
                 row = ground.loc[i]
                 pid = res[0].id
@@ -475,27 +485,32 @@ def propagate_control_network(Session,
                     continue
 
                 points.append(Measures(pointid = pid,
-                                       line=float(row['line']),
+                                       line = float(row['line']),
                                        sample = float(row['sample']),
                                        aprioriline = float(row['line']),
                                        apriorisample = float(row['sample']),
                                        imageid = int(row['imageid']),
+                                       template_metric = float(row['template_metric']),
+                                       template_shift = float(row['template_shift']),
                                        serial = row['serial'],
-                                       measuretype=3))
+                                       measuretype = 3))
         else:
+            # upload new point
             p = Points()
             p.pointtype = 3
             p.apriori = point['point_ecef']
             p.adjusted = point['point_ecef']
             for i in indices:
                 row = ground.loc[i]
-                p.measures.append(Measures(line=float(row['line']),
+                p.measures.append(Measures(line = float(row['line']),
                                            sample = float(row['sample']),
                                            aprioriline = float(row['line']),
                                            apriorisample = float(row['sample']),
                                            imageid = int(row['imageid']),
                                            serial = row['serial'],
-                                           measuretype=3))
+                                           template_metric = float(row['template_metric']),
+                                           template_shift = float(row['template_shift']),
+                                           measuretype = 3))
             points.append(p)
 
     session.add_all(points)
