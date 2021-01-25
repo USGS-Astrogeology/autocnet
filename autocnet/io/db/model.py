@@ -290,7 +290,8 @@ class Points(BaseMixin, Base):
     _apriori = Column("apriori", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
     _adjusted = Column("adjusted", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
     measures = relationship('Measures')
-    ref_measure = Column("refMeasure",  ForeignKey('measure.id'))
+    _ref_measure = Column("refMeasure", Integer, nullable=False)
+
 
     @hybrid_property
     def geom(self):
@@ -348,8 +349,15 @@ class Points(BaseMixin, Base):
             v = PointType(v)
         self._pointtype = v
 
-    #def subpixel_register(self, Session, pointid, **kwargs):
-    #    subpixel.subpixel_register_point(args=(Session, pointid), **kwargs)
+    @hybrid_property
+    def ref_measure(self):
+      if (self._ref_measure is None):
+        return self.measures[0].id
+
+    @ref_measure.setter
+    def ref_measure(self, v):
+      self._ref_measure = v
+
 
 class MeasureType(enum.IntEnum):
     """
