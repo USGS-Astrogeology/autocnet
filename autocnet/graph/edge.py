@@ -802,7 +802,7 @@ class NetworkEdge(Edge):
                    If the column already exists, then the mask in that column will be overwritten.
 
         kwargs : dict
-                 Extra arguments that will be passed to the homography computation.
+                 Extra arguments that will be passed to the fundamental matrix computation.
 
         See Also
         --------
