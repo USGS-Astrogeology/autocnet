@@ -461,3 +461,52 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
 
      changes = gpd.GeoDataFrame(geometry=polys)
      return changes, bdiff
+
+
+def generate_boulder(dem, radius, height=None, x=None, y=None):
+    max_radii = 0
+    points = []
+    geom = None
+    new_dem = np.copy(dem)
+
+    x_range, y_range = dem.shape
+    if not x:
+        x = np.random.randint(0, x_range)
+    if not y:
+        y = np.random.randint(0, y_range)
+    if not height:
+        base_height = dem[x][y]
+    else:
+        base_height = height
+    for x_coord in range(len(dem[0])):
+        for y_coord in range(len(dem)):
+            point_radius = math.sqrt(math.pow(x_coord - x, 2) + math.pow(y_coord - y, 2))
+            if point_radius < radius:
+                computed_height = ((1 - (math.sin(((math.pi*point_radius)/(2*radius)))) * radius) + radius) + base_height
+                if computed_height >= dem[x_coord][y_coord]:
+                    points.append((y_coord, abs(len(dem[0]) - x_coord)))
+                    new_dem[x_coord][y_coord] = computed_height
+
+    if len(points) >= 3:
+        geom = Polygon(points).convex_hull
+
+    return new_dem, geom
+
+def generate_boulder_field(dem, num_boulders,
+                           x_shift=np.random.randint(5, 10), y_shift=np.random.randint(5, 10),
+                           radius = np.random.randint(5, 8), height = None):
+    before_dem = np.copy(dem)
+    after_dem = np.copy(dem)
+    before_polys = []
+    after_polys = []
+    for i in range(num_boulders):
+        x_pos = np.random.randint(10, len(dem[0]))
+        y_pos = np.random.randint(10, len(dem))
+        before_dem, before_geom = generate_boulder(before_dem, radius, height, x = x_pos, y = y_pos)
+        after_dem, after_geom = generate_boulder(after_dem, radius, height, x = x_pos - x_shift, y = y_pos - y_shift)
+        if before_geom:
+            before_polys.append(before_geom)
+        if after_geom:
+            after_polys.append(after_geom)
+
+    return before_dem, before_polys, after_dem, after_polys
