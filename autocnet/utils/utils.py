@@ -10,6 +10,12 @@ import networkx as nx
 
 from osgeo import ogr
 
+from sklearn.cluster import DBSCAN
+from sklearn.neighbors import NearestNeighbors
+
+from shapely import geometry
+from shapely.geometry import MultiPoint
+
 def tile(array_size, tilesize=1000, overlap=500):
     stepsize = tilesize - overlap
     if stepsize < 0:
@@ -592,3 +598,288 @@ def import_func(func):
     module = importlib.import_module(module, package='autocnet')
     func = getattr(module, func)
     return func
+
+
+def compute_depression(input_dem, scale_factor=1, curvature_percentile=75):
+    """
+    Compute depressions and return a new image with larges depressions filled in. 
+    
+    Parameters
+    ----------
+    
+    input_dem : np.array, rd.rdarray
+                2d array of elevation DNs, a DEM
+    
+    scale_factor : float
+                   Value to scale the erotion of planform curvatures by
+                   
+    curvature_percentile : float 
+                           what percentile of the curvature to keep, lower values
+                           results in bigger blobs 
+                   
+    
+    Returns
+    -------
+    dem : rd.rdarray
+          Dem with filled depressions
+    
+    mask : np.array
+           Change mask, true on pixels that have been changed 
+    
+    
+    """
+    if isinstance(input_dem, np.ndarray):
+        dem = rd.rdarray(input_dem.copy(), no_data=0)
+    elif isinstance(input_dem, rd.rdarray):
+        # take ownership of the reference
+        dem = input_dem.copy()
+
+    # create filled DEM
+    demfilled = rd.FillDepressions(dem, epsilon=True, in_place=False, topology="D8")
+    
+    # Mask out filled areas
+    mask = np.abs(dem-demfilled)
+    thresh = np.percentile(mask, 95)
+    mask[mask <= thresh] = False
+    mask[mask > thresh] = True
+    
+    curvatures = rd.TerrainAttribute(dem, attrib='planform_curvature')
+    curvatures = (curvatures - np.min(curvatures))/np.ptp(curvatures) 
+    curvatures[curvatures < np.percentile(curvatures, curvature_percentile)] = 0
+    curvatures[mask.astype(bool)] = 0
+    
+    demfilled -= curvatures * scale_factor
+    
+    mask = (curvatures+mask).astype(bool)
+    
+    # Get 3rd nn distance 
+    coords = np.argwhere(mask)
+    nbrs = NearestNeighbors(n_neighbors=3, algorithm='kd_tree').fit(coords)
+    dists, _ = nbrs.kneighbors(coords)
+    eps = np.percentile(dists, 95)
+    
+    # Cluster
+    db = DBSCAN(eps=eps, min_samples=3).fit(coords)
+    labels = db.labels_
+    unique, counts = np.unique(labels, return_counts=True)
+    
+    # First count are outliers, ignore
+    counts = counts[1:]
+    unique = unique[1:]
+    
+    index = np.argwhere(counts == counts.max())
+    group = unique[index][0][0]
+    cluster = coords[labels == group]
+    
+    # mask out depression
+    dmask = np.full(dem.shape, False)
+    dmask[[*cluster.T]] = True
+    
+    dem[dmask] = 0
+    demfilled[~dmask] = 0
+    dem = dem+demfilled
+
+    return dem, dmask
+
+
+def rasterize_polygon(shape, vertices, dtype=bool):
+    """
+    Simple tool to convert poly into a boolean numpy array.
+    
+    source: https://stackoverflow.com/questions/37117878/generating-a-filled-polygon-inside-a-numpy-array
+    
+    Parameters
+    ----------
+    
+    shape : tuple 
+            size of the array in (y,x) format
+    
+    vertices : np.array, list
+               array of vertices in [[x0, y0], [x1, y1]...] format
+    
+    dtype : type
+            datatype of output mask
+    
+    Returns
+    -------
+    
+    mask : np.array
+           mask with filled polygon set to true
+    
+    """
+    def check(p1, p2, base_array):
+        idxs = np.indices(base_array.shape) # Create 3D array of indices
+
+        p1 = p1.astype(float)
+        p2 = p2.astype(float)
+
+        # Calculate max column idx for each row idx based on interpolated line between two points
+        if p1[0] == p2[0]:
+            max_col_idx = (idxs[0] - p1[0]) * idxs.shape[1]
+            sign = np.sign(p2[1] - p1[1])
+        else:
+            max_col_idx = (idxs[0] - p1[0]) / (p2[0] - p1[0]) * (p2[1] - p1[1]) + p1[1]
+            sign = np.sign(p2[0] - p1[0])
+            
+        return idxs[1] * sign <= max_col_idx * sign
+
+    base_array = np.zeros(shape, dtype=dtype)  # Initialize your array of zeros
+
+    fill = np.ones(base_array.shape) * True  # Initialize boolean array defining shape fill
+
+    # Create check array for each edge segment, combine into fill array
+    for k in range(vertices.shape[0]):
+        fill = np.all([fill, check(vertices[k-1], vertices[k], base_array)], axis=0)
+    
+    print(fill.any())
+    # Set all values inside polygon to one
+    base_array[fill] = 1
+    return base_array
+
+
+def generate_dem(alpha=1.0, size=800, scales=[160,80,32,16,8,4,2,1], scale_factor=5):
+    """
+    Produces a random DEM
+    
+    Parameters
+    ----------
+    
+    alpha : float 
+            Controls height variation. Lower number makes a shallower and noisier DEM, 
+            higher values create smoother DEM with large peaks and valleys. 
+            Reccommended range = (0, 1.5]
+    
+    size : int
+           size of DEM, output DEM is in the shape of (size, size)
+    
+    scale_factor : float 
+                   scalar to multiply the slope degridation by, higher values = more erotion. 
+                   Reccomended to increase proportionately with alpha 
+                   (higher alphas mean you might want higher scale_factor)
+    
+    Returns 
+    -------
+    
+    dem : np.array 
+          DEM array in the shape (size, size)
+    
+    """
+    
+    topo=np.zeros((2,2))+random.rand(2,2)*(200/(2.**alpha))
+
+    for k in range(len(scales)):
+        nn = size/scales[k]
+        topo = scipy.misc.imresize(topo, (int(nn), int(nn)), "cubic", mode="F")
+        topo = topo + random.rand(int(nn), int(nn))*(200/(nn**alpha))
+    
+    topo = rd.rdarray(topo, no_data=0)
+    
+    curvatures = rd.TerrainAttribute(topo, attrib='slope_riserun')
+    curvatures = (curvatures - np.min(curvatures))/np.ptp(curvatures) * scale_factor
+    return topo - curvatures
+
+
+def hillshade(img, azi=255, min_slope=20, max_slope=100, min_bright=0, grayscale=False):
+    """
+    hillshade a DEM, based on IDL code by Colin Dundas 
+    
+    Parameters
+    ----------
+    
+    img : np.array
+          DEM to hillshade
+    
+    azi : float 
+          Sun azimuth 
+    
+    min_slope : float 
+                minimum slope value 
+    
+    max_slope : float 
+                maximum slope value 
+    
+    min_bright : float 
+                 minimum brightness 
+    
+    grayscale : bool 
+                whether or not to produce grayscale image 
+    
+    
+    Returns
+    -------
+    
+    dem : np.array 
+          hillshaded DEM 
+    
+    """
+    dem = np.array(np.flip(bytescale(img), axis = 0), dtype=int)
+    emax = np.max(dem)
+    emin = np.min(dem)
+
+    indices = np.linspace(0, 255, 256) / 25.5
+
+    red_array = [0,25,50,101,153,204,255,255,255,255,255,255]
+    red_index = np.arange(len(red_array))
+    red_vec = np.interp(indices, red_index, red_array)
+
+    green_array = [42,101,153,204,237,255,255,238,204,153,102,42]
+    green_index = np.arange(len(green_array))
+    green_vec = np.interp(indices, green_index, green_array)
+
+    blue_array = [255,255,255,255,255,255,204,153,101,50,25,0]
+    blue_index = np.arange(len(blue_array))
+    blue_vec = np.interp(indices, blue_index, blue_array)
+
+    zz = (255.0/(emax-emin))*(dem-emin)
+    zz = zz.astype(int)
+
+    nx = (np.roll(dem, 1, axis = 1) - dem)
+    ny = (np.roll(dem, 1, axis = 0) - dem)
+    sz = np.shape(nx)
+    nz = np.ones(sz)
+    nl = np.sqrt(np.power(nx, 2.0) + np.power(ny, 2.0) + np.power(nz, 2.0))
+    nx = nx/nl
+    ny = ny/nl
+    nz = nz/nl
+
+    math.cos(math.radians(1))
+    azi_rad = math.radians(azi)
+    alt_rad = math.radians(alt)
+    lx = math.sin(azi_rad)*math.cos(alt_rad)
+    ly = math.cos(azi_rad)*math.cos(alt_rad)
+    lz = math.sin(alt_rad)
+
+    dprod = nx*lx + ny*ly + nz*lz
+
+    if min_slope is not None:
+        min_dprod = math.cos(math.radians(max_slope + 90.0 - alt))
+    else:
+        min_dprod = np.min(dprod)
+
+    if max_slope is not None:
+        max_dprod = math.cos(math.radians(90.0 - alt - max_slope))
+    else:
+        max_dprod = np.max(dprod)
+
+    bright = ((dprod - min_dprod) + min_bright)/((max_dprod - min_dprod) + min_bright)
+
+    if grayscale:
+        qq=(255*bright)
+    else:
+        qq = red_vec[zz]*bright
+
+    if grayscale:
+        rr = (255*bright)
+    else:
+        rr = green_vec[zz]*bright
+
+    if grayscale:
+        ss=(255*bright)
+    else:
+        ss = blue_vec[zz]*bright
+
+    arrforout = np.dstack((qq, rr ,ss))
+    arrforout = np.flip(arrforout.astype(int), axis = 0)
+    arrfotout = bytescale(arrforout)
+    arrforout.shape
+    return arrforout
