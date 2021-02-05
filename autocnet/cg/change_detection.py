@@ -1,7 +1,5 @@
 import numpy as np
 from matplotlib.path import Path
-from shapely.geometry import Point, MultiPoint
-import geopandas as gpd
 import cv2
 from sklearn.cluster import  OPTICS
 from plio.io.io_gdal import GeoDataset
@@ -13,7 +11,7 @@ import matplotlib
 from matplotlib import pyplot as plt
 
 from shapely import wkt
-from shapely.geometry import Point, MultiPoint
+from shapely.geometry import Point, MultiPoint, Polygon
 import pandas as pd
 import geopandas as gpd
 
