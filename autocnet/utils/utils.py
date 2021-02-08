@@ -602,7 +602,7 @@ def import_func(func):
 
 def compute_depression(input_dem, scale_factor=1, curvature_percentile=75):
     """
-    Compute depressions and return a new image with larges depressions filled in. 
+    Compute depressions and return a new image with largest depressions filled in. 
     
     Parameters
     ----------
@@ -779,7 +779,7 @@ def generate_dem(alpha=1.0, size=800, scales=[160,80,32,16,8,4,2,1], scale_facto
     return topo - curvatures
 
 
-def hillshade(img, azi=255, min_slope=20, max_slope=100, min_bright=0, grayscale=False):
+def hillshade(img, azi=255, alt=60, min_slope=20, max_slope=100, min_bright=0, grayscale=False):
     """
     hillshade a DEM, based on IDL code by Colin Dundas 
     
@@ -790,7 +790,10 @@ def hillshade(img, azi=255, min_slope=20, max_slope=100, min_bright=0, grayscale
           DEM to hillshade
     
     azi : float 
-          Sun azimuth 
+          Sun azimuth in degrees 
+    
+    alt: float 
+         base alt
     
     min_slope : float 
                 minimum slope value 
@@ -842,7 +845,6 @@ def hillshade(img, azi=255, min_slope=20, max_slope=100, min_bright=0, grayscale
     ny = ny/nl
     nz = nz/nl
 
-    math.cos(math.radians(1))
     azi_rad = math.radians(azi)
     alt_rad = math.radians(alt)
     lx = math.sin(azi_rad)*math.cos(alt_rad)
