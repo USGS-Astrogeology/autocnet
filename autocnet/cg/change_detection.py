@@ -8,6 +8,7 @@ from plio.io.io_gdal import GeoDataset
 from scipy.spatial import cKDTree
 from skimage.feature import blob_log, blob_doh
 from math import sqrt, atan2, pi
+from hoggorm.mat_corr_coeff import RVcoeff
 
 import matplotlib
 from matplotlib import pyplot as plt
@@ -461,3 +462,69 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
 
      changes = gpd.GeoDataFrame(geometry=polys)
      return changes, bdiff
+
+
+def rv_detector(im1, im2, search_size, pattern_size=None, threshold=.999):
+    """
+    RV coefficient based change detection.
+
+    Parameters
+    ----------
+
+    image1 : GeoDataset
+        Image representing the "before" state of the ROI, can be a 2D numpy array or plio GeoDataset.
+
+    image2 : GeoDataset
+        Image representing the "after" state of the ROI, can be a 2D numpy array or plio GeoDataset.
+
+    search_size : int
+        The size of the search space surrounding each pixel.
+
+    pattern_size : int
+        The size of the window used to calculate the RV score.  This window slides through the search space.
+
+    threshold : float
+        The cutoff value for an RV value to be considered a change
+
+    Returns
+    -------
+
+    : pd.DataFrame
+      A pandas dataframe containing a points of changed areas
+
+    : np.ndarray
+      A numpy array containing the RV values of each pixel.  Note that the array is
+       padded by NaN values for 1/2 window size on each size
+
+    """
+    def get_window(arr, ulx, uly, size):
+        return arr[ulx:ulx+size, uly:uly+size]
+
+    if isinstance(image1, GeoDataset):
+        image1 = image1.read_array()
+
+    if isinstance(image2, GeoDataset):
+        image2 = image2.read_array()
+
+    if search_size < pattern_size or pattern_size is None:
+        print("Pattern size must be <= search size.  Setting pattern_size=search_size")
+        search_size = pattern_size
+
+    rv = np.empty(im1.shape)
+    rv[:] = np.NaN
+    for row in range(im1.shape[0] - search_size):
+        for col in range(im1.shape[1] - search_size):
+            best = -float("inf")
+            # Windows are determined by ulx, uly, but rv corresponds to window's center
+            center_x = col + (search_size//2)
+            center_y = row + (search_size//2)
+            for row_offset in range(search_size - pattern_size + 1):
+                for col_offset in range(search_size - pattern_size + 1):
+                    pattern_uly = row + row_offset
+                    pattern_ulx = col + col_offset
+                    best = max(best, abs(RVcoeff([get_window(im1, row, col, pattern_size), get_window(im2, pattern_uly, pattern_ulx, pattern_size)])[0,1]))
+            rv[center_y, center_x] = best
+    # Get x/y coordinates of points with correlation <= threshold
+    filtered_rv = np.asarray(np.where(rv<=threshold)).T
+    change_geometries = gpd.GeoDataFrame(geometry=[Point(x[1],x[0]) for x in filtered_rv])
+    return change_geometries, rv
