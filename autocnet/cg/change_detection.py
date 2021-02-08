@@ -470,15 +470,15 @@ def generate_boulder(dem, radius, height=None, x=None, y=None):
     ----------
 
     dem : 2d array
-        2D array representing the topology of a surface where the value in the
-        array is the height of the surface
+          2D array representing the topology of a surface where the value in the
+          array is the height of the surface
 
     radius : float
-        Radius of the half dome to generate
+             Radius of the half dome to generate
 
     height : float
-        Height at which to generate the half dome. If none, the height is set
-        to the value in the dem where the dome is being generated
+             Height at which to generate the half dome. If none, the height is set
+             to the value in the dem where the dome is being generated
 
     x : int
         X position in the array to place the center of the half dome. If none, a
@@ -492,10 +492,10 @@ def generate_boulder(dem, radius, height=None, x=None, y=None):
     -------
 
     new_dem : 2D array
-        Modified 2D array with the new "boulder" generated in it
+              Modified 2D array with the new "boulder" generated in it
 
     geom : Object
-        Polgon object representing the generated boulder
+           Polgon object representing the generated boulder
     '''
     max_radii = 0
     points = []
@@ -525,64 +525,67 @@ def generate_boulder(dem, radius, height=None, x=None, y=None):
 
     return new_dem, geom
 
-def generate_boulder_field(dem, num_boulders, x_shift_min=5, x_shift_max=10,
-                           y_shift_min=5, y_shift_max=10,
+def generate_boulder_field(dem, num_boulders, x_shift_min = 5, x_shift_max = 10,
+                           y_shift_min = 5, y_shift_max = 10,
                            radius_min = 5, radius_max = 8,
                            height_min = None, height_max = None):
     '''
+    Generates a number of boulders randomly across a given 2d array with
+    specified aspects of all boulders placed around the image
+    
     Parameters
     ----------
 
     dem : 2d array
-        2D array representing the topology of a surface where the value in the
-        array is the height of the surface
+          2D array representing the topology of a surface where the value in the
+          array is the height of the surface
 
     num_boulders : int
-        Number of boulders to generate in the dem
+                   Number of boulders to generate in the dem
 
     x_shift_min : int
-        Minimum amount of pixels to shift the center of the boulder in the x
-        direction
+                  Minimum amount of pixels to shift the center of the boulder in the x
+                  direction
 
     x_shift_max : int
-        Maximum amount of pixels to shift the center of the boulder in the x
-        direction
+                  Maximum amount of pixels to shift the center of the boulder in the x
+                  direction
 
     y_shift_min : int
-        Minimum amount of pixels to shift the center of the boulder in the y
-        direction
+                  Minimum amount of pixels to shift the center of the boulder in the y
+                  direction
 
     y_shift_max : int
-        Maximum amount of pixels to shift the center of the boulder in the y
-        direction
+                  Maximum amount of pixels to shift the center of the boulder in the y
+                  direction
 
     radius_min : int
-        Minimum possible radius when generating a boulder
+                 Minimum possible radius when generating a boulder
 
     radius_max : int
-        Maximum possible radius when generating a boulder
+                 Maximum possible radius when generating a boulder
 
     height_min : int
-        Minimum height that a boulder can be generated at
+                 Minimum height that a boulder can be generated at
 
     height_max : int
-        Maximum height that a boulder can be generated at
+                 Maximum height that a boulder can be generated at
 
     Returns
     -------
 
     before_dem : 2d array
-        Modified dem with boulders
+                 Modified dem with boulders
 
     after_dem : 2d array
-        Modified dem with the same boulders as the before_dem with boulders shifted
-        in the x and y directions
+                Modified dem with the same boulders as the before_dem with boulders shifted
+                in the x and y directions
 
     before_polys : list
-        A list of polygon objects representing the boulders
+                   A list of polygon objects representing the boulders
 
     after_polys : list
-        A list of polygon objects representing the shifted boulders
+                  A list of polygon objects representing the shifted boulders
     '''
     before_dem = np.copy(dem)
     after_dem = np.copy(dem)
