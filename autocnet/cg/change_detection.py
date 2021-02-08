@@ -500,11 +500,11 @@ def rv_detector(im1, im2, search_size, pattern_size=None, threshold=.999):
     def get_window(arr, ulx, uly, size):
         return arr[ulx:ulx+size, uly:uly+size]
 
-    if isinstance(image1, GeoDataset):
-        image1 = image1.read_array()
+    if isinstance(im1, GeoDataset):
+        im1 = im1.read_array()
 
-    if isinstance(image2, GeoDataset):
-        image2 = image2.read_array()
+    if isinstance(im2, GeoDataset):
+        im2 = im2.read_array()
 
     if search_size < pattern_size or pattern_size is None:
         print("Pattern size must be <= search size.  Setting pattern_size=search_size")
