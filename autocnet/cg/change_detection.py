@@ -17,7 +17,7 @@ from scipy.spatial import cKDTree
 from plio.io.io_gdal import GeoDataset
 
 from shapely import wkt
-from shapely.geometry import Point, MultiPoint
+from shapely.geometry import Point, MultiPoint, Polygon
 
 import pandas as pd
 import geopandas as gpd
@@ -705,4 +705,154 @@ def hillshade(img, azi=255, alt=60, min_slope=20, max_slope=100, min_bright=0, g
     arrforout.shape
     return arrforout
 
+
+
+def generate_boulder(dem, radius, height=None, x=None, y=None):
+    '''
+    Generates a half dome with a given radius, at a given height,
+    at a given x, y in 2D topology array
+
+    Parameters
+    ----------
+
+    dem : 2d array
+          2D array representing the topology of a surface where the value in the
+          array is the height of the surface
+
+    radius : float
+             Radius of the half dome to generate
+
+    height : float
+             Height at which to generate the half dome. If none, the height is set
+             to the value in the dem where the dome is being generated
+
+    x : int
+        X position in the array to place the center of the half dome. If none, a
+        random position in the image is selected
+
+    y : int
+        Y position in the array to place the center of the half dome. If none, a
+        random position in the image is selected
+
+    Returns
+    -------
+
+    new_dem : 2D array
+              Modified 2D array with the new "boulder" generated in it
+
+    geom : Object
+           Polgon object representing the generated boulder
+    '''
+    max_radii = 0
+    points = []
+    geom = None
+    new_dem = np.copy(dem)
+
+    x_range, y_range = dem.shape
+    if not x:
+        x = np.random.randint(0, x_range)
+    if not y:
+        y = np.random.randint(0, y_range)
+    if not height:
+        base_height = dem[x][y]
+    else:
+        base_height = height
+    for x_coord in range(len(dem[0])):
+        for y_coord in range(len(dem)):
+            point_radius = math.sqrt(math.pow(x_coord - x, 2) + math.pow(y_coord - y, 2))
+            if point_radius < radius:
+                computed_height = ((1 - (math.sin(((math.pi*point_radius)/(2*radius)))) * radius) + radius) + base_height
+                if computed_height >= dem[x_coord][y_coord]:
+                    points.append((y_coord, abs(len(dem[0]) - x_coord)))
+                    new_dem[x_coord][y_coord] = computed_height
+
+    if len(points) >= 3:
+        geom = Polygon(points).convex_hull
+
+    return new_dem, geom
+
+def generate_boulder_field(dem, num_boulders, x_shift_min = 5, x_shift_max = 10,
+                           y_shift_min = 5, y_shift_max = 10,
+                           radius_min = 5, radius_max = 8,
+                           height_min = None, height_max = None):
+    '''
+    Generates a number of boulders randomly across a given 2d array with
+    specified aspects of all boulders placed around the image
+    
+    Parameters
+    ----------
+
+    dem : 2d array
+          2D array representing the topology of a surface where the value in the
+          array is the height of the surface
+
+    num_boulders : int
+                   Number of boulders to generate in the dem
+
+    x_shift_min : int
+                  Minimum amount of pixels to shift the center of the boulder in the x
+                  direction
+
+    x_shift_max : int
+                  Maximum amount of pixels to shift the center of the boulder in the x
+                  direction
+
+    y_shift_min : int
+                  Minimum amount of pixels to shift the center of the boulder in the y
+                  direction
+
+    y_shift_max : int
+                  Maximum amount of pixels to shift the center of the boulder in the y
+                  direction
+
+    radius_min : int
+                 Minimum possible radius when generating a boulder
+
+    radius_max : int
+                 Maximum possible radius when generating a boulder
+
+    height_min : int
+                 Minimum height that a boulder can be generated at
+
+    height_max : int
+                 Maximum height that a boulder can be generated at
+
+    Returns
+    -------
+
+    before_dem : 2d array
+                 Modified dem with boulders
+
+    after_dem : 2d array
+                Modified dem with the same boulders as the before_dem with boulders shifted
+                in the x and y directions
+
+    before_polys : list
+                   A list of polygon objects representing the boulders
+
+    after_polys : list
+                  A list of polygon objects representing the shifted boulders
+    '''
+    before_dem = np.copy(dem)
+    after_dem = np.copy(dem)
+    before_polys = []
+    after_polys = []
+    x_shift = np.random.randint(x_shift_min, x_shift_max)
+    y_shift = np.random.randint(y_shift_min, y_shift_max)
+    for i in range(num_boulders):
+        x_pos = np.random.randint(10, len(dem[0]))
+        y_pos = np.random.randint(10, len(dem))
+        radius = np.random.randint(radius_min, radius_max)
+        if height_min == None or height_max == None:
+            height = None
+        else:
+            height = np.random.randint(height_min, height_max)
+        before_dem, before_geom = generate_boulder(before_dem, radius, height, x = x_pos, y = y_pos)
+        after_dem, after_geom = generate_boulder(after_dem, radius, height, x = x_pos - x_shift, y = y_pos - y_shift)
+        if before_geom:
+            before_polys.append(before_geom)
+        if after_geom:
+            after_polys.append(after_geom)
+
+    return before_dem, before_polys, after_dem, after_polys
 
