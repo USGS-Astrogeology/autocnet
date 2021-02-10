@@ -512,7 +512,10 @@ def rv_detector(im1, im2, search_size, pattern_size=None, threshold=.999):
     if isinstance(im2, GeoDataset):
         im2 = im2.read_array()
 
-    if search_size < pattern_size or pattern_size is None:
+    if pattern_size is None:
+        pattern_size = search_size
+
+    if search_size < pattern_size
         print("Pattern size must be <= search size.  Setting pattern_size=search_size")
         search_size = pattern_size
 
