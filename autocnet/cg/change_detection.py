@@ -13,7 +13,9 @@ from sklearn.neighbors import NearestNeighbors
 from skimage.feature import blob_log, blob_doh
 from math import sqrt, atan2, pi
 from hoggorm.mat_corr_coeff import RVcoeff
+import math
 
+import scipy
 from scipy.spatial import cKDTree
 
 from plio.io.io_gdal import GeoDataset
@@ -21,10 +23,10 @@ from plio.io.io_gdal import GeoDataset
 from shapely import wkt
 from shapely.geometry import Point, MultiPoint, Polygon
 
+import richdem as rd
+
 import pandas as pd
 import geopandas as gpd
-
-from math import sqrt, atan2, pi
 
 import pysis
 
@@ -613,7 +615,7 @@ def compute_depression(input_dem, scale_factor=1, curvature_percentile=75, retur
     dem = dem+demfilled
 
     if return_polygon:
-        concave_hull = cg.alpha_shape(np.argwhere(dmask), alpha=alpha)
+        concave_hull = cg.cg.alpha_shape(np.argwhere(dmask), alpha=alpha)
         return dem, concave_hull
 
     return dem, dmask
@@ -647,12 +649,12 @@ def generate_dem(alpha=1.0, size=800, scales=[160,80,32,16,8,4,2,1], scale_facto
 
     """
 
-    topo=np.zeros((2,2))+random.rand(2,2)*(200/(2.**alpha))
+    topo=np.zeros((2,2))+np.random.rand(2,2)*(200/(2.**alpha))
 
     for k in range(len(scales)):
         nn = size/scales[k]
         topo = scipy.misc.imresize(topo, (int(nn), int(nn)), "cubic", mode="F")
-        topo = topo + random.rand(int(nn), int(nn))*(200/(nn**alpha))
+        topo = topo + np.random.rand(int(nn), int(nn))*(200/(nn**alpha))
 
     topo = rd.rdarray(topo, no_data=0)
 
