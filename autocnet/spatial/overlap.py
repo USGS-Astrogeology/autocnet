@@ -272,7 +272,7 @@ def place_points_in_overlap(overlap,
         if len(point.measures) >= 2:
             points.append(point)
     print(f'Able to place {len(points)} points.')
-    #Points.bulkadd(points, ncg.Session)
+    Points.bulkadd(points, ncg.Session)
     return points
 
 def place_points_in_image(image,

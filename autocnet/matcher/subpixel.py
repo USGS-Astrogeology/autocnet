@@ -497,6 +497,9 @@ def subpixel_template_classic(sx, sy, dx, dy,
     s_image = s_roi.clip()
     d_template = d_roi.clip()
 
+    if d_roi.variance == 0:
+        return [None] * 4
+
     if (s_image is None) or (d_template is None):
         return None, None, None, None
 
@@ -580,6 +583,9 @@ def subpixel_template(sx, sy, dx, dy,
 
     s_roi = roi.Roi(s_img, sx, sy, size_x=image_size[0], size_y=image_size[1])
     d_roi = roi.Roi(d_img, dx, dy, size_x=template_size_x, size_y=template_size_y)
+
+    if d_roi.variance == 0:
+        return [None] * 4
 
     if not s_roi.is_valid or not d_roi.is_valid:
         return [None] * 4
