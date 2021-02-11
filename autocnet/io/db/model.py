@@ -289,7 +289,8 @@ class Points(BaseMixin, Base):
     ignore = Column("pointIgnore", Boolean, default=False)
     _apriori = Column("apriori", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
     _adjusted = Column("adjusted", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
-    measures = relationship('Measures')
+    measures = relationship('Measures', back_populates="point")
+    reference_index = Column("referenceIndex", Integer, default=0)
 
     @hybrid_property
     def geom(self):
@@ -385,6 +386,7 @@ class Measures(BaseMixin, Base):
     linesigma = Column(Float)
     weight = Column(Float, default=None)
     rms = Column(Float)
+    point = relationship("Points", back_populates="measures")
 
     @hybrid_property
     def measuretype(self):
@@ -395,6 +397,10 @@ class Measures(BaseMixin, Base):
         if isinstance(v, int):
             v = MeasureType(v)
         self._measuretype = v
+
+    @property
+    def reference_index(self):
+        return self.point.reference_index
 
 def try_db_creation(engine, config):
     from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, valid_geom_function, valid_geom_trigger, ignore_image_function, ignore_image_trigger

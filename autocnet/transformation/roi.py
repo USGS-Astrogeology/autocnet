@@ -38,14 +38,15 @@ class Roi():
     bottom_y : int
                The bottom image coordinate in imge space
     """
-    def __init__(self, data, x, y, size_x=200, size_y=200, dtype=None, ndv=None):
+    def __init__(self, data, x, y, size_x=200, size_y=200, dtype=None, ndv=None, ndv_threshold=0.5):
         self.data = data
-        self.ndv = ndv
         self.x = x
         self.y = y
         self.dtype = dtype
         self.size_x = size_x
         self.size_y = size_y
+        self.ndv = ndv
+        self._ndv_threshold = ndv_threshold
 
     @property
     def x(self):
@@ -62,6 +63,14 @@ class Roi():
     @y.setter
     def y(self, y):
         self.ayr, self._y = modf(y)
+
+    @property
+    def ndv_threshold(self):
+        return self._ndv_threshold
+
+    @ndv_threshold.setter
+    def ndv_threshold(self, threshold):
+        self._ndv_threshold = threshold
 
     @property
     def ndv(self):
@@ -143,17 +152,22 @@ class Roi():
         return self.ndv not in self.array
 
     @property
+    def variance(self):
+        return np.var(self.array)
+
+    @property
     def array(self):
         """
         The clipped array associated with this ROI.
         """
         pixels = self.image_extent
         if isinstance(self.data, np.ndarray):
-             return self.data[pixels[2]:pixels[3]+1,pixels[0]:pixels[1]+1]
+            data = self.data[pixels[2]:pixels[3]+1,pixels[0]:pixels[1]+1]
         else:
             # Have to reformat to [xstart, ystart, xnumberpixels, ynumberpixels]
             pixels = [pixels[0], pixels[2], pixels[1]-pixels[0]+1, pixels[3]-pixels[2]+1]
-            return self.data.read_array(pixels=pixels, dtype=self.dtype)
+            data = self.data.read_array(pixels=pixels, dtype=self.dtype)
+        return data
 
     def clip(self, dtype=None):
         """

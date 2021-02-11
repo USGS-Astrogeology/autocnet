@@ -1327,7 +1327,11 @@ def subpixel_register_measure(measureid,
 
         # Get the point id and set up the reference measure
         pointid = destination.pointid
-        source = session.query(Measures).filter(Measures.pointid==pointid).order_by(Measures.id).first()
+        measures = session.query(Measures).filter(Measures.pointid==pointid).order_by(Measures.id).all()
+
+        reference_index = measures[0].reference_index
+        source = measures[reference_index]
+
         source.template_metric = 1
         source.template_shift = 0
         source.phase_error = 0
@@ -1343,6 +1347,11 @@ def subpixel_register_measure(measureid,
         print(f'Attempting to subpixel register measure {measureid}: ({pointid}, {destinationimage.name})')
         currentlog = {'measureid': measureid,
                       'status': ''}
+        
+        if source.measureid == measureid:
+            currentlog['status'] = f'Unable to register this measure. Measure {measureid} is the reference measure.'
+            return 
+            resultlog
 
         try:
             new_x, new_y, dist, metric = geom_match_simple(source_node.geodata, destination_node.geodata,
@@ -1437,15 +1446,15 @@ def subpixel_register_point(pointid,
     match_func = check_match_func(match_func)
     geom_func = check_geom_func(geom_func)
 
-    if isinstance(pointid, Points):
-        pointid = pointid.id
-    
     if not ncg.Session:
         raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
     
     with ncg.session_scope() as session:
         measures = session.query(Measures).filter(Measures.pointid == pointid).order_by(Measures.id).all()
-        source = measures[0]
+        
+        # Get the reference measure. Previously this was index 0, but now it is a database tracked attribute
+        reference_index = measures[0].point.reference_index
+        source = measures[reference_index]
 
         source.template_metric = 1
         source.template_shift = 0
@@ -1461,7 +1470,11 @@ def subpixel_register_point(pointid,
         print(f'Attempting to subpixel register {len(measures)-1} measures for point {pointid}')
 
         resultlog = []
-        for measure in measures[1:]:
+        for i, measure in enumerate(measures):
+            # Skip the reference measure.
+            if i == reference_index:
+                continue
+            
             currentlog = {'measureid':measure.id,
                         'status':''}
             cost = None
