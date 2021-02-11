@@ -1468,14 +1468,18 @@ class NetworkCandidateGraph(CandidateGraph):
                                        port=conf['port'],
                                        db=0)
         self.processing_queue = conf['processing_queue']
+        self.completed_queue = conf['completed_queue']
+        self.working_queue = conf['working_queue']
 
-    def empty_queues(self):
+    def clear_queues(self):
         """
         Delete all messages from the redis queue. This a convenience method.
         The `redis_queue` object is a redis-py StrictRedis object with API
         documented at: https://redis-py.readthedocs.io/en/latest/#redis.StrictRedis
         """
-        return self.redis_queue.flushall()
+        queues = [self.processing_queue, self.completed_queue, self.working_queue]
+        for q in queues:
+            self.redis_queue.delete(q)
 
     def _execute_sql(self, sql):
         """
@@ -1586,6 +1590,7 @@ class NetworkCandidateGraph(CandidateGraph):
             query_string='',
             reapply=False,
             log_dir=None,
+            queue=None,
             **kwargs):
         """
         A mirror of the apply function from the standard CandidateGraph object. This implementation
@@ -1646,6 +1651,10 @@ class NetworkCandidateGraph(CandidateGraph):
 
         kwargs : dict
                  Of keyword arguments passed to the function being applied
+
+        queue : str
+                The processing queue to use. If None (default), use the processing queue from
+                the config file.
 
         Examples
         --------
@@ -1708,16 +1717,19 @@ class NetworkCandidateGraph(CandidateGraph):
         isisroot = env['ISISROOT']
         isisdata = env['ISISDATA']
 
-        isissetup = f'export ISISROOT={isisroot} && export ISIS3DATA={isisdata}'
+        isissetup = f'export ISISROOT={isisroot} && export ISISDATA={isisdata}'
         condasetup = f'conda activate {condaenv}'
         job = f'acn_submit -r={rhost} -p={rport} {processing_queue}'
         command = f'{condasetup} && {isissetup} && {job}'
+
+        if queue == None:
+            queue = self.config['cluster']['queue']
 
         submitter = Slurm(command,
                      job_name='AutoCNet',
                      mem_per_cpu=self.config['cluster']['processing_memory'],
                      time=walltime,
-                     partition=self.config['cluster']['queue'],
+                     partition=queue,
                      output=log_dir+f'/autocnet.{function}-%j')
         submitter.submit(array='1-{}%{}'.format(job_counter,arraychunk), chunksize=chunksize)
         return job_counter
@@ -2216,13 +2228,6 @@ class NetworkCandidateGraph(CandidateGraph):
         """
         llen = self.redis_queue.llen(self.config['redis']['processing_queue'])
         return llen
-
-    def queue_flushdb(self):
-        """
-        Clear the processing queue of any left over jobs from a previous cluster
-        job cancellation or hanging jobs.
-        """
-        self.redis_queue.flushdb()
 
     def overlays(self, size_threshold=0):
         """
