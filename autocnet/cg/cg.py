@@ -333,7 +333,7 @@ def distribute_points_classic(geom, nspts, ewpts, use_mrr=True, **kwargs):
             in the E/W (right/left) direction
     
     use_mrr : boolean
-              If True (default) compute the minimum rotated rectable bounding
+              If True (default) compute the minimum rotated rectangle bounding
               the geometry
 
     Returns

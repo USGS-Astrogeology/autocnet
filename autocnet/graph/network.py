@@ -1479,7 +1479,7 @@ class NetworkCandidateGraph(CandidateGraph):
         """
         queues = [self.processing_queue, self.completed_queue, self.working_queue]
         for q in queues:
-            self.redis_queue.delete(q)
+            self.redis_queue.empty(q)
 
     def _execute_sql(self, sql):
         """
