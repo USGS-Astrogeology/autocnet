@@ -312,8 +312,7 @@ def xy_in_polygon(x,y, geom):
     """
     return geom.contains(Point(x, y))
 
-
-def distribute_points_classic(geom, nspts, ewpts, **kwargs):
+def distribute_points_classic(geom, nspts, ewpts, use_mrr=True, **kwargs):
     """
     This is a decision tree that attempts to perform a
     very simplistic approximation of the shape
@@ -332,14 +331,21 @@ def distribute_points_classic(geom, nspts, ewpts, **kwargs):
     ewpts : int
             The number of points to attempt to place
             in the E/W (right/left) direction
+    
+    use_mrr : boolean
+              If True (default) compute the minimum rotated rectable bounding
+              the geometry
 
     Returns
     -------
     valid : list
             of point coordinates in the form [(x1,y1), (x2,y2), ..., (xn, yn)]
     """
-
-    geom_coords = np.column_stack(geom.envelope.exterior.xy)
+    original_geom = geom
+    if use_mrr:
+        geom = geom.minimum_rotated_rectangle
+        
+    geom_coords = np.column_stack(geom.exterior.xy)
     coords = np.array(list(zip(*geom.envelope.exterior.xy))[:-1])
 
     ll = coords[0]
@@ -370,7 +376,7 @@ def distribute_points_classic(geom, nspts, ewpts, **kwargs):
 
     points = np.vstack(points)
     # Perform a spatial intersection check to eject points that are not valid
-    valid = [p for p in points if xy_in_polygon(p[0], p[1], geom)]
+    valid = [p for p in points if xy_in_polygon(p[0], p[1], original_geom)]
     return valid
 
 def distribute_points_new(geom, nspts, ewpts, Session):
@@ -476,6 +482,9 @@ def distribute_points_in_geom(geom, method="classic",
     point_distribution_func = point_funcs[method]
 
     coords = list(zip(*geom.envelope.exterior.xy))
+   
+
+    # This logic is kwarg swapping - need to trace this logic.
     short = np.inf
     long = -np.inf
     shortid = 0
@@ -489,9 +498,11 @@ def distribute_points_in_geom(geom, method="classic",
             long = d
             longid = i
     ratio = short/long
+    
     ns = False
     ew = False
     valid = []
+    
     # The polygons should be encoded with a lower left origin in counter-clockwise direction.
     # Therefore, if the 'bottom' is the short edge it should be id 0 and modulo 2 == 0.
     if shortid % 2 == 0:
