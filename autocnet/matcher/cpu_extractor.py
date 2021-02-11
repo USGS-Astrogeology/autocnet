@@ -83,7 +83,7 @@ def extract_features(array, extractor_method='sift', extractor_parameters={}):
         keypoints = pd.DataFrame(keypoints, columns=['x', 'y', 'response', 'size',
                                                      'angle', 'octave', 'layer'])
 
-        if descriptors.dtype != np.float32:
+        if hasattr(descriptors, 'dtype') and descriptors.dtype != np.float32:
             descriptors = descriptors.astype(np.float32)
 
     return keypoints, descriptors
@@ -115,6 +115,8 @@ def extract_most_interesting(image, extractor_method='orb', extractor_parameters
                                  extractor_method=extractor_method,
                                  extractor_parameters=extractor_parameters)
 
+    if len(kps) == 0:
+        return None
     # Naively assume that the maximum variance is the most unique feature
     vari = np.var(desc, axis=1)
     return kps.iloc[np.argmax(vari)]

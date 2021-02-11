@@ -121,7 +121,9 @@ def place_points_in_overlap(overlap,
     if not valid:
         warnings.warn('Failed to distribute points in overlap')
         return []
-
+    
+    print(f'Have {len(valid)} potential points to place.')
+    
     # Setup the node objects that are covered by the geom
     nodes = []
     with ncg.session_scope() as session:
@@ -130,8 +132,7 @@ def place_points_in_overlap(overlap,
             nn = NetworkNode(node_id=id, image_path=res.path)
             nn.parent = ncg
             nodes.append(nn)
-
-    print(f'Have {len(valid)} potential points to place.')
+    print(f'Attempting to place measures in {len(nodes)} images.')
     for v in valid:
         lon = v[0]
         lat = v[1]
@@ -163,10 +164,21 @@ def place_points_in_overlap(overlap,
         # Extract ORB features in a sub-image around the desired point
         image_roi = roi.Roi(node.geodata, sample, line, size_x=size, size_y=size)
         image = image_roi.clip()
-        try:
-            interesting = extract_most_interesting(image)
-        except:
-            continue
+        
+        # Extract the most interesting point
+        parameters = [{'extractor_method':'orb'}, 
+                      {'extractor_method':'vlfeat', 'extractor_parameters':{}}, 
+                      {'extractor_method':'orb', 'extractor_parameters':{'edgeThreshold':15}}]
+        for parameter in parameters:
+            interesting = extract_most_interesting(image, **parameter)
+            if interesting:
+                break
+
+        if interesting is None:
+            warnings.warn('Unable to find an interesting point, falling back to the a priori pointing')
+            newsample = sample
+            newline = line
+        
 
         # kps are in the image space with upper left origin and the roi
         # could be the requested size or smaller if near an image boundary.
