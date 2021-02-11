@@ -27,16 +27,14 @@ def og2oc(lon, lat, semi_major, semi_minor):
     lat: float
          planetocentric latitude (in degrees)
     """
-    lon_og = np.radians(lon)
-    lat_og = np.radians(lat)
 
     proj_str = f"""
     +proj=pipeline
-    +step +proj=geoc +a={semi_major} +b={semi_minor} +lon_wrap=180 +xy_in=rad +xy_out=rad
+    +step +proj=geoc +a={semi_major} +b={semi_minor} +lon_wrap=180 +xy_in=deg +xy_out=deg
     """
     og2oc = pyproj.transformer.Transformer.from_pipeline(proj_str)
-    lon_oc, lat_oc = og2oc.transform(lon_og, lat_og, errcheck=True, radians=True)
-    return np.degrees(lon_oc), np.degrees(lat_oc)
+    lon_oc, lat_oc = og2oc.transform(lon, lat, errcheck=True)
+    return lon_oc, lat_oc
 
 def oc2og(lon, lat, semi_major, semi_minor):
     """
@@ -65,17 +63,14 @@ def oc2og(lon, lat, semi_major, semi_minor):
           planetographic latitude (in degrees)
     """
 
-    lon_oc = np.radians(lon)
-    lat_oc = np.radians(lat)
-
     proj_str = f"""
     +proj=pipeline
-    +step +proj=geoc +a={semi_major} +b={semi_minor} +lon_wrap=180 +inv +xy_in=rad +xy_out=rad
+    +step +proj=geoc +a={semi_major} +b={semi_minor} +lon_wrap=180 +inv +xy_in=deg +xy_out=deg
     """
     oc2og = pyproj.transformer.Transformer.from_pipeline(proj_str)
-    lon_og, lat_og = oc2og.transform(lon_oc, lat_oc, errcheck=True, radians=True)
+    lon_og, lat_og = oc2og.transform(lon, lat, errcheck=True)
 
-    return np.degrees(lon_og), np.degrees(lat_og)
+    return lon_og, lat_og
 
 def reproject(record, semi_major, semi_minor, source_proj, dest_proj, **kwargs):
     """
