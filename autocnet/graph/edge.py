@@ -757,6 +757,67 @@ class NetworkEdge(Edge):
             session.expunge_all()
         return res
 
+    def compute_homography(self, method='ransac', maskname='homography', **kwargs):
+        """
+        Estimate the homography and reprojective error on this edge of the graph.
+
+        Parameters
+        ----------
+        method : {'ransac', 'lmeds', 'normal'}
+                 The method that will be used when computing the homography.
+
+        maskname : str
+                   The column that the mask will be saved under in the masks dataframe.
+                   If the column already exists, then the mask in that column will be overwritten.
+
+        kwargs : dict
+                 Extra arguments that will be passed to the homography computation.
+
+        See Also
+        --------
+        autocnet.transformation.transformations.homography.compute_homography
+        """
+        matches = self.matches
+
+        s_keypoints = matches[["source_x", "source_y"]].values.astype(np.float64)
+        d_keypoints = matches[["destination_x", "destination_y"]].values.astype(np.float64)
+
+        self['homography'], hmask = hm.compute_homography(s_keypoints, d_keypoints, method=method, **kwargs)
+
+        self.masks[maskname] = hmask
+
+    def compute_fundamental_matrix(self, method='ransac', maskname='fundamental', **kwargs):
+        """
+        Estimate the fundamental matrix (F) using the correspondences tagged to this
+        edge.
+
+
+        Parameters
+        ----------
+        method : {'ransac', 'lmeds', 'normal', '8point'}
+                 The method that will be used when computing the homography.
+
+        maskname : str
+                   The column that the mask will be saved under in the masks dataframe.
+                   If the column already exists, then the mask in that column will be overwritten.
+
+        kwargs : dict
+                 Extra arguments that will be passed to the fundamental matrix computation.
+
+        See Also
+        --------
+        autocnet.transformation.transformations.fundamental_matrix.compute_fundamental_matrix
+
+        """
+
+        matches = self.matches
+
+        s_keypoints = matches[["source_x", "source_y"]].values.astype(np.float64)
+        d_keypoints = matches[["destination_x", "destination_y"]].values.astype(np.float64)
+        self.fundamental_matrix, fmask = fm.compute_fundamental_matrix(s_keypoints, d_keypoints, method=method, **kwargs)
+
+        self.masks[maskname] = fmask
+
     @property
     def weights(self):
         with self.parent.session_scope() as session:
