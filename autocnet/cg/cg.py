@@ -440,7 +440,8 @@ def distribute_points_new(geom, nspts, ewpts, Session):
 def distribute_points_in_geom(geom, method="classic",
                               nspts_func=lambda x: ceil(round(x,1)*10),
                               ewpts_func=lambda x: ceil(round(x,1)*5),
-                              Session=None):
+                              Session=None,
+                              **kwargs):
     """
     Given a geometry, attempt a basic classification of the shape.
     RIght now, this simply attempts to determine if the bounding box
@@ -526,7 +527,7 @@ def distribute_points_in_geom(geom, method="classic",
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
-            valid = point_distribution_func(geom, nspts, ewpts, Session=Session)
+            valid = point_distribution_func(geom, nspts, ewpts, Session=Session, **kwargs)
     elif ew == True:
         # Since this is an LS, we should place these diagonally from the 'lower left' to the 'upper right'
         nspts = ewpts_func(short)
@@ -534,7 +535,7 @@ def distribute_points_in_geom(geom, method="classic",
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
-            valid = point_distribution_func(geom, nspts, ewpts, Session=Session)
+            valid = point_distribution_func(geom, nspts, ewpts, Session=Session, **kwargs)
     else:
         print('WTF Willy')
     return valid

@@ -44,6 +44,7 @@ INSERT INTO overlay(intersections, geom) SELECT row.intersections, row.geom FROM
 def place_points_in_overlaps(size_threshold=0.0007,
                              distribute_points_kwargs={},
                              cam_type='csm',
+                             point_type=2,
                              ncg=None):
     """
     Place points in all of the overlap geometries by back-projecing using
@@ -62,6 +63,13 @@ def place_points_in_overlaps(size_threshold=0.0007,
 
     size_threshold : float
                      overlaps with area <= this threshold are ignored
+    
+    cam_type : str
+               Either 'csm' (default) or 'isis'. The type of sensor model to use.
+
+    point_type : int
+                 Either 2 (free;default) or 3 (constrained). Point type 3 should be used for
+                 ground.
     """
     if not ncg.Session:
         raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
@@ -72,12 +80,14 @@ def place_points_in_overlaps(size_threshold=0.0007,
         place_points_in_overlap(overlap,
                                 cam_type=cam_type,
                                 distribute_points_kwargs=distribute_points_kwargs,
+                                point_type=point_type,
                                 ncg=ncg)
 
 def place_points_in_overlap(overlap,
                             cam_type="csm",
                             size=71,
                             distribute_points_kwargs={},
+                            point_type=2,
                             ncg=None,
                             **kwargs):
     """
@@ -241,7 +251,7 @@ def place_points_in_overlap(overlap,
         point = Points(overlapid=overlap.id,
                        apriori=point_geom,
                        adjusted=point_geom,
-                       pointtype=2, # Would be 3 or 4 for ground
+                       pointtype=point_type, # Would be 3 or 4 for ground
                        cam_type=cam_type,
                        reference_index=reference_index)
 
@@ -257,7 +267,7 @@ def place_points_in_overlap(overlap,
                     line, sample = isis.ground_to_image(node["image_path"], updated_lon, updated_lat)
                 except ProcessError as e:
                     if 'Requested position does not project in camera model' in e.stderr:
-                        print(f'interesting point ({geocent_lon},{geocent_lat}) does not project to image {node["image_path"]}')
+                        print(f'interesting point ({updated_lon},{updated_lat}) does not project to image {node["image_path"]}')
                         continue
 
             point.measures.append(Measures(sample=sample,

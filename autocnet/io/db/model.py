@@ -222,6 +222,20 @@ class Images(BaseMixin, Base):
         else:
             self._geom = from_shape(newgeom, srid=self.latitudinal_srid)
 
+    @classmethod
+    def union(cls, session):
+        """
+        The boundary formed by unioning (or merging) all of the input footprints. The result 
+        will likely be a multipolygon, likely with holes where data were not collected.
+
+        Returns
+        -------
+          : obj
+            A shapely MULTIPOLYGON object
+        """
+        res = session.query(cls.geom.ST_Union()).one()[0]
+        return to_shape(res)
+
 class Overlay(BaseMixin, Base):
     __tablename__ = 'overlay'
     latitudinal_srid = -1
