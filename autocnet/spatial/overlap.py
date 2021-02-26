@@ -63,7 +63,7 @@ def place_points_in_overlaps(size_threshold=0.0007,
 
     size_threshold : float
                      overlaps with area <= this threshold are ignored
-    
+
     cam_type : str
                Either 'csm' (default) or 'isis'. The type of sensor model to use.
 
@@ -84,6 +84,7 @@ def place_points_in_overlaps(size_threshold=0.0007,
                                 ncg=ncg)
 
 def place_points_in_overlap(overlap,
+                            indentifier="autocnet",
                             cam_type="csm",
                             size=71,
                             distribute_points_kwargs={},
@@ -97,20 +98,47 @@ def place_points_in_overlap(overlap,
     Parameters
     ----------
     overlap : obj
-              An autocnet.io.db.model Overlay model instance
+              An autocnet.io.db.model Overlay model instance.
+
+    identifier: str
+                The tag used to distiguish points laid down by this function.
 
     cam_type : str
                options: {"csm", "isis"}
-               Pick what kind of camera model implementation to use
+               Pick what kind of camera model implementation to use.
 
     size : int
-           The size of the window used to extractor features to find an
-           interesting feature to which the point is shifted.
+           The amount of pixel around a points initial location to search for an
+           interesting feature to which to shift the point.
+
+    distribute_points_kwargs: dict
+                              kwargs to pass to autocnet.cg.cg.distribute_points_in_geom
+
+    point_type: int
+                The type of point being placed. Default is pointtype=2, corresponding to
+                free points.
+
+    ncg: obj
+         An autocnet.graph.network NetworkCandidateGraph instance representing the network
+         to apply this function to
+
 
     Returns
     -------
     points : list of Points
         The list of points seeded in the overlap
+
+    See Also
+    --------
+    autocnet.io.db.model.Overlay: for associated properties of the Overlay object
+
+    autocnet.cg.cg.distribute_points_in_geom: for the possible arguments to pass through using
+    disribute_points_kwargs.
+
+    autocnet.model.io.db.PointType: for the point type options.
+
+    autocnet.graph.network.NetworkCandidateGraph: for associated properties and functionalities of the
+    NetworkCandidateGraph class
     """
     if not ncg.Session:
         raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
@@ -131,9 +159,9 @@ def place_points_in_overlap(overlap,
     if not valid:
         warnings.warn('Failed to distribute points in overlap')
         return []
-    
+
     print(f'Have {len(valid)} potential points to place.')
-    
+
     # Setup the node objects that are covered by the geom
     nodes = []
     with ncg.session_scope() as session:
@@ -142,7 +170,7 @@ def place_points_in_overlap(overlap,
             nn = NetworkNode(node_id=id, image_path=res.path)
             nn.parent = ncg
             nodes.append(nn)
-    
+
     print(f'Attempting to place measures in {len(nodes)} images.')
     for v in valid:
         lon = v[0]
@@ -154,8 +182,8 @@ def place_points_in_overlap(overlap,
         height = ncg.dem.read_array(1, [px, py, 1, 1])[0][0]
 
         # Need to get the first node and then convert from lat/lon to image space
-        for reference_index, node in enumerate(nodes):  
-            # reference_index is the index into the list of measures for the image that is not shifted and is set at the 
+        for reference_index, node in enumerate(nodes):
+            # reference_index is the index into the list of measures for the image that is not shifted and is set at the
             # reference against which all other images are registered.
             if cam_type == "isis":
                 try:
@@ -186,7 +214,7 @@ def place_points_in_overlap(overlap,
             if interesting is not None:
                 # We have found an interesting feature and have identified the reference point.
                 break
- 
+
         if interesting is None:
             warnings.warn('Unable to find an interesting point, falling back to the a priori pointing')
             newsample = sample
@@ -248,7 +276,8 @@ def place_points_in_overlap(overlap,
             updated_lon, updated_lat = og2oc(updated_lon_og, updated_lat_og, semi_major, semi_minor)
 
         point_geom = shapely.geometry.Point(x, y, z)
-        point = Points(overlapid=overlap.id,
+        point = Points(identifier=identifier,
+                       overlapid=overlap.id,
                        apriori=point_geom,
                        adjusted=point_geom,
                        pointtype=point_type, # Would be 3 or 4 for ground
@@ -286,6 +315,7 @@ def place_points_in_overlap(overlap,
     return points
 
 def place_points_in_image(image,
+                          identifier="autocnet",
                           cam_type="csm",
                           size=71,
                           distribute_points_kwargs={},
@@ -301,6 +331,9 @@ def place_points_in_image(image,
     image : obj
             An autocnet Images model object
 
+    identifier: str
+                The tag used to distiguish points laid down by this function.
+
     cam_type : str
                options: {"csm", "isis"}
                Pick what kind of camera model implementation to use
@@ -309,8 +342,20 @@ def place_points_in_image(image,
            The size of the window used to extractor features to find an
            interesting feature to which the point is shifted.
 
-    distirbute_points_kwargs : dict
-                               Of optional arguments for distirbute_points_in_geom
+    distribute_points_kwargs: dict
+                              kwargs to pass to autocnet.cg.cg.distribute_points_in_geom
+
+    ncg: obj
+         An autocnet.graph.network NetworkCandidateGraph instance representing the network
+         to apply this function to
+
+    See Also
+    --------
+    autocnet.cg.cg.distribute_points_in_geom: for the possible arguments to pass through using
+    disribute_points_kwargs.
+
+    autocnet.graph.network.NetworkCandidateGraph: for associated properties and functionalities of the
+    NetworkCandidateGraph class
     """
     # Arg checking
     if not ncg.Session:
@@ -440,7 +485,8 @@ def place_points_in_image(image,
         with ncg.session_scope() as session:
             oid = session.query(Overlay.id).filter(Overlay.geom.ST_Contains(point_geometry)).one()[0]
 
-        point = Points(overlapid=oid,
+        point = Points(identifier=identifier,
+                       overlapid=oid,
                        apriori=point_geom,
                        adjusted=point_geom,
                        pointtype=2, # Would be 3 or 4 for ground
