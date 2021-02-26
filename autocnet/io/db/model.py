@@ -225,7 +225,7 @@ class Images(BaseMixin, Base):
     @classmethod
     def union(cls, session):
         """
-        The boundary formed by unioning (or merging) all of the input footprints. The result 
+        The boundary formed by unioning (or merging) all of the input footprints. The result
         will likely be a multipolygon, likely with holes where data were not collected.
 
         Returns
@@ -296,7 +296,7 @@ class Points(BaseMixin, Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     _pointtype = Column("pointType", IntEnum(PointType), nullable=False)  # 2, 3, 4 - Could be an enum in the future, map str to int in a decorator
-    identifier = Column(String, unique=True)
+    identifier = Column(String)
     overlapid = Column(Integer, ForeignKey('overlay.id'))
     _geom = Column("geom", Geometry('POINT', srid=latitudinal_srid, dimension=2, spatial_index=True))
     cam_type = Column(String)
