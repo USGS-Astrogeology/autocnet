@@ -1828,15 +1828,14 @@ class NetworkCandidateGraph(CandidateGraph):
         """
         # Ingest isis control net as a df and do some massaging
         data = cnet.from_isis(path)
-        data_to_update = data[['id', 'serialnumber',
-            'measureJigsawRejected',
-            'sampleResidual',
-            'lineResidual',
-            'samplesigma',
-            'linesigma',
-            'adjustedCovar',
-            'apriorisample',
-            'aprioriline']]
+        data_to_update = data[['id',
+                               'serialnumber',
+                               'measureJigsawRejected',
+                               'sampleResidual',
+                               'lineResidual',
+                               'samplesigma',
+                               'linesigma',
+                               'adjustedCovar']]
         data_to_update.loc[:,'adjustedCovar'] = data_to_update['adjustedCovar'].apply(lambda row : list(row))
         data_to_update.loc[:,'id'] = data_to_update['id'].apply(lambda row : int(row))
 
@@ -1853,8 +1852,6 @@ class NetworkCandidateGraph(CandidateGraph):
             liner = t."lineResidual",
             samplesigma = t."samplesigma",
             linesigma = t."linesigma",
-            apriorisample = t."apriorisample",
-            aprioriline = t."aprioriline"
             FROM temp_measures_{i} AS t
             WHERE f.serialnumber = t.serialnumber AND f.pointid = t.id;
 
