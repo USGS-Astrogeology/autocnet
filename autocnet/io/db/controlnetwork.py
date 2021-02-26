@@ -12,7 +12,7 @@ SELECT measures."pointid",
         points."adjusted",
         points."pointIgnore",
         points."referenceIndex",
-        points."identifier"
+        points."identifier",
         measures."id",
         measures."serialnumber",
         measures."sample",
