@@ -1813,7 +1813,7 @@ class NetworkCandidateGraph(CandidateGraph):
         cnet.to_isis(df, path, targetname=target)
         cnet.write_filelist(fpaths, path=flistpath)
 
-    def update_from_jigsaw(self, path, k=10):
+    def update_from_jigsaw(self, path, pointid_func=lambda x: int(x.split('_')[-1])):
         """
         Updates the measures table in the database with data from
         a jigsaw bundle adjust
@@ -1823,44 +1823,17 @@ class NetworkCandidateGraph(CandidateGraph):
         path : str
                Full path to a bundle adjusted isis control network
 
-        k    : int
-               Number of queries to split the update over
+        pointid_func : callable
+                       A function that is used to convert from the id in the ISIS network
+                       back into the pointid that autocnet uses as the primary key. The
+                       default takes a string, splits it on underscores and takes the final element(s).
+                       For example, autocnet_14 becomes 14.
         """
-        # Ingest isis control net as a df and do some massaging
-        data = cnet.from_isis(path)
-        data_to_update = data[['id',
-                               'serialnumber',
-                               'measureJigsawRejected',
-                               'sampleResidual',
-                               'lineResidual',
-                               'samplesigma',
-                               'linesigma',
-                               'adjustedCovar']]
-        data_to_update.loc[:,'adjustedCovar'] = data_to_update['adjustedCovar'].apply(lambda row : list(row))
-        data_to_update.loc[:,'id'] = data_to_update['id'].apply(lambda row : int(row))
-
-        split_data = np.array_split(data_to_update, k)
-        for i, sdf in enumerate(split_data):
-            # Generate a temp table, update the real table, then drop the temp table
-            sdf.to_sql(f'temp_measures_{i}', self.engine, if_exists='replace', index_label='serialnumber', index = False)
-
-            sql = f"""
-            UPDATE measures AS f
-            SET
-            "measureJigsawRejected" = t."measureJigsawRejected",
-            sampler = t."sampleResidual",
-            liner = t."lineResidual",
-            samplesigma = t."samplesigma",
-            linesigma = t."linesigma",
-            FROM temp_measures_{i} AS t
-            WHERE f.serialnumber = t.serialnumber AND f.pointid = t.id;
-
-            DROP TABLE temp_measures_{i};
-            """
-
-            with self.session_scope() as session:
-                session.execute(sql)
-                session.commit()
+        isis_network = cnet.from_isis(path)
+        io_controlnetwork.update_from_jigsaw(isis_network, 
+                                             ncg.measures, 
+                                             ncg.connection, 
+                                             pointid_func=pointid_func)
 
     @classmethod
     def from_filelist(cls, filelist, config, clear_db=False):
@@ -2133,14 +2106,13 @@ class NetworkCandidateGraph(CandidateGraph):
                     except Exception as e:
                         warnings.warn(f'Failed to reset primary id sequence for table {t}')
 
-    def place_points_from_cnet(self, cnet):
+    """def place_points_from_cnet(self, cnet):
         semi_major, semi_minor = self.config["spatial"]["semimajor_rad"], self.config["spatial"]["semiminor_rad"]
 
         if isinstance(cnet, str):
             cnet = from_isis(cnet)
 
         cnetpoints = cnet.groupby('id')
-        points = []
         session = self.Session()
 
         for id, cnetpoint in cnetpoints:
@@ -2168,7 +2140,6 @@ class NetworkCandidateGraph(CandidateGraph):
             lon_og, lat_og, alt = reproject([x, y, z], semi_major, semi_minor, 'geocent', 'latlon')
             lon, lat = og2oc(lon_og, lat_og, semi_major, semi_minor)
 
-
             point = Points(identifier=id,
                            ignore=row.pointIgnore,
                            apriori= shapely.geometry.Point(float(row.aprioriX), float(row.aprioriY), float(row.aprioriZ)),
@@ -2176,10 +2147,9 @@ class NetworkCandidateGraph(CandidateGraph):
                            pointtype=float(row.pointType))
 
             point.measures = list(measures)
-            points.append(point)
-        session.add_all(points)
+            session.add(point)
         session.commit()
-        session.close()
+        session.close()"""
 
     @classmethod
     def from_cnet(cls, cnet, filelist, config):

@@ -1,3 +1,6 @@
+from csv import (writer as csv_writer, QUOTE_MINIMAL)
+from io import StringIO
+
 import pandas as pd
 import numpy as np
 import shapely.wkb as swkb
@@ -93,62 +96,81 @@ ORDER BY measures."pointid", measures."id";
         return df
 
 
-def update_measure_from_jigsaw(point, path, ncg=None, **kwargs):
+def update_from_jigsaw(cnet, measures, connection, pointid_func=None):
     """
-    Updates the database (associated with ncg) with a single measure's
-    jigsaw line and sample residuals.
+    Updates a database fields: liner, sampler, measureJigsawRejected,
+    samplesigma, and linesigma using an ISIS control network.
+    
+    This function uses the pandas update function with overwrite=True. Therefore, 
+    this function will overwrite NaN and non-NaN entries.
+
+    In order to be efficient, this func creates an in-memory control network
+    and then writes to the database using a string buffer and a COPY FROM call.
+    
+    Note: If using this func and looking at the updates table in pgadmin, it
+    is necessary to refresh the pgadmin table of contents for the schema.
 
     Parameters
     ----------
-    point   : obj
-              point identifying object as defined by autocnet.io.db.model.Points
+    cnet : pd.DataFrame
+           plio.io.io_control_network loaded dataframe
 
-    path    : str
-              absolute path and network name of control network used to update the measure/database.
-
-    ncg     : obj
-              the network candidate graph associated with the measure/database
-              being updated.
+    measures : pd.DataFrame
+               of measures from a database table. 
+    
+    connection : object
+                 An SQLAlchemy DB connection object
     """
 
-    if not ncg.Session:
-        BrokenPipeError('This function requires a database session from a NetworkCandidateGraph.')
+    def copy_from_method(table, conn, keys, data_iter, pre_truncate=False, fatal_failure=False):
+        """
+        Custom method for pandas.DataFrame.to_sql that will use COPY FROM
+        From: https://stackoverflow.com/questions/24084710/to-sql-sqlalchemy-copy-from-postgresql-engine
+        
+        This is follows the API specified by pandas.
+        """
 
-    data = cnet.from_isis(path)
-    data_to_update = data[['id', 'serialnumber', 'measureJigsawRejected', 'sampleResidual', 'lineResidual', 'samplesigma', 'linesigma', 'adjustedCovar', 'apriorisample', 'aprioriline']]
-    data_to_update.loc[:,'adjustedCovar'] = data_to_update['adjustedCovar'].apply(lambda row : list(row))
-    data_to_update.loc[:,'id'] = data_to_update['id'].apply(lambda row : int(row))
+        dbapi_conn = conn.connection
+        cur = dbapi_conn.cursor()
 
-    res = data_to_update[(data_to_update['id']==point.id)]
-    if res.empty:
-        print(f'Point {point.id} does not exist in input network.')
-        return
+        s_buf = StringIO()
+        writer = csv_writer(s_buf, quoting=QUOTE_MINIMAL)
+        writer.writerows(data_iter)
+        s_buf.seek(0)
 
-    # update
-    resultlog = []
-    with ncg.session_scope() as session:
-        for row in res.iterrows():
-            row = row[1]
-            currentlog = {'measure':row["serialnumber"],
-                          'status':''}
+        columns = ', '.join('"{}"'.format(k) for k in keys)
+        table_name = '{}.{}'.format(
+            table.schema, table.name) if table.schema else table.name
 
-            residual = np.linalg.norm([row["sampleResidual"], row["lineResidual"]])
-            session.query(Measures).\
-                    filter(Measures.pointid==point.id, Measures.serial==row["serialnumber"]).\
-                    update({"jigreject": row["measureJigsawRejected"],
-                        "sampler": row["sampleResidual"],
-                        "liner": row["lineResidual"],
-                        "residual": residual,
-                        "samplesigma": row["samplesigma"],
-                        "linesigma": row["linesigma"],
-                        "apriorisample": row["apriorisample"],
-                        "aprioriline": row["aprioriline"]})
-            currentlog['status'] = 'success'
-            resultlog.append(currentlog)
+        sql_query = 'COPY %s (%s) FROM STDIN WITH CSV' % (table_name, columns)
+        cur.copy_expert(sql=sql_query, file=s_buf)
+        return cur.rowcount
 
-        session.commit()
-    return resultlog
+    # Get the PID back from the id.
+    if pointid_func:
+        cnet['pointid'] = cnet['id'].apply(pointid_func)
+    else:
+        cnet['pointid'] = cnet['id']
+    cnet = cnet.rename(columns={'sampleResidual':'sampler',
+                            'lineResidual':'liner'})
 
+    # Homogenize the indices
+    measures.set_index(['pointid', 'serialnumber'], inplace=True)
+    cnet.set_index(['pointid', 'serialnumber'], inplace=True)
+
+    # Update the current meaasures using the data from the input network
+    measures.update(cnet[['sampler', 'liner', 'measureJigsawRejected', 'samplesigma', 'linesigma']])
+    measures.reset_index(inplace=True)
+    
+    # Compute the residual from the components
+    measures['residual'] = np.sqrt(measures['liner'] ** 2 + measures['sampler'] ** 2)
+
+    # Execute an SQL COPY from a CSV buffer into the DB
+    measures.to_sql('measures_tmp', connection, schema='public', if_exists='replace', index=False, method=copy_from_method)
+
+    # Drop the old measures table and then rename the tmp measures table to be the 'new' measures table
+    connection.execute('DROP TABLE measures;')
+    connection.execute('ALTER TABLE measures_tmp RENAME TO measures;')
 
 # This is not a permanent placement for this function
 # TO DO: create a new module for parsing/cleaning points from a controlnetwork

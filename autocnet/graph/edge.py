@@ -416,7 +416,7 @@ class Edge(dict, MutableMapping):
         self['homography'], hmask = hm.compute_homography(s_keypoints.values, d_keypoints.values, method=method)
 
         # Convert the truncated RANSAC mask back into a full length mask
-        mask[mask] = hmask
+        mask[mask] = hmask.ravel()
         self.masks['homography'] = mask
 
     def subpixel_register(self, method='phase', clean_keys=[],
