@@ -2106,7 +2106,7 @@ class NetworkCandidateGraph(CandidateGraph):
                     except Exception as e:
                         warnings.warn(f'Failed to reset primary id sequence for table {t}')
 
-    """def place_points_from_cnet(self, cnet):
+    def place_points_from_cnet(self, cnet):
         semi_major, semi_minor = self.config["spatial"]["semimajor_rad"], self.config["spatial"]["semiminor_rad"]
 
         if isinstance(cnet, str):
@@ -2149,7 +2149,7 @@ class NetworkCandidateGraph(CandidateGraph):
             point.measures = list(measures)
             session.add(point)
         session.commit()
-        session.close()"""
+        session.close()
 
     @classmethod
     def from_cnet(cls, cnet, filelist, config):
