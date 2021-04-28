@@ -69,7 +69,6 @@ class TestSpatialSuppression(unittest.TestCase):
             mask, k = cpu_outlier_detector.spatial_suppression(self.df, self.domain, k=30, xkey='lon', ykey='lat')
             self.assertEqual(k, 59)
             self.assertTrue(issubclass(w[0].category, UserWarning))
-            # The old check for # of warning is brittle because deprecation warnings in upstream packages are counted.
             self.assertTrue('Unable to optimally solve.' == str(w[0].message))
             
 

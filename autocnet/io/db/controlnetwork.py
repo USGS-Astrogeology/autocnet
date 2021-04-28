@@ -120,6 +120,13 @@ def update_from_jigsaw(cnet, measures, connection, pointid_func=None):
     
     connection : object
                  An SQLAlchemy DB connection object
+
+    poitid_func : callable
+                  A callable function that is used to split the id string in
+                  the cnet in order to extract a pointid. An autocnet written cnet
+                  will have a user specified identifier with the numeric pointid as 
+                  the final element, e.g., autocnet_1. This func needs to get the
+                  numeric ID back. This callable is used to unmunge the id.
     """
 
     def copy_from_method(table, conn, keys, data_iter, pre_truncate=False, fatal_failure=False):
