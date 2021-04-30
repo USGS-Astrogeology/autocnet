@@ -471,7 +471,7 @@ def distribute_points_in_geom(geom, method="classic",
 
     Returns
     -------
-    valid : list
+    valid : np.ndarray
             of valid points in the form (x,y) or (lon,lat)
 
     """
@@ -516,7 +516,7 @@ def distribute_points_in_geom(geom, method="classic",
     # Decision Tree
     if ratio < 0.16 and geom.area < 0.01:
         # Class: Slivers - ignore.
-        return []
+        return np.array([])
     elif geom.area <= 0.004 and ratio >= 0.25:
         # Single point at the centroid
         valid = single_centroid(geom)
@@ -538,7 +538,7 @@ def distribute_points_in_geom(geom, method="classic",
             valid = point_distribution_func(geom, nspts, ewpts, Session=Session, **kwargs)
     else:
         print('WTF Willy')
-    return valid
+    return np.array(valid)
 
 
 def alpha_shape(points, alpha):

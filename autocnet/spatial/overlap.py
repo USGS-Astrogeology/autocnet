@@ -63,7 +63,6 @@ def place_points_in_overlaps(size_threshold=0.0007,
 
     size_threshold : float
                      overlaps with area <= this threshold are ignored
-
     cam_type : str
                Either 'csm' (default) or 'isis'. The type of sensor model to use.
 
@@ -156,7 +155,7 @@ def place_points_in_overlap(overlap,
     # Determine the point distribution in the overlap geom
     geom = overlap.geom
     valid = compgeom.distribute_points_in_geom(geom, **distribute_points_kwargs, **kwargs)
-    if not valid:
+    if not valid.any():
         warnings.warn('Failed to distribute points in overlap')
         return []
 
@@ -170,7 +169,7 @@ def place_points_in_overlap(overlap,
             nn = NetworkNode(node_id=id, image_path=res.path)
             nn.parent = ncg
             nodes.append(nn)
-
+    
     print(f'Attempting to place measures in {len(nodes)} images.')
     for v in valid:
         lon = v[0]
@@ -182,15 +181,15 @@ def place_points_in_overlap(overlap,
         height = ncg.dem.read_array(1, [px, py, 1, 1])[0][0]
 
         # Need to get the first node and then convert from lat/lon to image space
-        for reference_index, node in enumerate(nodes):
-            # reference_index is the index into the list of measures for the image that is not shifted and is set at the
+        for reference_index, node in enumerate(nodes):  
+            # reference_index is the index into the list of measures for the image that is not shifted and is set at the 
             # reference against which all other images are registered.
             if cam_type == "isis":
                 try:
                     line, sample = isis.ground_to_image(node["image_path"], lon, lat)
                 except ProcessError as e:
                     if 'Requested position does not project in camera model' in e.stderr:
-                        print(f'point ({geocent_lon}, {geocent_lat}) does not project to reference image {node["image_path"]}')
+                        print(f'point ({lon}, {lat}) does not project to reference image {node["image_path"]}')
                         continue
             if cam_type == "csm":
                 lon_og, lat_og = oc2og(lon, lat, semi_major, semi_minor)
@@ -214,7 +213,7 @@ def place_points_in_overlap(overlap,
             if interesting is not None:
                 # We have found an interesting feature and have identified the reference point.
                 break
-
+ 
         if interesting is None:
             warnings.warn('Unable to find an interesting point, falling back to the a priori pointing')
             newsample = sample
@@ -518,3 +517,49 @@ def place_points_in_image(image,
             points.append(point)
     print(f'Able to place {len(points)} points.')
     Points.bulkadd(points, ncg.Session)
+
+def add_measures_to_point(pointid, cam_type='isis', ncg=None, Session=None):
+    if not ncg.Session:
+        raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
+    
+    if isinstance(pointid, Points):
+        pointid = pointid.id
+
+    
+    with ncg.session_scope() as session:
+        point = session.query(Points).filter(Points.id == pointid).one()
+        point_lon = point.geom.x
+        point_lat = point.geom.y
+
+        reference_index = point.reference_index
+        reference_measure = point.measures[reference_index]
+        reference_image_id = reference_measure.imageid
+
+        images = session.query(Images).filter(Images.geom.ST_Intersects(point._geom)).all()
+        print(f'Placing measures into {len(images)-1} images.')
+        for image in images:
+            if image.id == reference_image_id:
+                continue  # This is the reference image, so pass on adding a new measure
+            
+            if cam_type == "isis":
+                try:
+                    line, sample = isis.ground_to_image(image.path, point_lon, point_lat)
+                except ProcessError as e:
+                    if 'Requested position does not project in camera model' in e.stderr:
+                        print(f'interesting point ({point_lon},{point_lat}) does not project to image {image.name}')
+
+            point.measures.append(Measures(sample=sample,
+                                           line=line,
+                                           apriorisample=sample,
+                                           aprioriline=line,
+                                           imageid=image.id,
+                                           serial=image.serial,
+                                           measuretype=3,
+                                           choosername='add_measures_to_point')) 
+            i = 0
+            for m in point.measures:
+                if m.measuretype == 2 or m.measuretype == 3:
+                    i += 1
+            if i >= 2:
+                point.ignore = False      
+    return

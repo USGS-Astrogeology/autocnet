@@ -4,48 +4,40 @@ import numpy as np
 from scipy.ndimage.interpolation import zoom
 
 
-def pattern_match_autoreg(template, image, subpixel_size=3, max_scaler=0.2, func=cv2.TM_CCORR_NORMED):
+def pattern_match_autoreg(template, image, subpixel_size=3, max_scaler=0.2, metric=cv2.TM_CCORR_NORMED):
     """
     Call an arbitrary pattern matcher using a subpixel approach where a center of gravity using
     the correlation coefficients are used for subpixel alignment.
-
     Parameters
     ----------
     template : ndarray
                The input search template used to 'query' the destination
                image
-
     image : ndarray
             The image or sub-image to be searched
-
     subpixel_size : int
                     An odd integer that defines the window size used to compute
                     the moments
-
     max_scaler : float
                  The percentage offset to apply to the delta between the maximum
                  correlation and the maximum edge correlation.
-
-    func : object
-           The function to be used to perform the template based matching
-           Options: {cv2.TM_CCORR_NORMED, cv2.TM_CCOEFF_NORMED, cv2.TM_SQDIFF_NORMED}
-           In testing the first two options perform significantly better with Apollo data.
-
+    metric : object
+             The function to be used to perform the template based matching
+             Options: {cv2.TM_CCORR_NORMED, cv2.TM_CCOEFF_NORMED, cv2.TM_SQDIFF_NORMED}
+             In testing the first two options perform significantly better with Apollo data.
     Returns
     -------
     x : float
         The x offset
-
     y : float
         The y offset
-
     max_corr : float
                The strength of the correlation in the range [-1, 1].
     """
 
-    result = cv2.matchTemplate(image, template, method=func)
+    result = cv2.matchTemplate(image, template, method=metric)
 
-    if func == cv2.TM_SQDIFF or func == cv2.TM_SQDIFF_NORMED:
+    if metric == cv2.TM_SQDIFF or metric == cv2.TM_SQDIFF_NORMED:
         y, x = np.unravel_index(np.argmin(result, axis=None), result.shape)
     else:
         y, x = np.unravel_index(np.argmax(result, axis=None), result.shape)
@@ -59,7 +51,7 @@ def pattern_match_autoreg(template, image, subpixel_size=3, max_scaler=0.2, func
 
     if area.shape != (subpixel_size+2, subpixel_size+2):
         print("Max correlation is too close to the boundary.")
-        return None, None, 0
+        return None, None, 0, None
 
     # Find the max on the edges, scale just like autoreg (but why?)
     edge_max = np.max(np.vstack([area[0], area[-1], area[:,0], area[:,-1]]))
@@ -83,43 +75,34 @@ def pattern_match_autoreg(template, image, subpixel_size=3, max_scaler=0.2, func
     y -= (image.shape[0] / 2) - (template.shape[0] / 2)
     x -= (image.shape[1] / 2) - (template.shape[1] / 2)
 
-    return x, y, max_corr
+    return float(x), float(y), float(max_corr), result
 
 def pattern_match(template, image, upsampling=16, metric=cv2.TM_CCOEFF_NORMED, error_check=False):
     """
     Call an arbitrary pattern matcher using a subpixel approach where the template and image
     are upsampled using a third order polynomial.
-
     Parameters
     ----------
     template : ndarray
                The input search template used to 'query' the destination
                image
-
     image : ndarray
             The image or sub-image to be searched
-
     upsampling : int
                  The multiplier to upsample the template and image.
-
     func : object
            The function to be used to perform the template based matching
            Options: {cv2.TM_CCORR_NORMED, cv2.TM_CCOEFF_NORMED, cv2.TM_SQDIFF_NORMED}
            In testing the first two options perform significantly better with Apollo data.
-
     error_check : bool
                   If True, also apply a different matcher and test that the values
                   are not too divergent.  Default, False.
-
     Returns
     -------
-
     x : float
         The x offset
-
     y : float
         The y offset
-
     strength : float
                The strength of the correlation in the range [-1, 1].
     """

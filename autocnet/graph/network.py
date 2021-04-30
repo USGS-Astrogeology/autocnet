@@ -44,8 +44,8 @@ from autocnet.graph.node import Node, NetworkNode
 from autocnet.io import network as io_network
 from autocnet.io.db import controlnetwork as io_controlnetwork
 from autocnet.io.db.model import (Images, Keypoints, Matches, Cameras, Points,
-                                  Base, Overlay, Edges, Costs, Measures, JsonEncoder,
-                                  try_db_creation)
+                                  Base, Overlay, Edges, Costs, Measures, CandidateGroundPoints,
+                                  JsonEncoder, try_db_creation)
 from autocnet.io.db.connection import new_connection, Parent
 from autocnet.matcher import subpixel
 from autocnet.matcher import cross_instrument_matcher as cim
@@ -1350,7 +1350,10 @@ class NetworkCandidateGraph(CandidateGraph):
                 'image': Images,
                 'images': Images,
                 'i': Images,
-                5: Images
+                5: Images,
+                'candidategroundpoints' : CandidateGroundPoints,
+                'candidategroundpoint' : CandidateGroundPoints,
+                6: CandidateGroundPoints
             }
 
     def config_from_file(self, filepath):
@@ -1583,6 +1586,7 @@ class NetworkCandidateGraph(CandidateGraph):
             reapply=False,
             log_dir=None,
             queue=None,
+            exclude=None,
             **kwargs):
         """
         A mirror of the apply function from the standard CandidateGraph object. This implementation
@@ -1648,6 +1652,11 @@ class NetworkCandidateGraph(CandidateGraph):
                 The processing queue to use. If None (default), use the processing queue from
                 the config file.
 
+        Returns
+        -------
+        job_str : str
+                  The string job that is submitted to the job scheduler
+
         Examples
         --------
         Apply a function to the overlay table omitting those overlay rows that already have
@@ -1679,7 +1688,7 @@ class NetworkCandidateGraph(CandidateGraph):
             # Determine which obj will be called
             if isinstance(on, str):
                 onobj = self.apply_iterable_options[on]
-            elif isinstance(on, list):
+            elif isinstance(on, (list, np.ndarray)):
                 onobj = on
 
             # This method support arbitrary functions. The name needs to be a string for the log name.
@@ -1691,7 +1700,7 @@ class NetworkCandidateGraph(CandidateGraph):
             # Dispatch to either the database object message generator or the autocnet object message generator
             if isinstance(onobj, DeclarativeMeta):
                 job_counter = self._push_row_messages(onobj, on, function, walltime, filters, query_string, args, kwargs)
-            elif isinstance(onobj, list):
+            elif isinstance(onobj, (list, np.ndarray)):
                 job_counter = self._push_iterable_message(onobj, function, walltime, args, kwargs)
             elif isinstance(onobj, (nx.classes.reportviews.EdgeView, nx.classes.reportviews.NodeView)):
                 job_counter = self._push_obj_messages(onobj, function, walltime, args, kwargs)
@@ -1723,8 +1732,10 @@ class NetworkCandidateGraph(CandidateGraph):
                      time=walltime,
                      partition=queue,
                      output=log_dir+f'/autocnet.{function}-%j')
-        submitter.submit(array='1-{}%{}'.format(job_counter,arraychunk), chunksize=chunksize)
-        return job_counter
+        job_str = submitter.submit(array='1-{}%{}'.format(job_counter,arraychunk), 
+                                   chunksize=chunksize, 
+                                   exclude=exclude)
+        return job_str
 
     def generic_callback(self, msg):
         """
@@ -1783,7 +1794,8 @@ class NetworkCandidateGraph(CandidateGraph):
 
         Returns
         -------
-        None
+        df : pd.DataFrame
+             The pandas dataframe that is passed to plio to generate the control network.
 
         """
         # Read the cnet from the db
@@ -1812,6 +1824,10 @@ class NetworkCandidateGraph(CandidateGraph):
                            inplace=True)
         cnet.to_isis(df, path, targetname=target)
         cnet.write_filelist(fpaths, path=flistpath)
+        
+        # Even though this method writes, having a non-None return 
+        # let's a user work with the data that is passed to plio
+        return df
 
     def update_from_jigsaw(self, path, pointid_func=lambda x: int(x.split('_')[-1])):
         """
@@ -1917,14 +1933,20 @@ class NetworkCandidateGraph(CandidateGraph):
 
         Parameters
         ----------
-        img_path: str
+        img_path : str
                   absolute path to image
+
+        Returns
+        -------
+        node.id : int
+                  The id of the newly added node. 
         """
         image_name = os.path.basename(img_path)
         node = NetworkNode(image_path=img_path, image_name=image_name)
         node.parent = self
         node.populate_db()
-
+        return node.id
+        
     def copy_images(self, newdir):
         """
         Copy images from a given directory into a new directory and
@@ -1950,7 +1972,7 @@ class NetworkCandidateGraph(CandidateGraph):
                     session.commit()
                 else:
                     continue
-
+            
     def add_from_remote_database(self, source_db_config, path,  query_string='SELECT * FROM public.images LIMIT 10'):
         """
         This is a constructor that takes an existing database containing images and sensors,
@@ -2381,11 +2403,91 @@ class NetworkCandidateGraph(CandidateGraph):
         submitter.submit(array='1-{}'.format(job_counter))
         return job_counter
 
+    def distribute_ground_uniform(self, distribute_points_kwargs={}):
+        """
+        Distribute candidate ground points into the union of the image footprints. This
+        function returns a list of 2d nd-arrays where the first element is the longitude
+        and the second element is the latitude.
+        
+        Parameters
+        ----------
+        distirbute_points_kwargs : dict
+                                   Of arguments that are passed on the the
+                                   distribute_points_in_geom argument in autocnet.cg.cg
+        Returns
+        -------
+        valid : np.ndarray
+                n, 2 array with each row in the form lon, lat
+        
+        Examples
+        --------
+        To use this method, one can first define the spacing of ground points in the north-
+        south and east-west directions using the `distribute_points_kwargs` keyword argument:
+            def ns(x):
+                from math import ceil
+                return ceil(round(x,1)*3)
+            def ew(x):
+                from math import ceil
+                return ceil(round(x,1)*3)
+        
+        Next these arguments can be passed in in order to generate the grid of points:
+            distribute_points_kwargs = {'nspts_func':ns, 'ewpts_func':ew, 'method':'classic'}
+            valid = ncg.distribute_ground_uniform(distribute_points_kwargs=distribute_points_kwargs)
+        
+        At this point, it is possible to visualize the valid points inside of a Jupyter notebook. This
+        is frequently convenient when combined with the `ncg.union` property that displays the unioned
+        geometries in the NetworkCandidateGraph.
+        Finally, the valid points can be propagated using apply. The code below will use the defined base
+        to find the most interesting ground feature in the region of the valid point and write that point
+        to the table defined by CandidateGroundPoints (autocnet.io.db.model):
+        
+            base = 'mc11_oxia_palus_dir_final.cub'
+            ncg.apply('matcher.ground.find_most_interesting_ground', on=valid, args=(base,))
+        """
+        geom  = self.union
+        valid = cg.distribute_points_in_geom(geom, **distribute_points_kwargs)
+        return valid
+
+    def distribute_ground_density(self, threshold=4, distribute_points_kwargs={}):
+        """
+        Distribute candidate ground points into overlapping geometries with greater than or
+        equal to the number of images equal to the threshold. This function returns a list of 
+        2d nd-arrays where the first element is the longitude and the second element is the latitude.
+        Parameters
+        ----------
+        distirbute_points_kwargs : dict
+                                   Of arguments that are passed on the the
+                                   distribute_points_in_geom argument in autocnet.cg.cg
+        threshold : int
+                    Overlaps intersecting threshold images or greater have points placed. 
+                    Default 4.
+        Returns
+        -------
+        valid : np.ndarray
+                n, 2 array in the form lon, lat
+
+        Examples
+        --------
+        Usage for `distribute_ground_density` is identical to usage for `distribute_ground_uniform`.
+        See Also
+        --------
+        autocnet.graph.network.NetworkCandidateGraph.distribute_ground_uniform
+        """
+        valid = []
+        with self.session_scope() as session:
+            res = session.query(Overlay).filter(func.array_length(Overlay.intersections, 1) >= threshold).all()
+            for r in res:
+                coords = cg.distribute_points_in_geom(r.geom, **distribute_points_kwargs)
+                if len(coords) > 0:
+                    valid.append(coords)
+        valid = np.vstack(valid)
+        return valid
+
     def subpixel_register_points(self, **kwargs):
         subpixel.subpixel_register_points(self.Session, **kwargs)
 
     def subpixel_register_point(self, pointid, **kwargs):
-        subpixel.subpixel_register_point(self.Session, pointid, **kwarg)
+        subpixel.subpixel_register_point(self.Session, pointid, **kwargs)
 
     def subpixel_regiter_mearure(self, measureid, **kwargs):
         subpixel.subpixel_register_measure(self.Session, measureid, **kwargs)
@@ -2405,23 +2507,4 @@ class NetworkCandidateGraph(CandidateGraph):
                                          self.dem,
                                          nodes,
                                          **kwargs)
-    def distribute_ground(self, distribute_points_kwargs={}):
-        """
-        Distribute candidate ground points into the union of the image footprints. This
-        function returns a list of 2d nd-arrays where the first element is the longitude
-        and the second element is the latitude.
-
-        Parameters
-        ----------
-        distirbute_points_kwargs : dict
-                                   Of arguments that are passed on the the
-                                   distribute_points_in_geom argument in autocnet.cg.cg
-
-        Returns
-        -------
-        valid : list
-                of nd-arrays in the form [array([lon, lat]), array([lon, lat])]
-        """
-        geom  = self.union
-        valid = cg.distribute_points_in_geom(geom, **distribute_points_kwargs)
-        return valid
+    

@@ -1,5 +1,6 @@
 import json
 from math import modf, floor
+import time
 import numpy as np
 import warnings
 
@@ -58,7 +59,8 @@ def check_match_func(func):
     match_funcs = {
         "classic": subpixel_template_classic,
         "phase": iterative_phase,
-        "template": subpixel_template
+        "template": subpixel_template,
+        "mutualinformation": mutual_information
     }
 
     if func in match_funcs.values():
@@ -488,6 +490,8 @@ def subpixel_template_classic(sx, sy, dx, dy,
     autocnet.matcher.naive_template.pattern_match_autoreg : for the jwargs that can be passed to the autoreg style matcher
     """
 
+    # Image or source is the reference that the template is registered to
+
     image_size = check_image_size(image_size)
     template_size = check_image_size(template_size)
 
@@ -839,11 +843,15 @@ def geom_match_simple(base_cube,
     autocnet.matcher.subpixel.subpixel_template: for list of kwargs that can be passed to the matcher
     autocnet.matcher.subpixel.subpixel_phase: for list of kwargs that can be passed to the matcher
     """
-
+    t1 = time.time()
     if not isinstance(input_cube, GeoDataset):
         raise Exception("input cube must be a geodataset obj")
     if not isinstance(base_cube, GeoDataset):
         raise Exception("match cube must be a geodataset obj")
+
+    # Parse the match_func into a function if it comes in as a string
+    if not callable(match_func):
+        match_func = check_match_func(match_func)
 
     base_startx = int(bcenter_x - size_x)
     base_starty = int(bcenter_y - size_y)
@@ -891,7 +899,8 @@ def geom_match_simple(base_cube,
     stop_y = dst_gcps[:,1].max()
 
     affine = tf.estimate_transform('affine', np.array([*base_gcps]), np.array([*dst_gcps]))
-
+    t2 = time.time()
+    print(f'Estimation of the transformation took {t2-t1} seconds.')
     # read_array not getting correct type by default
     isis2np_types = {
                     "UnsignedByte" : "uint8",
@@ -908,8 +917,9 @@ def geom_match_simple(base_cube,
     box = (0, 0, max(dst_arr.shape[1], base_arr.shape[1]), max(dst_arr.shape[0], base_arr.shape[0]))
     dst_arr = np.array(Image.fromarray(dst_arr).crop(box))
 
-    dst_arr = tf.warp(dst_arr, affine)
-
+    dst_arr = tf.warp(dst_arr, affine)      
+    t3 = time.time()
+    print(f'Affine warp took {t3-t2} seconds.')
     if verbose:
         fig, axs = plt.subplots(1, 2)
         axs[0].set_title("Base")
@@ -917,10 +927,12 @@ def geom_match_simple(base_cube,
         axs[1].set_title("Projected Image")
         axs[1].imshow(roi.Roi(bytescale(dst_arr, cmin=0), bcenter_x, bcenter_y, 25, 25).clip(), cmap="Greys_r")
         plt.show()
-
+    print(base_arr.shape, dst_arr.shape)
     # Run through one step of template matching then one step of phase matching
     # These parameters seem to work best, should pass as kwargs later
     restemplate = match_func(bcenter_x, bcenter_y, bcenter_x, bcenter_y, bytescale(base_arr, cmin=0), bytescale(dst_arr, cmin=0), **match_kwargs)
+    t4 = time.time()
+    print(f'Matching took {t4-t3} seconds')
 
     x,y,maxcorr,temp_corrmap = restemplate
     if x is None or y is None:
@@ -939,19 +951,21 @@ def geom_match_simple(base_cube,
         axs[0][2].axvline(x=oarr.shape[1]/2, color="red", linestyle="-", alpha=1)
         axs[0][2].set_title("Original Registered Image")
 
-        darr = roi.Roi(dst_arr, x, y, size_x, size_y).clip()
-        axs[0][1].imshow(bytescale(darr, cmin=0), cmap="Greys_r")
-        axs[0][1].axhline(y=darr.shape[1]/2, color="red", linestyle="-", alpha=1)
-        axs[0][1].axvline(x=darr.shape[1]/2, color="red", linestyle="-", alpha=1)
-        axs[0][1].set_title("Projected Registered Image")
-
         barr = roi.Roi(base_arr, bcenter_x, bcenter_y, size_x, size_y).clip()
         axs[0][0].imshow(bytescale(barr, cmin=0), cmap="Greys_r")
         axs[0][0].axhline(y=barr.shape[1]/2, color="red", linestyle="-", alpha=1)
         axs[0][0].axvline(x=barr.shape[1]/2, color="red", linestyle="-", alpha=1)
         axs[0][0].set_title("Base")
 
-        axs[1][0].imshow(bytescale(darr.astype("f")/barr.astype("f")), cmap="Greys_r", alpha=.6)
+        darr = roi.Roi(dst_arr, x, y, size_x, size_y).clip()
+        axs[0][1].imshow(bytescale(darr, cmin=0), cmap="Greys_r")
+        axs[0][1].axhline(y=darr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][1].axvline(x=darr.shape[1]/2, color="red", linestyle="-", alpha=1)
+        axs[0][1].set_title("Projected Registered Image")
+
+        #axs[1][0].imshow(bytescale(darr.astype("f")/barr.astype("f")), cmap="Greys_r", alpha=.6)
+        axs[1][0].imshow(bytescale(barr.astype("f")), cmap="Blues", alpha=1.0)
+        axs[1][0].imshow(bytescale(darr.astype("f")), cmap="Pastel2", alpha=0.5)
         axs[1][0].axhline(y=barr.shape[1]/2, color="red", linestyle="-", alpha=.5)
         axs[1][0].axvline(x=barr.shape[1]/2, color="red", linestyle="-", alpha=.5)
         axs[1][0].set_title("overlap")
@@ -1356,8 +1370,7 @@ def subpixel_register_measure(measureid,
         
         if source.measureid == measureid:
             currentlog['status'] = f'Unable to register this measure. Measure {measureid} is the reference measure.'
-            return 
-            resultlog
+            return resultlog
 
         try:
             new_x, new_y, dist, metric = geom_match_simple(source_node.geodata, destination_node.geodata,
@@ -1412,6 +1425,8 @@ def subpixel_register_point(pointid,
                             geom_func='simple',
                             match_func='classic',
                             match_kwargs={},
+                            verbose=False,
+                            chooser='subpixel_register_point',
                             **kwargs):
 
     """
@@ -1455,13 +1470,25 @@ def subpixel_register_point(pointid,
     if not ncg.Session:
         raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
     
+    if isinstance(pointid, Points):
+        pointid = pointid.id
+    
+    t1 = time.time()
     with ncg.session_scope() as session:
-        measures = session.query(Measures).filter(Measures.pointid == pointid).order_by(Measures.id).all()
-        
+        point = session.query(Points).filter(Points.id == pointid).one()
+        measures = point.measures
+        #measures = session.query(Measures).filter(Measures.pointid == pointid).order_by(Measures.id).all()
+
+        t2 = time.time()
+        print(f'Query took {t2-t1} seconds to find the point.')
+
         # Get the reference measure. Previously this was index 0, but now it is a database tracked attribute
-        reference_index = measures[0].point.reference_index
+        reference_index = point.reference_index
+        
         source = measures[reference_index]
 
+        print(f'Using measure {source.id} on image {source.imageid}/{source.serial} as the reference.')
+        print(f'Measure reference index is: {point.reference_index}')
         source.template_metric = 1
         source.template_shift = 0
         source.phase_error = 0
@@ -1469,15 +1496,15 @@ def subpixel_register_point(pointid,
         source.phase_shift = 0
 
         sourceid = source.imageid
-        res = session.query(Images).filter(Images.id == sourceid).one()
-        source_node = NetworkNode(node_id=sourceid, image_path=res.path)
+        sourceres = session.query(Images).filter(Images.id == sourceid).one()
+        source_node = NetworkNode(node_id=sourceid, image_path=sourceres.path)
         source_node.parent = ncg
-
+        t3 = time.time()
+        print(f'Query for the image to use as source took {t3-t2} seconds.')
         print(f'Attempting to subpixel register {len(measures)-1} measures for point {pointid}')
 
         resultlog = []
         for i, measure in enumerate(measures):
-            # Skip the reference measure.
             if i == reference_index:
                 continue
             
@@ -1491,17 +1518,21 @@ def subpixel_register_point(pointid,
             destination_node.parent = ncg
 
             print('geom_match image:', res.path)
+            print('geom_func', geom_func)
+            print(source_node.geodata, destination_node.geodata, source.apriorisample, source.aprioriline)
             try:
                 # new geom_match has a incompatible API, until we decide on one, put in if.
                 if (geom_func == geom_match):
                    new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
                                                         source.apriorisample, source.aprioriline,
-                                                        template_kwargs=match_kwargs)
+                                                        template_kwargs=match_kwargs,
+                                                        verbose=verbose)
                 else:
                     new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
                                                         source.apriorisample, source.aprioriline,
                                                         match_func=match_func,
-                                                        match_kwargs=match_kwargs)
+                                                        match_kwargs=match_kwargs,
+                                                        verbose=verbose)
             except Exception as e:
                 print(f'geom_match failed on measure {measure.id} with exception -> {e}')
                 currentlog['status'] = f"geom_match failed on measure {measure.id}"
@@ -1522,13 +1553,11 @@ def subpixel_register_point(pointid,
 
             cost = cost_func(measure.template_shift, measure.template_metric)
 
+            print(f'Current Cost: {cost},  Current Weight: {measure.weight}')
+
             # Check to see if the cost function requirement has been met
-            if measure.weight and cost < measure.weight:
+            if measure.weight and cost <= measure.weight:
                 currentlog['status'] = f'Previous match provided better correlation. {measure.weight} > {cost}.'
-                resultlog.append(currentlog)
-                continue
-            if measure.weight and cost == measure.weight:
-                currentlog['status'] = f'WTF old and new cost are equal for measure {measure.id}. {measure.weight} = {cost}.'
                 resultlog.append(currentlog)
                 continue
 
@@ -1543,7 +1572,7 @@ def subpixel_register_point(pointid,
             measure.sample = new_x
             measure.line = new_y
             measure.weight = cost
-            measure.choosername = 'subpixel_register_point'
+            measure.choosername = chooser
 
             # In case this is a second run, set the ignore to False if this
             # measures passed. Also, set the source measure back to ignore=False
@@ -1551,7 +1580,8 @@ def subpixel_register_point(pointid,
             source.ignore = False
             currentlog['status'] = f'Success. Distance shifted: {measure.template_shift}. Metric: {measure.template_metric}.'
             resultlog.append(currentlog)
-
+        t4 = time.time()
+        print(f'Registering {len(measures)} took {t4-t3} seconds.')
     return resultlog
 
 
@@ -1593,3 +1623,125 @@ def subpixel_register_points(subpixel_template_kwargs={'image_size':(251,251)},
                                 subpixel_template_kwargs=subpixel_template_kwargs,
                                 **cost_kwargs)
 
+def register_to_base(pointid,
+                     base_image,
+                     cost_func=lambda x, y: y == np.max(x),
+                     ncg=None,
+                     geom_func='simple',
+                     geom_kwargs={"size_x": 16, "size_y": 16},
+                     match_func='classic',
+                     match_kwargs={},
+                     verbose=False,
+                     **kwargs):
+    """
+    """
+
+    if not ncg.Session:
+     raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
+
+    geom_func = check_geom_func(geom_func)
+    match_func = check_match_func(match_func)
+    session = ncg.Session()
+
+    if isinstance(base_image, str):
+        base_image = GeoDataset(base_image)
+
+    if isinstance(pointid, Points):
+        point = pointid
+        pointid = pointid.id
+
+    with ncg.session_scope() as session:
+        if isinstance(pointid, Points):
+            point = pointid
+            pointid = point.id
+        else:
+            point = session.query(Points).filter(Points.id == pointid).one()
+        
+        # Get all of the measures associated with the given point
+        measures = point.measures
+
+        # Attempt to project the point into the base image
+        bpoint = spatial.isis.point_info(base_image.file_name, point.geom.x, point.geom.y, 'ground')
+        if bpoint is None:
+            print('unable to find point in ground image')
+            # Need to set the point to False
+            return
+        bline = bpoint[0].get('Line')
+        bsample = bpoint[0].get('Sample')
+
+        # Setup a cache so that we can get the file handles one time instead of 
+        # once per measure in the measures list.
+        image_cache = {}
+
+        # list of matching results in the format:
+        # [measure_id, measure_index, x_offset, y_offset, offset_magnitude]
+        match_results = []
+
+        # Step over all of the measures (images) that are not the base image
+        for measure_index, measure in enumerate(measures):
+            res = session.query(Images).filter(Images.id == measure.imageid).one()
+            try:
+                measure_image = image_cache[res.id]
+            except:
+                measure_image = GeoDataset(measure_image.path)
+                image_cache[res.id] = measure_image
+
+            # Attempt to match the base 
+            try:
+                print(f'prop point: base_image: {base_image}')
+                print(f'prop point: dest_image: {measure_image}')
+                print(f'prop point: (sx, sy): ({measure.sample}, {measure.line})')
+                x, y, dist, metrics = geom_func(base_image, measure_image,
+                        bsample, bline,
+                        match_func = match_func,
+                        match_kwargs = match_kwargs,
+                        verbose=verbose,
+                        **geom_kwargs)
+
+            except Exception as e:
+                raise Exception(e)
+                match_results.append(e)
+                continue
+
+            match_results.append([measure.id, measure_index, x, y,
+                                 metrics, dist, base_image.file_name, measure_image.file_name])
+
+    if verbose:
+      print("Match Results: ", match_results)
+
+    # Clean out any instances where None has been return by the geom matcher.
+    match_results = np.copy(np.array([res for res in match_results if isinstance(res, list) and all(r is not None for r in res)]))
+
+    # If all of the results are None, this point was not matchable
+    if match_results.shape[0] == 0:
+        raise Exception("Point with id {pointid} has no measure that matches criteria, reference measure will remain unchanged")
+
+    # Compute the cost function for each match using the 
+    costs = [cost_func(match_results[:,3], match[3]) for match in match_results]
+
+    if verbose:
+      print("Values:", costs)
+
+    # column index 3 is the metric returned by the geom matcher
+    best_results = match_results[np.argmax(costs)]
+
+    if verbose:
+        print("match_results final length: ", len(match_results))
+        print("best_results length: ", len(best_results))
+        print("Full results: ", best_results)
+        print("Winning CORRs: ", best_results[3], "Base Pixel shifts: ", best_results[4])
+        print('\n')
+
+    if len(best_results[3])==1 or best_results[3] is None:
+        raise Exception("Point with id {pointid} has no measure that matches criteria, reference measure will remain unchanged")
+
+    # Finally, update the point that will be the reference
+    with ncg.session_scope() as session:
+       measure = session.query(Measures).filter(Measures.id == best_results[0]).one()
+       measure.sample = best_results[2]
+       measure.line = best_results[3]
+
+       point = session.query(Points).filter(Points.id == pointid).one()
+       point.ref_measure = best_results[1]
+    return
+    
