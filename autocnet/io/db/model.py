@@ -11,6 +11,7 @@ from sqlalchemy.orm import relationship, backref
 from sqlalchemy_utils import database_exists, create_database
 from sqlalchemy.types import TypeDecorator
 from sqlalchemy.ext.hybrid import hybrid_property
+from sqlalchemy.orm.attributes import QueryableAttribute
 
 from geoalchemy2 import Geometry
 from geoalchemy2.shape import from_shape, to_shape
@@ -24,6 +25,117 @@ from autocnet.utils.serializers import JsonEncoder
 Base = declarative_base()
 
 class BaseMixin(object):
+    def to_dict(self, show=None, _hide=[], _path=None):     
+        """Return a dictionary representation of this model."""
+
+        show = show or []
+
+        hidden = self._hidden_fields if hasattr(self, "_hidden_fields") else []
+        default = self._default_fields if hasattr(self, "_default_fields") else []
+        
+        default.extend(['id', 'modified_at', 'created_at'])
+
+        
+        if not _path:
+            _path = self.__tablename__.lower()
+
+            def prepend_path(item):
+                item = item.lower()
+                if item.split(".", 1)[0] == _path:
+                    return item
+                if len(item) == 0:
+                    return item
+                if item[0] != ".":
+                    item = ".%s" % item
+                item = "%s%s" % (_path, item)
+                return item
+
+            _hide[:] = [prepend_path(x) for x in _hide]
+            show[:] = [prepend_path(x) for x in show]
+
+        columns = self.__table__.columns.keys()
+        relationships = self.__mapper__.relationships.keys()
+        properties = dir(self)
+
+        ret_data = {}
+
+        for key in columns:
+            if key.startswith("_"):
+                continue
+            check = "%s.%s" % (_path, key)
+            if check in _hide or key in hidden:
+                continue
+            if check in show or key in default:
+                ret_data[key] = getattr(self, key)
+            
+        for key in relationships:
+            if key.startswith("_"):
+                continue
+            check = "%s.%s" % (_path, key)
+            if check in _hide or key in hidden:
+                continue
+            if check in show or key in default:
+                _hide.append(check)
+                is_list = self.__mapper__.relationships[key].uselist
+                if is_list:
+                    items = getattr(self, key)
+                    if self.__mapper__.relationships[key].query_class is not None:
+                        if hasattr(items, "all"):
+                            items = items.all()
+                    ret_data[key] = []
+                    for item in items:
+                        ret_data[key].append(
+                            item.to_dict(
+                                show=list(show),
+                                _hide=list(_hide),
+                                _path=("%s.%s" % (_path, key.lower())),
+                            )
+                        )
+                else:
+                    if (
+                        self.__mapper__.relationships[key].query_class is not None
+                        or self.__mapper__.relationships[key].instrument_class
+                        is not None
+                    ):
+                        item = getattr(self, key)
+                        if item is not None:
+                            ret_data[key] = item.to_dict(
+                                show=list(show),
+                                _hide=list(_hide),
+                                _path=("%s.%s" % (_path, key.lower())),
+                            )
+                        else:
+                            ret_data[key] = None
+                    else:
+                        ret_data[key] = getattr(self, key)
+
+        for key in list(set(properties) - set(columns) - set(relationships)):
+            if key.startswith("_"):
+                continue
+            if not hasattr(self.__class__, key):
+                continue
+            attr = getattr(self.__class__, key)
+            if not (isinstance(attr, property) or isinstance(attr, QueryableAttribute)):
+                continue
+            check = "%s.%s" % (_path, key)
+            if check in _hide or key in hidden:
+                continue
+            if check in show or key in default:
+                val = getattr(self, key)
+                if hasattr(val, "to_dict"):
+                    ret_data[key] = val.to_dict(
+                        show=list(show),
+                        _hide=list(_hide),
+                        _path=('%s.%s' % (path, key.lower())),
+                    )
+                else:
+                    try:
+                        ret_data[key] = json.loads(json.dumps(val))
+                    except:
+                        pass
+
+        return ret_data
+
     @classmethod
     def create(cls, session, **kw):
         obj = cls(**kw)
@@ -36,7 +148,7 @@ class BaseMixin(object):
         session = Session()
         session.add_all(iterable)
         session.commit()
-        session.close()
+        session.close()   
 
 class IntEnum(TypeDecorator):
     """
@@ -222,20 +334,6 @@ class Images(BaseMixin, Base):
         else:
             self._geom = from_shape(newgeom, srid=self.latitudinal_srid)
 
-    @classmethod
-    def union(cls, session):
-        """
-        The boundary formed by unioning (or merging) all of the input footprints. The result
-        will likely be a multipolygon, likely with holes where data were not collected.
-
-        Returns
-        -------
-          : obj
-            A shapely MULTIPOLYGON object
-        """
-        res = session.query(cls.geom.ST_Union()).one()[0]
-        return to_shape(res)
-
 class Overlay(BaseMixin, Base):
     __tablename__ = 'overlay'
     latitudinal_srid = -1
@@ -288,7 +386,7 @@ class PointType(enum.IntEnum):
     constrained = 3
     fixed = 4
 
-class Points(BaseMixin, Base):
+class Points(Base, BaseMixin):
     __tablename__ = 'points'
     latitudinal_srid = -1
     rectangular_srid = -1
@@ -297,7 +395,7 @@ class Points(BaseMixin, Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     _pointtype = Column("pointType", IntEnum(PointType), nullable=False)  # 2, 3, 4 - Could be an enum in the future, map str to int in a decorator
-    identifier = Column(String)
+    identifier = Column(String, unique=True)
     overlapid = Column(Integer, ForeignKey('overlay.id'))
     _geom = Column("geom", Geometry('POINT', srid=latitudinal_srid, dimension=2, spatial_index=True))
     cam_type = Column(String)
@@ -306,6 +404,19 @@ class Points(BaseMixin, Base):
     _adjusted = Column("adjusted", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
     measures = relationship('Measures', order_by="asc(Measures.id)", back_populates="point")
     reference_index = Column("referenceIndex", Integer, default=0)
+
+    _default_fields = [
+        "pointtype",
+        "identifier",
+        "overlapid",
+        "adjusted",
+        "cam_type",
+        "ignore",
+        "measures"
+    ]
+
+    def __repr__(self):
+        return str(self.to_dict())
 
     @hybrid_property
     def geom(self):
@@ -434,7 +545,14 @@ class Measures(BaseMixin, Base):
     linesigma = Column(Float)
     weight = Column(Float, default=None)
     rms = Column(Float)
-    point = relationship("Points", back_populates="measures")
+
+    
+    _default_fields = ['id', 'pointid', 'imageid', 'serial', 'measuretype', 'ignore',
+                       'line', 'sample', 'template_metric', 'template_shift', 'phase_error',
+                       'phase_diff', 'phase_shift', 'choosername', 'apriorisample', 'aprioriline',
+                       'sampler', 'liner', 'residual', 'jigreject', 'samplesigma', 'linesigma',
+                       'weight', 'rms']
+    
 
     @hybrid_property
     def measuretype(self):
@@ -446,10 +564,6 @@ class Measures(BaseMixin, Base):
             v = MeasureType(v)
         self._measuretype = v
 
-    @property
-    def reference_index(self):
-        return self.point.reference_index
-
 def try_db_creation(engine, config):
     from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, valid_geom_function, valid_geom_trigger, ignore_image_function, ignore_image_trigger
 
@@ -459,7 +573,7 @@ def try_db_creation(engine, config):
 
     # Trigger that watches for points that should be active/inactive
     # based on the point count.
-    if not engine.dialect.has_table(engine, "points"):
+    if not sqlalchemy.inspect(engine).has_table("points"):
         event.listen(Base.metadata, 'before_create', valid_point_function)
         event.listen(Measures.__table__, 'after_create', valid_point_trigger)
         event.listen(Base.metadata, 'before_create', valid_geom_function)

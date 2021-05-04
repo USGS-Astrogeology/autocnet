@@ -1425,8 +1425,7 @@ def subpixel_register_point(pointid,
                             geom_func='simple',
                             match_func='classic',
                             match_kwargs={},
-                            verbose=False,
-                            chooser='subpixel_register_point',
+                            use_cache=False,
                             **kwargs):
 
     """
@@ -1456,7 +1455,13 @@ def subpixel_register_point(pointid,
                 running a matcher. 
     
     match_func : callable
-                 subpixel matching function to use registering measures      
+                 subpixel matching function to use registering measures   
+
+    use_cache : bool
+                If False (default) this func opens a database session and writes points
+                and measures directly to the respective tables. If True, this method writes 
+                messages to the point_insert (defined in ncg.config) redis queue for 
+                asynchronous (higher performance) inserts.   
     """
 
     geom_func=geom_func.lower()
@@ -1475,12 +1480,7 @@ def subpixel_register_point(pointid,
     
     t1 = time.time()
     with ncg.session_scope() as session:
-        point = session.query(Points).filter(Points.id == pointid).one()
-        measures = point.measures
-        #measures = session.query(Measures).filter(Measures.pointid == pointid).order_by(Measures.id).all()
-
-        t2 = time.time()
-        print(f'Query took {t2-t1} seconds to find the point.')
+        measures = session.query(Measures).filter(Measures.pointid == pointid).order_by(Measures.id).all()
 
         # Get the reference measure. Previously this was index 0, but now it is a database tracked attribute
         reference_index = point.reference_index
@@ -1503,85 +1503,103 @@ def subpixel_register_point(pointid,
         print(f'Query for the image to use as source took {t3-t2} seconds.')
         print(f'Attempting to subpixel register {len(measures)-1} measures for point {pointid}')
 
-        resultlog = []
-        for i, measure in enumerate(measures):
-            if i == reference_index:
-                continue
-            
-            currentlog = {'measureid':measure.id,
-                        'status':''}
-            cost = None
-            destinationid = measure.imageid
+        nodes = {}
+        for measure in measures:
+            res = session.query(Images).filter(Images.id == measure.imageid).one()
+            nodes[measure.imageid] = NetworkNode(node_id=measure.imageid, image_path=res.path)
 
-            res = session.query(Images).filter(Images.id == destinationid).one()
-            destination_node = NetworkNode(node_id=destinationid, image_path=res.path)
-            destination_node.parent = ncg
+        session.expunge_all()
 
-            print('geom_match image:', res.path)
-            print('geom_func', geom_func)
-            print(source_node.geodata, destination_node.geodata, source.apriorisample, source.aprioriline)
-            try:
-                # new geom_match has a incompatible API, until we decide on one, put in if.
-                if (geom_func == geom_match):
-                   new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
-                                                        source.apriorisample, source.aprioriline,
-                                                        template_kwargs=match_kwargs,
-                                                        verbose=verbose)
-                else:
-                    new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
-                                                        source.apriorisample, source.aprioriline,
-                                                        match_func=match_func,
-                                                        match_kwargs=match_kwargs,
-                                                        verbose=verbose)
-            except Exception as e:
-                print(f'geom_match failed on measure {measure.id} with exception -> {e}')
-                currentlog['status'] = f"geom_match failed on measure {measure.id}"
-                resultlog.append(currentlog)
-                if measure.weight is None:
-                    measure.ignore = True # Geom match failed and no previous sucesses
-                continue
+    resultlog = []
+    updated_measures = []
+    for i, measure in enumerate(measures):
+        # Skip the reference measure.
+        if i == reference_index:
+            continue
+        
+        currentlog = {'measureid':measure.id,
+                    'status':''}
+        cost = None
+        destination_node = nodes[measure.imageid]
+        destination_node.parent = ncg
 
-            if new_x == None or new_y == None:
-                currentlog['status'] = f'Failed to register measure {measure.id}.'
-                resultlog.append(currentlog)
-                if measure.weight is None:
-                    measure.ignore = True # Unable to geom match and no previous sucesses
-                continue
-
-            measure.template_metric = metric
-            measure.template_shift = dist
-
-            cost = cost_func(measure.template_shift, measure.template_metric)
-
-            print(f'Current Cost: {cost},  Current Weight: {measure.weight}')
-
-            # Check to see if the cost function requirement has been met
-            if measure.weight and cost <= measure.weight:
-                currentlog['status'] = f'Previous match provided better correlation. {measure.weight} > {cost}.'
-                resultlog.append(currentlog)
-                continue
-
-            if cost <= threshold:
-                currentlog['status'] = f'Cost failed. Distance calculated: {measure.template_shift}. Metric calculated: {measure.template_metric}.'
-                resultlog.append(currentlog)
-                if measure.weight is None:
-                    measure.ignore = True # Threshold criteria not met and no previous sucesses
-                continue
-
-            # Update the measure
-            measure.sample = new_x
-            measure.line = new_y
-            measure.weight = cost
-            measure.choosername = chooser
-
-            # In case this is a second run, set the ignore to False if this
-            # measures passed. Also, set the source measure back to ignore=False
-            measure.ignore = False
-            source.ignore = False
-            currentlog['status'] = f'Success. Distance shifted: {measure.template_shift}. Metric: {measure.template_metric}.'
+        print('geom_match image:', res.path)
+        try:
+            # new geom_match has a incompatible API, until we decide on one, put in if.
+            if (geom_func == geom_match):
+                new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
+                                                    source.apriorisample, source.aprioriline,
+                                                    template_kwargs=match_kwargs)
+            else:
+                new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
+                                                    source.apriorisample, source.aprioriline,
+                                                    match_func=match_func,
+                                                    match_kwargs=match_kwargs)
+        except Exception as e:
+            print(f'geom_match failed on measure {measure.id} with exception -> {e}')
+            currentlog['status'] = f"geom_match failed on measure {measure.id}"
             resultlog.append(currentlog)
-        t4 = time.time()
-        print(f'Registering {len(measures)} took {t4-t3} seconds.')
+            if measure.weight is None:
+                measure.ignore = True # Geom match failed and no previous sucesses
+            continue
+
+        if new_x == None or new_y == None:
+            currentlog['status'] = f'Failed to register measure {measure.id}.'
+            resultlog.append(currentlog)
+            if measure.weight is None:
+                measure.ignore = True # Unable to geom match and no previous sucesses
+            continue
+
+        measure.template_metric = metric
+        measure.template_shift = dist
+
+        cost = cost_func(measure.template_shift, measure.template_metric)
+
+        # Check to see if the cost function requirement has been met
+        if measure.weight and cost < measure.weight:
+            currentlog['status'] = f'Previous match provided better correlation. {measure.weight} > {cost}.'
+            resultlog.append(currentlog)
+            continue
+        if measure.weight and cost == measure.weight:
+            currentlog['status'] = f'WTF old and new cost are equal for measure {measure.id}. {measure.weight} = {cost}.'
+            resultlog.append(currentlog)
+            continue
+
+        if cost <= threshold:
+            currentlog['status'] = f'Cost failed. Distance calculated: {measure.template_shift}. Metric calculated: {measure.template_metric}.'
+            resultlog.append(currentlog)
+            if measure.weight is None:
+                measure.ignore = True # Threshold criteria not met and no previous sucesses
+            continue
+
+        # Update the measure
+        measure.sample = new_x
+        measure.line = new_y
+        measure.weight = cost
+        measure.choosername = 'subpixel_register_point'
+
+        # In case this is a second run, set the ignore to False if this
+        # measures passed. Also, set the source measure back to ignore=False
+        measure.ignore = False
+        source.ignore = False
+
+        updated_measures.append(measure)
+        currentlog['status'] = f'Success. Distance shifted: {measure.template_shift}. Metric: {measure.template_metric}.'
+        resultlog.append(currentlog)
+    
+    
+    # Once here, update the source measure (possibly back to ignore=False)
+    updated_measures.append(source)
+
+    if use_cache:
+        ncg.redis_queue.rpush(ncg.measure_update_queue, *[json.dumps(measure.to_dict(_hide=[]), cls=JsonEncoder) for measure in updated_measures])
+        ncg.redis_queue.incr(ncg.measure_update_counter, amount=len(updated_measures))
+    else:
+        # Commit the updates back into the DB
+        with ncg.session_scope() as session:
+            for updated_measure in update_measures:
+                session.add(updated_measure)
+    
     return resultlog
 
 

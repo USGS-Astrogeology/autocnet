@@ -5,6 +5,7 @@ import json
 import math
 import os
 from shutil import copyfile
+import threading
 from time import gmtime, strftime, time
 import warnings
 from itertools import combinations
@@ -18,7 +19,7 @@ import shapely
 import scipy.special
 
 import geoalchemy2
-from sqlalchemy.ext.declarative.api import DeclarativeMeta
+from sqlalchemy.orm.decl_api import DeclarativeMeta
 from sqlalchemy.sql import func
 import shapely.affinity
 import shapely.geometry
@@ -38,6 +39,7 @@ from plurmy import Slurm
 import autocnet
 from autocnet.config_parser import parse_config
 from autocnet.cg import cg
+from autocnet.graph.asynchronous_funcs import watch_insert_queue, watch_update_queue
 from autocnet.graph import markov_cluster
 from autocnet.graph.edge import Edge, NetworkEdge
 from autocnet.graph.node import Node, NetworkNode
@@ -1391,6 +1393,9 @@ class NetworkCandidateGraph(CandidateGraph):
         # Setup the database
         self._setup_database()
 
+        # Setup threaded queue watchers
+        self._setup_asynchronous_workers()
+
         # Setup the DEM
         # I dislike having the DEM on the NCG, but in the short term it
         # is the best solution I think. I don't want to pass the DEM around
@@ -1465,6 +1470,45 @@ class NetworkCandidateGraph(CandidateGraph):
         self.processing_queue = conf['processing_queue']
         self.completed_queue = conf['completed_queue']
         self.working_queue = conf['working_queue']
+        self.point_insert_queue = conf['basename'] + ':point_insert_queue'
+        self.point_insert_counter = conf['basename'] + ':point_insert_counter'
+        self.measure_update_queue = conf['basename'] + ':measure_update_queue'
+        self.measure_update_counter = conf['basename'] + ':measure_update_counter'
+
+        self.queue_names = [self.processing_queue, self.completed_queue, self.working_queue,
+                           self.point_insert_queue, self.point_insert_counter, 
+                           self.measure_update_queue, self.measure_update_counter]
+
+    def _setup_asynchronous_workers(self):
+        # Default the counters to zero, unless they are already set from a run
+        # where the NCG did not exit cleanly
+        if self.queue.get(self.point_insert_counter) is None:
+            self.queue.set(self.point_insert_counter, 0)
+
+        if self.queue.get(self.measure_update_counter) is None:
+            self.queue.set(self.measure_update_counter, 0)
+
+        # Start the insert watching thread
+        self.point_inserter_stop_event = threading.Event()
+        self.point_inserter = threading.Thread(target=watch_insert_queue, 
+                                               args=(self.redis_queue,
+                                                     self.point_insert_queue, 
+                                                     self.point_insert_counter, 
+                                                     self.engine,
+                                                     self.point_inserter_stop_event))
+        self.point_inserter.setDaemon(True)
+        self.point_inserter.start()
+
+        # Start the update watching thread
+        self.measure_updater_stop_event = threading.Event()
+        self.measure_updater = threading.Thread(target=watch_update_queue, 
+                                               args=(self.redis_queue,
+                                                     self.measure_update_queue, 
+                                                     self.measure_update_counter, 
+                                                     self.engine,
+                                                     self.measure_updater_stop_event))
+        self.measure_updater.setDaemon(True)
+        self.measure_updater.start()        
 
     def clear_queues(self):
         """
@@ -1472,8 +1516,7 @@ class NetworkCandidateGraph(CandidateGraph):
         The `redis_queue` object is a redis-py StrictRedis object with API
         documented at: https://redis-py.readthedocs.io/en/latest/#redis.StrictRedis
         """
-        queues = [self.processing_queue, self.completed_queue, self.working_queue]
-        for q in queues:
+        for q in self.queue_names:
             self.redis_queue.delete(q)
 
     def _execute_sql(self, sql):

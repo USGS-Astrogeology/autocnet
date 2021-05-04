@@ -89,6 +89,7 @@ def place_points_in_overlap(overlap,
                             distribute_points_kwargs={},
                             point_type=2,
                             ncg=None,
+                            use_cache=False,
                             **kwargs):
     """
     Place points into an overlap geometry by back-projecing using sensor models.
@@ -121,6 +122,11 @@ def place_points_in_overlap(overlap,
          An autocnet.graph.network NetworkCandidateGraph instance representing the network
          to apply this function to
 
+    use_cache : bool
+                If False (default) this func opens a database session and writes points
+                and measures directly to the respective tables. If True, this method writes 
+                messages to the point_insert (defined in ncg.config) redis queue for 
+                asynchronous (higher performance) inserts.
 
     Returns
     -------
@@ -310,7 +316,14 @@ def place_points_in_overlap(overlap,
         if len(point.measures) >= 2:
             points.append(point)
     print(f'Able to place {len(points)} points.')
-    Points.bulkadd(points, ncg.Session)
+
+    # Insert the points into the database asynchronously (via redis) or synchronously via the ncg
+    if use_cache:
+        # Push
+        ncg.redis_queue.rpush(ncg.point_insert_queue, *[json.dumps(point.to_dict(_hide=[]), cls=JsonEncoder) for point in points])
+        ncg.redis_queue.incr(ncg.point_insert_counter, amount=len(points))
+    else:
+        Points.bulkadd(points, ncg.Session)
     return points
 
 def place_points_in_image(image,

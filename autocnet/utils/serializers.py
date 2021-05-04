@@ -5,6 +5,7 @@ import json
 import dill
 import numpy as np
 import shapely
+from shapely import wkt  # Not available in shapely.wkt
 
 class JsonEncoder(json.JSONEncoder):
     def default(self, obj):
@@ -28,9 +29,20 @@ def object_hook(dct):
     for k, v in dct.items():
         if isinstance(v, str):
             try:
+                # Decodes serialized functions
                 decoded = decodebytes(v.encode())
                 v = dill.loads(decoded)
+                dct[k] = v
+                continue
             except: pass
-            dct[k] = v
+            
+            # Decodes WKT points
+            if 'POINT' in v:
+                try:
+                    v = wkt.loads(v)
+                    dct[k] = v
+                    continue   
+                except: pass
+        # All other obj should be readable
+        dct[k] = v
     return dct
-        
