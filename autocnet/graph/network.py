@@ -1467,9 +1467,9 @@ class NetworkCandidateGraph(CandidateGraph):
         self.redis_queue = StrictRedis(host=conf['host'],
                                        port=conf['port'],
                                        db=0)
-        self.processing_queue = conf['processing_queue']
-        self.completed_queue = conf['completed_queue']
-        self.working_queue = conf['working_queue']
+        self.processing_queue = conf['basename'] + ':processing'
+        self.completed_queue = conf['basename'] + ':completed'
+        self.working_queue = conf['basename'] + ':working'
         self.point_insert_queue = conf['basename'] + ':point_insert_queue'
         self.point_insert_counter = conf['basename'] + ':point_insert_counter'
         self.measure_update_queue = conf['basename'] + ':measure_update_queue'
