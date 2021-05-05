@@ -545,6 +545,7 @@ class Measures(BaseMixin, Base):
     linesigma = Column(Float)
     weight = Column(Float, default=None)
     rms = Column(Float)
+    point = relationship("Points", back_populates="measures")
 
     
     _default_fields = ['id', 'pointid', 'imageid', 'serial', 'measuretype', 'ignore',
