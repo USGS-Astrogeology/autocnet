@@ -4,6 +4,7 @@ import time
 from sqlalchemy import insert, update
 from sqlalchemy.sql.expression import bindparam
 
+from autocnet.io.db.model import Points, Measures
 from autocnet.utils.serializers import object_hook
 
 def watch_insert_queue(queue, queue_name, counter_name, engine, stop_event):
@@ -51,7 +52,6 @@ def watch_insert_queue(queue, queue_name, counter_name, engine, stop_event):
     while not stop_event.is_set():
         # Determine the read length of objects to pull from the cache
         read_length = int(queue.get(counter_name))
-        
         # Pull the objects from the cache
         points = []
         measures = []
@@ -68,7 +68,7 @@ def watch_insert_queue(queue, queue_name, counter_name, engine, stop_event):
 
                 # Since this avoids the ORM, need to map the table names manually
                 msg['pointType'] = msg['pointtype']  
-                msg['adjusted'] = 'SRID={srid};' + msg["adjusted"].wkt  # Geometries go in as EWKT
+                msg['adjusted'] = f'SRID={srid};' + msg["adjusted"].wkt  # Geometries go in as EWKT
                 
                 # Measures are removed and manually added later
                 point_measures = msg.pop('measures', [])

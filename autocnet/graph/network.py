@@ -1328,7 +1328,7 @@ class NetworkCandidateGraph(CandidateGraph):
         for s, d, e in self.edges(data='data'):
             e.parent = self
 
-        self. apply_iterable_options = {
+        self.apply_iterable_options = {
                 'edge' : self.edges,
                 'edges' : self.edges,
                 'e' : self.edges,
@@ -1358,7 +1358,7 @@ class NetworkCandidateGraph(CandidateGraph):
                 6: CandidateGroundPoints
             }
 
-    def config_from_file(self, filepath):
+    def config_from_file(self, filepath, async_watchers=False):
         """
         A NetworkCandidateGraph uses a database. This method parses a config
         file to set up the connection. Additionally, this loads planetary
@@ -1369,11 +1369,16 @@ class NetworkCandidateGraph(CandidateGraph):
         ----------
         filepath : str
                    The path to the config file
+
+        async_watchers : bool
+                         If True the ncg will also spawn redis queue watching threads
+                         that manage asynchronous database inserts. This is primarily
+                         used for increased write performance.
         """
         # The YAML library will raise any parse errors
-        self.config_from_dict(parse_config(filepath))
+        self.config_from_dict(parse_config(filepath), async_watchers=async_watchers)
 
-    def config_from_dict(self, config_dict):
+    def config_from_dict(self, config_dict, async_watchers=False):
         """
         A NetworkCandidateGraph uses a database. This method loads a config
         dict to set up the connection. Additionally, this loads planetary
@@ -1384,9 +1389,14 @@ class NetworkCandidateGraph(CandidateGraph):
         ----------
         filepath : str
                    The path to the config file
+
+        async_watchers : bool
+                         If True the ncg will also spawn redis queue watching threads
+                         that manage asynchronous database inserts. This is primarily
+                         used for increased write performance.
         """
         self.config = config_dict
-
+        self.async_watchers = async_watchers
         # Setup REDIS
         self._setup_queues()
 
@@ -1394,7 +1404,8 @@ class NetworkCandidateGraph(CandidateGraph):
         self._setup_database()
 
         # Setup threaded queue watchers
-        self._setup_asynchronous_workers()
+        if self.async_watchers == True:
+            self._setup_asynchronous_workers()
 
         # Setup the DEM
         # I dislike having the DEM on the NCG, but in the short term it
@@ -1478,15 +1489,17 @@ class NetworkCandidateGraph(CandidateGraph):
         self.queue_names = [self.processing_queue, self.completed_queue, self.working_queue,
                            self.point_insert_queue, self.point_insert_counter, 
                            self.measure_update_queue, self.measure_update_counter]
-
+         
     def _setup_asynchronous_workers(self):
+        
         # Default the counters to zero, unless they are already set from a run
         # where the NCG did not exit cleanly
-        if self.queue.get(self.point_insert_counter) is None:
-            self.queue.set(self.point_insert_counter, 0)
+        if self.redis_queue.get(self.point_insert_counter) is None:
+            self.redis_queue.set(self.point_insert_counter, 0)
 
-        if self.queue.get(self.measure_update_counter) is None:
-            self.queue.set(self.measure_update_counter, 0)
+        if self.redis_queue.get(self.measure_update_counter) is None:
+            self.redis_queue.set(self.measure_update_counter, 0)
+
 
         # Start the insert watching thread
         self.point_inserter_stop_event = threading.Event()
@@ -1515,9 +1528,20 @@ class NetworkCandidateGraph(CandidateGraph):
         Delete all messages from the redis queue. This a convenience method.
         The `redis_queue` object is a redis-py StrictRedis object with API
         documented at: https://redis-py.readthedocs.io/en/latest/#redis.StrictRedis
+
+        This also needs to restart any threaded watchers of the queues.
         """
+        if self.async_watchers:
+            self.point_inserter_stop_event.set()
+            self.measure_updater_stop_event.set()
+        
         for q in self.queue_names:
             self.redis_queue.delete(q)
+        
+        self._setup_queues()
+        if self.async_watchers:
+            self._setup_asynchronous_workers()
+
 
     def _execute_sql(self, sql):
         """
@@ -1754,7 +1778,7 @@ class NetworkCandidateGraph(CandidateGraph):
         rconf = self.config['redis']
         rhost = rconf['host']
         rport = rconf['port']
-        processing_queue = rconf['processing_queue']
+        processing_queue = self.processing_queue
 
         env = self.config['env']
         condaenv = env['conda']
@@ -2067,13 +2091,14 @@ class NetworkCandidateGraph(CandidateGraph):
         sourcesession = sourceSession()
 
         sourceimages = sourcesession.execute(query_string).fetchall()
-
+        # Change for SQLAlchemy >= 1.4, results are now row objects
+        sourceimages = [sourceimage._asdict() for sourceimage in sourceimages]
         with self.session_scope() as destinationsession:
             destinationsession.execute(Images.__table__.insert(), sourceimages)
 
             # Get the camera objects to manually join. Keeps the caller from
             # having to remember to bring cameras as well.
-            ids = [i[0] for i in sourceimages]
+            #ids = [i[0] for i in sourceimages]
             #cameras = sourcesession.query(Cameras).filter(Cameras.image_id.in_(ids)).all()
             #for c in cameras:
             #    destinationsession.merge(c)
@@ -2265,7 +2290,7 @@ class NetworkCandidateGraph(CandidateGraph):
         jobs are then called on next cluster job launch, causing failures. This
         method provides a check for left over jobs.
         """
-        llen = self.redis_queue.llen(self.config['redis']['processing_queue'])
+        llen = self.redis_queue.llen(self.processing_queue)
         return llen
 
     @property

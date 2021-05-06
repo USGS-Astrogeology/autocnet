@@ -1,3 +1,4 @@
+import time
 import warnings
 import json
 
@@ -145,6 +146,7 @@ def place_points_in_overlap(overlap,
     autocnet.graph.network.NetworkCandidateGraph: for associated properties and functionalities of the
     NetworkCandidateGraph class
     """
+    t1 = time.time()
     if not ncg.Session:
         raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
 
@@ -320,11 +322,17 @@ def place_points_in_overlap(overlap,
     # Insert the points into the database asynchronously (via redis) or synchronously via the ncg
     if use_cache:
         # Push
+        print('Using the cache')
         ncg.redis_queue.rpush(ncg.point_insert_queue, *[json.dumps(point.to_dict(_hide=[]), cls=JsonEncoder) for point in points])
         ncg.redis_queue.incr(ncg.point_insert_counter, amount=len(points))
     else:
-        Points.bulkadd(points, ncg.Session)
-    return points
+        with ncg.session_scope() as session:
+            for point in points:
+                session.add(point)
+    t2 = time.time()
+    print(f'Total processing time was {t2-t1} seconds.')
+    
+    return
 
 def place_points_in_image(image,
                           identifier="autocnet",
