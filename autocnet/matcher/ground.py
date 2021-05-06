@@ -243,7 +243,7 @@ def find_most_interesting_ground(apriori_lon_lat,
 
     with ncg.session_scope() as session:
         # Check to see if the point already exists
-        g = Points(path=ground_mosaic.file_name,
+        g = CandidateGroundPoints(path=ground_mosaic.file_name,
                     choosername='find_most_interesting_ground',
                     aprioriline=line,
                     apriorisample=sample,
