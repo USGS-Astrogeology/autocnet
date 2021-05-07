@@ -530,7 +530,10 @@ def blob_detector(image1, image2, sub_solar_azimuth, image_func=image_diff_sq,
 
 def rv_detector(im1, im2, search_size, pattern_size=None, threshold=.999):
     """
-    RV coefficient based change detection.
+    RV coefficient based change detection. This computes an RV coefficient on a sliding window 
+    and correlates low scores below the input threshold to expected change.  
+    
+    **WARNING*: The time complexity for this is `1 + (search_size - pattern_size))^2` per overlapping pixel between im1 and im2. So larger the differemce between the search and pattern size, it causes compute time to increase exponentially. 
 
     Parameters
     ----------
@@ -549,14 +552,14 @@ def rv_detector(im1, im2, search_size, pattern_size=None, threshold=.999):
     threshold : float
         The cutoff value for an RV value to be considered a change
 
-
+    Returns 
+    -------
     : pd.DataFrame
       A pandas dataframe containing a points of changed areas
 
     : np.ndarray
       A numpy array containing the RV values of each pixel.  Note that the array is
        padded by NaN values for 1/2 window size on each size
-
     """
     def get_window(arr, ulx, uly, size):
         return arr[ulx:ulx+size, uly:uly+size]
