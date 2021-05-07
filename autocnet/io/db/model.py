@@ -78,7 +78,12 @@ class BaseMixin(object):
                 _hide.append(check)
                 is_list = self.__mapper__.relationships[key].uselist
                 if is_list:
-                    items = getattr(self, key)
+                    try:
+                        # Obj is in a detached state and can't be loaded to
+                        # serialize.
+                        items = getattr(self, key)
+                    except:
+                        continue
                     if self.__mapper__.relationships[key].query_class is not None:
                         if hasattr(items, "all"):
                             items = items.all()
@@ -401,8 +406,14 @@ class Points(Base, BaseMixin):
     cam_type = Column(String)
     ignore = Column("pointIgnore", Boolean, default=False)
     _apriori = Column("apriori", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
-    _adjusted = Column("adjusted", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
-    measures = relationship('Measures', order_by="asc(Measures.id)", back_populates="point")
+    _adjusted = Column("adjusted", 
+                       Geometry('POINTZ', 
+                                srid=rectangular_srid, 
+                                dimension=3, 
+                                spatial_index=False))
+    measures = relationship('Measures', 
+                            order_by="asc(Measures.id)", 
+                            backref=backref('point', lazy='joined'))
     reference_index = Column("referenceIndex", Integer, default=0)
 
     _default_fields = [
@@ -416,7 +427,10 @@ class Points(Base, BaseMixin):
     ]
 
     def __repr__(self):
-        return str(self.to_dict())
+        try:
+            return 'Point: ' + str(self.to_dict())
+        except:
+            return 'Unable to serialize for string output'
 
     @hybrid_property
     def geom(self):
