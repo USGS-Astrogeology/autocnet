@@ -24,38 +24,95 @@ from autocnet.matcher.cpu_extractor import extract_features
 
 
 def image_diff(arr1, arr2):
-     arr1 = arr1.astype("float32")
-     arr2 = arr2.astype("float32")
-     arr1[arr1 == 0] = np.nan
-     arr2[arr2 == 0] = np.nan
+    """
+    Diff two images but accounts for null pixels. Intended to be used with change 
+    detection algorithms.  
 
-     isis_null = pysis.specialpixels.SPECIAL_PIXELS['Real']['Null']
-     arr1[arr1 == isis_null] = np.nan
-     arr2[arr2 == isis_null] = np.nan
+    Parameters 
+    ----------
 
-     diff = arr1-arr2
-     diff[np.isnan(diff)] = 0
+    arr1 : np.ndarray
+           2D numpy array containing the first image, must have the same shape as arr2
 
-     return diff
+    arr2 : np.ndarray 
+           2D numpy array containing the second image, must have the same shape as arr1
+
+    Returns
+    -------
+
+    : np.ndarray 
+      new diffed image 
+    """
+    arr1 = arr1.astype("float32")
+    arr2 = arr2.astype("float32")
+    arr1[arr1 == 0] = np.nan
+    arr2[arr2 == 0] = np.nan
+
+    isis_null = pysis.specialpixels.SPECIAL_PIXELS['Real']['Null']
+    arr1[arr1 == isis_null] = np.nan
+    arr2[arr2 == isis_null] = np.nan
+
+    diff = arr1-arr2
+    diff[np.isnan(diff)] = 0
+
+    return diff
 
 
 def image_ratio(arr1, arr2):
-     arr1 = arr1.astype("float32")
-     arr2 = arr2.astype("float32")
-     arr1[arr1 == 0] = np.nan
-     arr2[arr2 == 0] = np.nan
+    """
+    Gets the ratio of two images but accounts for null and zero pixels. Intended to be used with change 
+    detection algorithms.  
 
-     isis_null = pysis.specialpixels.SPECIAL_PIXELS['Real']['Null']
-     arr1[arr1 == isis_null] = np.nan
-     arr2[arr2 == isis_null] = np.nan
+    Parameters 
+    ----------
 
-     ratio = arr1/arr2
-     ratio[np.isnan(ratio)] = 0
+    arr1 : np.ndarray
+           2D numpy array containing the first image, must have the same shape as arr2
 
-     return ratio
+    arr2 : np.ndarray 
+           2D numpy array containing the second image, must have the same shape as arr1
+
+    Returns
+    -------
+
+    : np.ndarray 
+      new image containing ratioed pixels
+    """
+    arr1 = arr1.astype("float32")
+    arr2 = arr2.astype("float32")
+    arr1[arr1 == 0] = np.nan
+    arr2[arr2 == 0] = np.nan
+
+    isis_null = pysis.specialpixels.SPECIAL_PIXELS['Real']['Null']
+    arr1[arr1 == isis_null] = np.nan
+    arr2[arr2 == isis_null] = np.nan
+
+    ratio = arr1/arr2
+    ratio[np.isnan(ratio)] = 0
+
+    return ratio
 
 
 def image_diff_sq(arr1, arr2):
+     """
+     Diff two images but accounts for null pixels then squares the result. Intended to be used with change 
+     detection algorithms.  
+
+     Parameters 
+     ----------
+
+     arr1 : np.ndarray
+            2D numpy array containing the first image, must have the same shape as arr2
+
+     arr2 : np.ndarray 
+            2D numpy array containing the second image, must have the same shape as arr1
+
+     Returns
+     -------
+     
+     : np.ndarray 
+       new image containing diffed pixels
+     """
      return image_diff(arr1, arr2)**2
 
 

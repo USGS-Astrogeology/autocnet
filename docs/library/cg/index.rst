@@ -4,3 +4,4 @@
 .. toctree::
 
    cg
+   change_detection

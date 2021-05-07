@@ -59,7 +59,23 @@ def poly_pixel_to_latlon(poly, affine, coord_transform):
 
     return poly_type(lonlats)
 
+description = """
+Registers two image and runs a change detection algorithm on the pair of images. 
 
+WARNING: Runs bundle adjust with update=yes, make sure you are using copies. 
+
+Out is a .tif file and .csv file. The former is a GEOTIFF image, usually the diff image that change detection was run on. The latter .csv file contains polygon results as a WKT field in the CSV file. 
+
+This script runs the images through several steps: 
+    1. cubes are inputted into spiceinit, an ISIS program that gives us a spatially enabled level 0 image 
+    2. Using Autocnet, we run a pair-wise feature extraction and registration pipeline to programmatically produce a pair-wise control network 
+    3. jigsaw is then used with the image pair and output control network to perform relative geodetic control of the image pair and updating camera parameters 
+    4. using the new camera pointing, the image pairs a projected onto each other
+    5. The selected change detection algorithm is used on the projected images 
+    6. Resulting image is written out as a geotiff file containing the diffed image and a csv file containing detected change results.  
+
+See the Autocnet docs for detailed decriptions of each change deteciton algorithm. 
+"""
 
 if __name__ == "__main__":
     cd_function_help_string = ("Change detection algorithm to use.\n"
@@ -67,7 +83,7 @@ if __name__ == "__main__":
                                "Okubogar modified method (okbm). Experimental feature based change detection algorithm that expands on okobubogar to allow for programmatic change detection."
     )
 
-    parser = argparse.ArgumentParser(description="Registers two image and runs a change detection algorithm on the pair of images. WARNING: Runs bundle adjust with update=yes, make sure you are using copies. Out is a .tif file and .csv file. The former is a GEOTIFF image, usually the diff image that change detection was run on. The latter .csv file contains polygon results as a WKT field in the CSV file.")
+    parser = argparse.ArgumentParser(description=description)
     parser.add_argument('before', action='store', help='Path to image 1, generally the "before image"')
     parser.add_argument('after', action='store', help='Path to image 2, generally the "after image"')
     parser.add_argument('out', action='store', help='Output image path, csv with geometries are also written as a side cart file as a csv.')
