@@ -2450,9 +2450,10 @@ class NetworkCandidateGraph(CandidateGraph):
 
     def distribute_ground_density(self, threshold=4, distribute_points_kwargs={}):
         """
-        Distribute candidate ground points into overlapping geometries with greater than or
-        equal to the number of images equal to the threshold. This function returns a list of 
-        2d nd-arrays where the first element is the longitude and the second element is the latitude.
+        Distribute candidate ground points into overlaps with a number of images greater than or equal 
+        to the threshold. This function returns a list of 2d nd-arrays where the first element is the 
+        longitude and the second element is the latitude.
+        
         Parameters
         ----------
         distirbute_points_kwargs : dict

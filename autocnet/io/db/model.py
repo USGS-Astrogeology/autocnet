@@ -477,7 +477,7 @@ def try_db_creation(engine, config):
     Points.rectangular_srid = rectangular_srid
     Points.semimajor_rad = spatial['semimajor_rad']
     Points.semiminor_rad = spatial['semiminor_rad']
-    for cls in [Points, Overlay, Images, Keypoints, Matches, CandidateGroundPoints()]:
+    for cls in [Points, Overlay, Images, Keypoints, Matches, CandidateGroundPoints]:
         setattr(cls, 'latitudinal_srid', latitudinal_srid)
 
     # If the table does not exist, this will create it. This is used in case a
@@ -487,4 +487,3 @@ def try_db_creation(engine, config):
                                      Cameras.__table__, Points.__table__,
                                      Measures.__table__, Images.__table__,
                                      Keypoints.__table__, CandidateGroundPoints.__table__])
-
