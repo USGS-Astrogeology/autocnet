@@ -1481,12 +1481,10 @@ def subpixel_register_point(pointid,
     t1 = time.time()
     with ncg.session_scope() as session:
         measures = session.query(Measures).filter(Measures.pointid == pointid).order_by(Measures.id).all()
-        print([m.id for m in measures])
         point = session.query(Points).filter(Points.id == pointid).one()
         reference_index = point.reference_index
         t2 = time.time()
         print(f'Query took {t2-t1} seconds to find the measures and reference measure.')
-        print(reference_index)
         # Get the reference measure. Previously this was index 0, but now it is a database tracked attribute
         source = measures[reference_index]
 
