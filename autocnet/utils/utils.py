@@ -756,8 +756,8 @@ def generate_dem(alpha=1.0, size=800, scales=[160,80,32,16,8,4,2,1], scale_facto
            size of DEM, output DEM is in the shape of (size, size)
     
     scale_factor : float 
-                   scalar to multiply the slope degridation by, higher values = more erotion. 
-                   Reccomended to increase proportionately with alpha 
+                   Scalar to multiply the slope degradation by, higher values = more erosion.
+                   Recommended to increase proportionately with alpha
                    (higher alphas mean you might want higher scale_factor)
     
     Returns 

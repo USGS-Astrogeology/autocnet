@@ -70,7 +70,7 @@ This script runs the images through several steps:
     1. cubes are inputted into spiceinit, an ISIS program that gives us a spatially enabled level 0 image 
     2. Using Autocnet, we run a pair-wise feature extraction and registration pipeline to programmatically produce a pair-wise control network 
     3. jigsaw is then used with the image pair and output control network to perform relative geodetic control of the image pair and updating camera parameters 
-    4. using the new camera pointing, the image pairs a projected onto each other
+    4. using the new camera pointing, the image pairs are projected onto each other
     5. The selected change detection algorithm is used on the projected images 
     6. Resulting image is written out as a geotiff file containing the diffed image and a csv file containing detected change results.  
 
