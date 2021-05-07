@@ -1268,7 +1268,6 @@ class CandidateGraph(nx.Graph):
         """
         return self.controlnetwork.groupby('point_id').apply(lambda g: g if len(g) > 1 else None)
 
-
     def to_isis(self, outname, flistpath=None, target="Mars"):  # pragma: no cover
         """
         Write the control network out to the ISIS3 control network format.
@@ -1310,13 +1309,6 @@ class CandidateGraph(nx.Graph):
         cnet.to_isis(df, outname, targetname=target)
         cnet.write_filelist(self.files, path=flistpath)
 
-    def to_bal(self):
-        """
-        Write the control network out to the Bundle Adjustment in the Large
-        (BAL) file format.  For more information see:
-        http://grail.cs.washington.edu/projects/bal/
-        """
-        pass
 
 class NetworkCandidateGraph(CandidateGraph):
     node_factory = NetworkNode
@@ -1468,14 +1460,18 @@ class NetworkCandidateGraph(CandidateGraph):
                                        port=conf['port'],
                                        db=0)
         self.processing_queue = conf['processing_queue']
+        self.completed_queue = conf['completed_queue']
+        self.working_queue = conf['working_queue']
 
-    def empty_queues(self):
+    def clear_queues(self):
         """
         Delete all messages from the redis queue. This a convenience method.
         The `redis_queue` object is a redis-py StrictRedis object with API
         documented at: https://redis-py.readthedocs.io/en/latest/#redis.StrictRedis
         """
-        return self.redis_queue.flushall()
+        queues = [self.processing_queue, self.completed_queue, self.working_queue]
+        for q in queues:
+            self.redis_queue.delete(q)
 
     def _execute_sql(self, sql):
         """
@@ -1586,6 +1582,7 @@ class NetworkCandidateGraph(CandidateGraph):
             query_string='',
             reapply=False,
             log_dir=None,
+            queue=None,
             **kwargs):
         """
         A mirror of the apply function from the standard CandidateGraph object. This implementation
@@ -1646,6 +1643,10 @@ class NetworkCandidateGraph(CandidateGraph):
 
         kwargs : dict
                  Of keyword arguments passed to the function being applied
+
+        queue : str
+                The processing queue to use. If None (default), use the processing queue from
+                the config file.
 
         Examples
         --------
@@ -1708,16 +1709,19 @@ class NetworkCandidateGraph(CandidateGraph):
         isisroot = env['ISISROOT']
         isisdata = env['ISISDATA']
 
-        isissetup = f'export ISISROOT={isisroot} && export ISIS3DATA={isisdata}'
+        isissetup = f'export ISISROOT={isisroot} && export ISISDATA={isisdata}'
         condasetup = f'conda activate {condaenv}'
         job = f'acn_submit -r={rhost} -p={rport} {processing_queue}'
         command = f'{condasetup} && {isissetup} && {job}'
+
+        if queue == None:
+            queue = self.config['cluster']['queue']
 
         submitter = Slurm(command,
                      job_name='AutoCNet',
                      mem_per_cpu=self.config['cluster']['processing_memory'],
                      time=walltime,
-                     partition=self.config['cluster']['queue'],
+                     partition=queue,
                      output=log_dir+f'/autocnet.{function}-%j')
         submitter.submit(array='1-{}%{}'.format(job_counter,arraychunk), chunksize=chunksize)
         return job_counter
@@ -1809,7 +1813,7 @@ class NetworkCandidateGraph(CandidateGraph):
         cnet.to_isis(df, path, targetname=target)
         cnet.write_filelist(fpaths, path=flistpath)
 
-    def update_from_jigsaw(self, path, k=10):
+    def update_from_jigsaw(self, path, pointid_func=lambda x: int(x.split('_')[-1])):
         """
         Updates the measures table in the database with data from
         a jigsaw bundle adjust
@@ -1819,32 +1823,17 @@ class NetworkCandidateGraph(CandidateGraph):
         path : str
                Full path to a bundle adjusted isis control network
 
-        k    : int
-               Number of queries to split the update over
+        pointid_func : callable
+                       A function that is used to convert from the id in the ISIS network
+                       back into the pointid that autocnet uses as the primary key. The
+                       default takes a string, splits it on underscores and takes the final element(s).
+                       For example, autocnet_14 becomes 14.
         """
-        # Ingest isis control net as a df and do some massaging
-        data = cnet.from_isis(path)
-        data_to_update = data[['id', 'serialnumber', 'measureJigsawRejected', 'sampleResidual', 'lineResidual', 'samplesigma', 'linesigma', 'adjustedCovar', 'apriorisample', 'aprioriline']]
-        data_to_update.loc[:,'adjustedCovar'] = data_to_update['adjustedCovar'].apply(lambda row : list(row))
-        data_to_update.loc[:,'id'] = data_to_update['id'].apply(lambda row : int(row))
-
-        split_data = np.array_split(data_to_update, k)
-        for i, sdf in enumerate(split_data):
-            # Generate a temp table, update the real table, then drop the temp table
-            sdf.to_sql(f'temp_measures_{i}', self.engine, if_exists='replace', index_label='serialnumber', index = False)
-
-            sql = f"""
-            UPDATE measures AS f
-            SET "measureJigsawRejected" = t."measureJigsawRejected", sampler = t."sampleResidual", liner = t."lineResidual", samplesigma = t."samplesigma", linesigma = t."linesigma", apriorisample = t."apriorisample", aprioriline = t."aprioriline"
-            FROM temp_measures_{i} AS t
-            WHERE f.serialnumber = t.serialnumber AND f.pointid = t.id;
-
-            DROP TABLE temp_measures_{i};
-            """
-
-            with self.session_scope() as session:
-                session.execute(sql)
-                session.commit()
+        isis_network = cnet.from_isis(path)
+        io_controlnetwork.update_from_jigsaw(isis_network, 
+                                             ncg.measures, 
+                                             ncg.connection, 
+                                             pointid_func=pointid_func)
 
     @classmethod
     def from_filelist(cls, filelist, config, clear_db=False):
@@ -2124,7 +2113,6 @@ class NetworkCandidateGraph(CandidateGraph):
             cnet = from_isis(cnet)
 
         cnetpoints = cnet.groupby('id')
-        points = []
         session = self.Session()
 
         for id, cnetpoint in cnetpoints:
@@ -2152,7 +2140,6 @@ class NetworkCandidateGraph(CandidateGraph):
             lon_og, lat_og, alt = reproject([x, y, z], semi_major, semi_minor, 'geocent', 'latlon')
             lon, lat = og2oc(lon_og, lat_og, semi_major, semi_minor)
 
-
             point = Points(identifier=id,
                            ignore=row.pointIgnore,
                            apriori= shapely.geometry.Point(float(row.aprioriX), float(row.aprioriY), float(row.aprioriZ)),
@@ -2160,8 +2147,7 @@ class NetworkCandidateGraph(CandidateGraph):
                            pointtype=float(row.pointType))
 
             point.measures = list(measures)
-            points.append(point)
-        session.add_all(points)
+            session.add(point)
         session.commit()
         session.close()
 
@@ -2217,12 +2203,18 @@ class NetworkCandidateGraph(CandidateGraph):
         llen = self.redis_queue.llen(self.config['redis']['processing_queue'])
         return llen
 
-    def queue_flushdb(self):
+    @property
+    def union(self):
         """
-        Clear the processing queue of any left over jobs from a previous cluster
-        job cancellation or hanging jobs.
+        The boundary formed by unioning (or merging) all of the input footprints. The result
+        will likely be a multipolygon, likely with holes where data were not collected.
+
+        Returns
         """
-        self.redis_queue.flushdb()
+        if not hasattr(self, '_union'):
+            with self.session_scope() as session:
+                self._union = Images.union(session)
+        return self._union
 
     def overlays(self, size_threshold=0):
         """
@@ -2413,3 +2405,23 @@ class NetworkCandidateGraph(CandidateGraph):
                                          self.dem,
                                          nodes,
                                          **kwargs)
+    def distribute_ground(self, distribute_points_kwargs={}):
+        """
+        Distribute candidate ground points into the union of the image footprints. This
+        function returns a list of 2d nd-arrays where the first element is the longitude
+        and the second element is the latitude.
+
+        Parameters
+        ----------
+        distirbute_points_kwargs : dict
+                                   Of arguments that are passed on the the
+                                   distribute_points_in_geom argument in autocnet.cg.cg
+
+        Returns
+        -------
+        valid : list
+                of nd-arrays in the form [array([lon, lat]), array([lon, lat])]
+        """
+        geom  = self.union
+        valid = cg.distribute_points_in_geom(geom, **distribute_points_kwargs)
+        return valid

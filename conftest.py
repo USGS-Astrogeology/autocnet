@@ -12,7 +12,6 @@ from autocnet.graph import edge, node
 from autocnet.graph.node import Node
 from autocnet.io.db import model
 
-
 from plio.io.io_gdal import GeoDataset
 
 @pytest.fixture(scope='session')
@@ -71,8 +70,8 @@ def default_configuration():
                   'username': 'postgres',
                   'password': 'NotTheDefault',
                   'host': 'localhost',
-                  'port': 5432,
-                  'pgbouncer_port': 5432,
+                  'port': 35432,
+                  'pgbouncer_port': 35432,
                   'name': 'travis_ci_test',
                   'timeout': 500},
               'pfeffernusse': {'url': ''},
@@ -94,10 +93,35 @@ def default_configuration():
     return config
 
 @pytest.fixture()
-def ncg(default_configuration):
+def ncg(default_configuration, request):
     ncg = NetworkCandidateGraph()
     ncg.config_from_dict(default_configuration)
+
+    def cleanup():
+        with ncg.session_scope() as session:
+            session.rollback()  # Necessary because some tests intentionally fail
+            engine = ncg.Session().get_bind()
+            for t in reversed(engine.table_names()):
+                # Skip the srid table
+                if t != 'spatial_ref_sys':
+                    res = session.execute(f'TRUNCATE TABLE {t} CASCADE')
+                # Reset the autoincrementing
+                if t in ['Images', 'Cameras', 'Matches', 'Measures']:
+                    session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
+            session.commit()
+            # Ensure that this is the only connection to the DB
+            num_con = session.execute('SELECT sum(numbackends) FROM pg_stat_database;').scalar()
+            assert num_con == 1
+            session.close()
+
+    request.addfinalizer(cleanup)
+
     return ncg
+
+@pytest.fixture
+def tables(ncg):
+    engine = ncg.Session().get_bind()
+    return engine.table_names()
 
 @pytest.fixture(scope='session')
 def node_a(geodata_a):
@@ -186,14 +210,10 @@ def controlnetwork():
 
     return df
 
-@pytest.fixture
-def tables(ncg):
-    engine = ncg.Session().get_bind()
-    return engine.table_names()
+
 
 @pytest.fixture
 def session(tables, request, ncg):
-
     session = ncg.Session()
 
     def cleanup():
@@ -206,47 +226,32 @@ def session(tables, request, ncg):
             if t in ['Images', 'Cameras', 'Matches', 'Measures']:
                 session.execute(f'ALTER SEQUENCE {t}_id_seq RESTART WITH 1')
         session.commit()
-        # Ensure that this is the only connection to the DB
-        num_con = session.execute('SELECT sum(numbackends) FROM pg_stat_database;').scalar()
-        assert num_con == 1
-        session.close()
 
     request.addfinalizer(cleanup)
 
     return session
 
 @pytest.fixture
-def db_controlnetwork(session):
+def db_controlnetwork(ncg):
+    with ncg.session_scope() as session:
+        # Create the images
+        i1 = {'id':0, 'serial':'foo'}
+        i2 = {'id':1, 'serial':'bar'}
+        for i in [i1, i2]:
+            model.Images.create(session, **i)
 
-    # Create the images
-    i1 = {'id':0, 'serial':'foo'}
-    i2 = {'id':1, 'serial':'bar'}
-    for i in [i1, i2]:
-        model.Images.create(session, **i)
-
-    for i, j in enumerate([0,2,4]):
-        ptype = 2
-        if j == 4:
-            ptype=3  # Ground
-        model.Points.create(session,
-                            id=i,
-                            _pointtype=ptype,
-                            measures=[model.Measures(id=k+j,
-                                                    imageid=k,
-                                                    serial='None',
-                                                    _measuretype=3,
-                                                    sample=k,
-                                                    line=k,
-                                                    aprioriline=k,
-                                                    apriorisample=k) for k in range(2)])
-    session.close()
-
-"""@pytest.fixture(scope='session')
-def bad_controlnetwork(controlnetwork_data):
-    cn = control.ControlNetwork()
-    cn.data = controlnetwork_data
-    # Since the data is being patched in, fix the measure counter
-    cn._measure_id = len(cn.data) + 1
-    # Add a duplicate measure in image 0 to point 0
-    cn.add_measure((0,11), (0,1), 2, [1,1], point_id=0)
-    return cn"""
+        for i, j in enumerate([0,2,4]):
+            ptype = 2
+            if j == 4:
+                ptype=3  # Ground
+            model.Points.create(session,
+                                id=i,
+                                _pointtype=ptype,
+                                measures=[model.Measures(id=k+j,
+                                                        imageid=k,
+                                                        serial=f'Random{k}:123',
+                                                        _measuretype=3,
+                                                        sample=k,
+                                                        line=k,
+                                                        aprioriline=k,
+                                                        apriorisample=k) for k in range(2)])

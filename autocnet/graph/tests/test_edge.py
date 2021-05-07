@@ -239,9 +239,9 @@ class TestEdge(unittest.TestCase):
         # Test edges with same keys, but diff np array vals
         # edge.__eq__ calls ndarray.all(), which checks that
         # all values in an array eval to true
-        edge1.__dict__["key"] = np.array([True, True, True], dtype=np.bool)
-        edge2.__dict__["key"] = np.array([True, True, True], dtype=np.bool)
-        edge3.__dict__["key"] = np.array([True, True, False], dtype=np.bool)
+        edge1.__dict__["key"] = np.array([True, True, True], dtype=bool)
+        edge2.__dict__["key"] = np.array([True, True, True], dtype=bool)
+        edge3.__dict__["key"] = np.array([True, True, False], dtype=bool)
 
         self.assertTrue(edge1 == edge2)
         self.assertFalse(edge1 == edge3)

@@ -11,6 +11,7 @@ dependencies:
   - dill
   - geoalchemy2
   - geopandas
+  - hoggorm
   - imageio
   - ipykernel
   - jupyter
@@ -29,6 +30,7 @@ dependencies:
   - pytest-cov
   - pysis
   - pvl < 1.0
+  - richdem
   - scikit-image
   - scikit-learn
   - scipy<=1.2.1

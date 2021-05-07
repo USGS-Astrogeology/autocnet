@@ -67,9 +67,10 @@ class TestSpatialSuppression(unittest.TestCase):
     def test_suppress_non_optimal(self):
         with warnings.catch_warnings(record=True) as w:
             mask, k = cpu_outlier_detector.spatial_suppression(self.df, self.domain, k=30, xkey='lon', ykey='lat')
-            self.assertEqual(len(w), 1)
             self.assertEqual(k, 59)
             self.assertTrue(issubclass(w[0].category, UserWarning))
+            self.assertTrue('Unable to optimally solve.' == str(w[0].message))
+            
 
 class testSuppressionRanges(unittest.TestCase):
 

@@ -49,7 +49,7 @@ def check_geom_func(func):
         return func
 
     if func in geom_funcs.keys():
-        return match_funcs[func]
+        return geom_funcs[func]
 
     raise Exception(f"{func} not a valid geometry function.")
 
@@ -268,7 +268,7 @@ def subpixel_phase(sx, sy, dx, dy,
     dx = d_roi.x - shift_x
     dy = d_roi.y - shift_y
 
-    return dx, dy, error
+    return dx, dy, error, None
 
 
 def subpixel_transformed_template(sx, sy, dx, dy,
@@ -497,6 +497,9 @@ def subpixel_template_classic(sx, sy, dx, dy,
     s_image = s_roi.clip()
     d_template = d_roi.clip()
 
+    if d_roi.variance == 0:
+        return [None] * 4
+
     if (s_image is None) or (d_template is None):
         return None, None, None, None
 
@@ -505,7 +508,7 @@ def subpixel_template_classic(sx, sy, dx, dy,
     dx = d_roi.x - shift_x
     dy = d_roi.y - shift_y
 
-    return dx, dy, metrics
+    return dx, dy, metrics, corrmap
 
 
 def subpixel_template(sx, sy, dx, dy,
@@ -580,6 +583,9 @@ def subpixel_template(sx, sy, dx, dy,
 
     s_roi = roi.Roi(s_img, sx, sy, size_x=image_size[0], size_y=image_size[1])
     d_roi = roi.Roi(d_img, dx, dy, size_x=template_size_x, size_y=template_size_y)
+
+    if d_roi.variance == 0:
+        return [None] * 4
 
     if not s_roi.is_valid or not d_roi.is_valid:
         return [None] * 4
@@ -725,7 +731,7 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(51, 51), reduction=11, c
     dline = dy
 
     while True:
-        shifted_dx, shifted_dy, metrics = subpixel_phase(sx, sy, dx, dy, s_img, d_img, image_size=size, **kwargs)
+        shifted_dx, shifted_dy, metrics, _ = subpixel_phase(sx, sy, dx, dy, s_img, d_img, image_size=size, **kwargs)
 
         # Compute the amount of move the matcher introduced
         delta_dx = abs(shifted_dx - dx)
@@ -776,7 +782,8 @@ def geom_match_simple(base_cube,
                        bcenter_y,
                        size_x=60,
                        size_y=60,
-                       template_kwargs={"image_size":(101,101), "template_size":(31,31)},
+                       match_func="classic",
+                       match_kwargs={"image_size":(101,101), "template_size":(31,31)},
                        phase_kwargs=None,
                        verbose=True):
     """
@@ -913,7 +920,7 @@ def geom_match_simple(base_cube,
 
     # Run through one step of template matching then one step of phase matching
     # These parameters seem to work best, should pass as kwargs later
-    restemplate = subpixel_template_classic(bcenter_x, bcenter_y, bcenter_x, bcenter_y, bytescale(base_arr, cmin=0), bytescale(dst_arr, cmin=0), **template_kwargs)
+    restemplate = match_func(bcenter_x, bcenter_y, bcenter_x, bcenter_y, bytescale(base_arr, cmin=0), bytescale(dst_arr, cmin=0), **match_kwargs)
 
     x,y,maxcorr,temp_corrmap = restemplate
     if x is None or y is None:
@@ -1326,7 +1333,11 @@ def subpixel_register_measure(measureid,
 
         # Get the point id and set up the reference measure
         pointid = destination.pointid
-        source = session.query(Measures).filter(Measures.pointid==pointid).order_by(Measures.id).first()
+        measures = session.query(Measures).filter(Measures.pointid==pointid).order_by(Measures.id).all()
+
+        reference_index = measures[0].reference_index
+        source = measures[reference_index]
+
         source.template_metric = 1
         source.template_shift = 0
         source.phase_error = 0
@@ -1342,10 +1353,16 @@ def subpixel_register_measure(measureid,
         print(f'Attempting to subpixel register measure {measureid}: ({pointid}, {destinationimage.name})')
         currentlog = {'measureid': measureid,
                       'status': ''}
+        
+        if source.measureid == measureid:
+            currentlog['status'] = f'Unable to register this measure. Measure {measureid} is the reference measure.'
+            return 
+            resultlog
 
         try:
-            new_x, new_y, dist, metric,  _ = geom_match_simple(source_node.geodata, destination_node.geodata,
+            new_x, new_y, dist, metric = geom_match_simple(source_node.geodata, destination_node.geodata,
                                                         source.sample, source.line,
+                                                        match_func=match_func,
                                                         template_kwargs=subpixel_template_kwargs)
         except Exception as e:
             print(f'geom_match failed on measure {measureid} with exception -> {e}')
@@ -1431,19 +1448,19 @@ def subpixel_register_point(pointid,
     match_func=match_func.lower()
 
     print(f"Using {geom_func} with the {match_func} matcher.")
-
-    if not ncg.Session:
-        raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
-
+    
     match_func = check_match_func(match_func)
     geom_func = check_geom_func(geom_func)
 
-    if isinstance(pointid, Points):
-        pointid = pointid.id
-
+    if not ncg.Session:
+        raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
+    
     with ncg.session_scope() as session:
         measures = session.query(Measures).filter(Measures.pointid == pointid).order_by(Measures.id).all()
-        source = measures[0]
+        
+        # Get the reference measure. Previously this was index 0, but now it is a database tracked attribute
+        reference_index = measures[0].point.reference_index
+        source = measures[reference_index]
 
         source.template_metric = 1
         source.template_shift = 0
@@ -1459,7 +1476,11 @@ def subpixel_register_point(pointid,
         print(f'Attempting to subpixel register {len(measures)-1} measures for point {pointid}')
 
         resultlog = []
-        for measure in measures[1:]:
+        for i, measure in enumerate(measures):
+            # Skip the reference measure.
+            if i == reference_index:
+                continue
+            
             currentlog = {'measureid':measure.id,
                         'status':''}
             cost = None
@@ -1471,7 +1492,7 @@ def subpixel_register_point(pointid,
 
             print('geom_match image:', res.path)
             try:
-                # new geom_match has a incompatible API, until we devide on one, put in if.
+                # new geom_match has a incompatible API, until we decide on one, put in if.
                 if (geom_func == geom_match):
                    new_x, new_y, dist, metric,  _ = geom_func(source_node.geodata, destination_node.geodata,
                                                         source.apriorisample, source.aprioriline,

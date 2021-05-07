@@ -40,17 +40,16 @@ def cnet():
             'measureType' : [1]
             })
 
-@pytest.mark.parametrize("image_data, expected_npoints", [({'id':1, 'serial': 'BRUH'}, 1)])
-def test_place_points_from_cnet(session, cnet, image_data, expected_npoints, ncg):
-    session = ncg.Session()
-    model.Images.create(session, **image_data)
+"""@pytest.mark.parametrize("image_data, expected_npoints", [({'id':1, 'serial': 'BRUH'}, 1)])
+def test_place_points_from_cnet(cnet, image_data, expected_npoints, ncg):
+    with ncg.session_scope() as session:
+        model.Images.create(session, **image_data)
 
-    ncg.place_points_from_cnet(cnet)
+        ncg.place_points_from_cnet(cnet)
 
-    resp = session.query(model.Points)
-    assert len(resp.all()) == expected_npoints
-    assert len(resp.all()) == cnet.shape[0]
-    session.close()
+        resp = session.query(model.Points)
+        assert len(resp.all()) == expected_npoints
+        assert len(resp.all()) == cnet.shape[0]"""
 
 def test_to_isis(db_controlnetwork, ncg, node_a, node_b, tmpdir):
     ncg.add_edge(0,1)
@@ -63,7 +62,7 @@ def test_to_isis(db_controlnetwork, ncg, node_a, node_b, tmpdir):
     assert os.path.exists(outpath)
 
 
-def test_from_filelist(session, default_configuration, tmp_path):
+def test_from_filelist(default_configuration, tmp_path, ncg):
     # Written as a list and not parametrized so that the fixture does not automatically clean
     #  up the DB. Needed to test the functionality of the clear_db kwarg.
     for filelist, clear_db in [(['bar1.cub', 'bar2.cub', 'bar3.cub'], False),
@@ -72,13 +71,14 @@ def test_from_filelist(session, default_configuration, tmp_path):
         filelist = [tmp_path/f for f in filelist]
 
         # Since we have no overlaps (everything is faked), len(ncg) == 0
-        ncg = NetworkCandidateGraph.from_filelist(filelist, default_configuration, clear_db=clear_db)
+        test_ncg = NetworkCandidateGraph.from_filelist(filelist, default_configuration, clear_db=clear_db)
         
-        with ncg.session_scope() as session:
+        with test_ncg.session_scope() as session:
             res = session.query(model.Images).all()
             assert len(res) == len(filelist)
+    
 
-def test_global_clear_db(session, ncg):
+def test_global_clear_db(ncg):
     i = model.Images(name='foo', path='/fooland/foo.img')
     with ncg.session_scope() as session:
         session.add(i)
@@ -92,7 +92,7 @@ def test_global_clear_db(session, ncg):
         res = session.query(model.Images).all()
         assert len(res) == 0
 
-def test_selective_clear_db(session, ncg):
+def test_selective_clear_db(ncg):
     i = model.Images(name='foo', path='fooland/foo.img')
     p = model.Points(pointtype=2)
 

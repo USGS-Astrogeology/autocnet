@@ -8,15 +8,16 @@ import geopandas as gpd
 import ogr
 
 from skimage import transform as tf
-from scipy.spatial import ConvexHull
-from scipy.spatial import Voronoi
+from scipy.spatial import Voronoi, Delaunay, ConvexHull
 import shapely.geometry
 from shapely.geometry import Polygon, MultiPolygon, Point
 from shapely.affinity import scale
-from shapely import wkt
+from shapely import wkt, geometry
 
 from autocnet.utils import utils
+from autocnet.cg import cg
 
+from shapely.ops import cascaded_union, polygonize
 
 
 def two_point_extrapolate(x, xs, ys):
@@ -312,8 +313,7 @@ def xy_in_polygon(x,y, geom):
     """
     return geom.contains(Point(x, y))
 
-
-def distribute_points_classic(geom, nspts, ewpts, **kwargs):
+def distribute_points_classic(geom, nspts, ewpts, use_mrr=True, **kwargs):
     """
     This is a decision tree that attempts to perform a
     very simplistic approximation of the shape
@@ -332,14 +332,21 @@ def distribute_points_classic(geom, nspts, ewpts, **kwargs):
     ewpts : int
             The number of points to attempt to place
             in the E/W (right/left) direction
+    
+    use_mrr : boolean
+              If True (default) compute the minimum rotated rectangle bounding
+              the geometry
 
     Returns
     -------
     valid : list
             of point coordinates in the form [(x1,y1), (x2,y2), ..., (xn, yn)]
     """
-
-    geom_coords = np.column_stack(geom.envelope.exterior.xy)
+    original_geom = geom
+    if use_mrr:
+        geom = geom.minimum_rotated_rectangle
+        
+    geom_coords = np.column_stack(geom.exterior.xy)
     coords = np.array(list(zip(*geom.envelope.exterior.xy))[:-1])
 
     ll = coords[0]
@@ -370,7 +377,7 @@ def distribute_points_classic(geom, nspts, ewpts, **kwargs):
 
     points = np.vstack(points)
     # Perform a spatial intersection check to eject points that are not valid
-    valid = [p for p in points if xy_in_polygon(p[0], p[1], geom)]
+    valid = [p for p in points if xy_in_polygon(p[0], p[1], original_geom)]
     return valid
 
 def distribute_points_new(geom, nspts, ewpts, Session):
@@ -433,7 +440,8 @@ def distribute_points_new(geom, nspts, ewpts, Session):
 def distribute_points_in_geom(geom, method="classic",
                               nspts_func=lambda x: ceil(round(x,1)*10),
                               ewpts_func=lambda x: ceil(round(x,1)*5),
-                              Session=None):
+                              Session=None,
+                              **kwargs):
     """
     Given a geometry, attempt a basic classification of the shape.
     RIght now, this simply attempts to determine if the bounding box
@@ -476,6 +484,9 @@ def distribute_points_in_geom(geom, method="classic",
     point_distribution_func = point_funcs[method]
 
     coords = list(zip(*geom.envelope.exterior.xy))
+   
+
+    # This logic is kwarg swapping - need to trace this logic.
     short = np.inf
     long = -np.inf
     shortid = 0
@@ -489,9 +500,11 @@ def distribute_points_in_geom(geom, method="classic",
             long = d
             longid = i
     ratio = short/long
+    
     ns = False
     ew = False
     valid = []
+    
     # The polygons should be encoded with a lower left origin in counter-clockwise direction.
     # Therefore, if the 'bottom' is the short edge it should be id 0 and modulo 2 == 0.
     if shortid % 2 == 0:
@@ -514,7 +527,7 @@ def distribute_points_in_geom(geom, method="classic",
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
-            valid = point_distribution_func(geom, nspts, ewpts, Session=Session)
+            valid = point_distribution_func(geom, nspts, ewpts, Session=Session, **kwargs)
     elif ew == True:
         # Since this is an LS, we should place these diagonally from the 'lower left' to the 'upper right'
         nspts = ewpts_func(short)
@@ -522,7 +535,108 @@ def distribute_points_in_geom(geom, method="classic",
         if nspts == 1 and ewpts == 1:
             valid = single_centroid(geom)
         else:
-            valid = point_distribution_func(geom, nspts, ewpts, Session=Session)
+            valid = point_distribution_func(geom, nspts, ewpts, Session=Session, **kwargs)
     else:
         print('WTF Willy')
     return valid
+
+
+def alpha_shape(points, alpha):
+    """
+    Compute a convex hull from a set of points.
+
+    credit: https://gist.github.com/dwyerk/10561690
+
+    Parameters
+    ----------
+
+    points : np.array
+             points in the format [[x0,y0], [x1, y,1], ... [xn, yn]]
+
+    alpha : float
+            Higher alphas creater a tighter the boundery around input points, alphas approaching 0 create a convex hull.
+            Best to keep in the range (0, 1]
+
+
+    Returns
+    -------
+
+    convex_hull : shapely.geometry.Polygon
+                  Shapely polygon of the convex hull
+
+    """
+    tri = Delaunay(points)
+    triangles = points[tri.vertices]
+    a = ((triangles[:,0,0] - triangles[:,1,0]) ** 2 + (triangles[:,0,1] - triangles[:,1,1]) ** 2) ** 0.5
+    b = ((triangles[:,1,0] - triangles[:,2,0]) ** 2 + (triangles[:,1,1] - triangles[:,2,1]) ** 2) ** 0.5
+    c = ((triangles[:,2,0] - triangles[:,0,0]) ** 2 + (triangles[:,2,1] - triangles[:,0,1]) ** 2) ** 0.5
+    s = ( a + b + c ) / 2.0
+    areas = (s*(s-a)*(s-b)*(s-c)) ** 0.5
+    circums = a * b * c / (4.0 * areas)
+
+    # avoid devide by zero
+    thresh = 1.0/alpha if alpha is not 0 else circums.max()
+    filtered = triangles[circums < thresh]
+
+    edge1 = filtered[:,(0,1)]
+    edge2 = filtered[:,(1,2)]
+    edge3 = filtered[:,(2,0)]
+    edge_points = np.unique(np.concatenate((edge1,edge2,edge3)), axis = 0).tolist()
+    m = geometry.MultiLineString(edge_points)
+    triangles = list(cg.polygonize(m))
+    return cascaded_union(triangles)
+
+
+def rasterize_polygon(shape, vertices, dtype=bool):
+    """
+    Simple tool to convert poly into a boolean numpy array.
+
+    source: https://stackoverflow.com/questions/37117878/generating-a-filled-polygon-inside-a-numpy-array
+
+    Parameters
+    ----------
+
+    shape : tuple
+            size of the array in (y,x) format
+
+    vertices : np.array, list
+               array of vertices in [[x0, y0], [x1, y1]...] format
+
+    dtype : type
+            datatype of output mask
+
+    Returns
+    -------
+
+    mask : np.array
+           mask with filled polygon set to true
+
+    """
+    def check(p1, p2, base_array):
+        idxs = np.indices(base_array.shape) # Create 3D array of indices
+
+        p1 = p1.astype(float)
+        p2 = p2.astype(float)
+
+        # Calculate max column idx for each row idx based on interpolated line between two points
+        if p1[0] == p2[0]:
+            max_col_idx = (idxs[0] - p1[0]) * idxs.shape[1]
+            sign = np.sign(p2[1] - p1[1])
+        else:
+            max_col_idx = (idxs[0] - p1[0]) / (p2[0] - p1[0]) * (p2[1] - p1[1]) + p1[1]
+            sign = np.sign(p2[0] - p1[0])
+
+        return idxs[1] * sign <= max_col_idx * sign
+
+    base_array = np.zeros(shape, dtype=dtype)  # Initialize your array of zeros
+
+    fill = np.ones(base_array.shape) * True  # Initialize boolean array defining shape fill
+
+    # Create check array for each edge segment, combine into fill array
+    for k in range(vertices.shape[0]):
+        fill = np.all([fill, check(vertices[k-1], vertices[k], base_array)], axis=0)
+
+    print(fill.any())
+    # Set all values inside polygon to one
+    base_array[fill] = 1
+    return base_array

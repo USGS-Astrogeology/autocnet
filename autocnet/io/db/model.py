@@ -222,6 +222,20 @@ class Images(BaseMixin, Base):
         else:
             self._geom = from_shape(newgeom, srid=self.latitudinal_srid)
 
+    @classmethod
+    def union(cls, session):
+        """
+        The boundary formed by unioning (or merging) all of the input footprints. The result
+        will likely be a multipolygon, likely with holes where data were not collected.
+
+        Returns
+        -------
+          : obj
+            A shapely MULTIPOLYGON object
+        """
+        res = session.query(cls.geom.ST_Union()).one()[0]
+        return to_shape(res)
+
 class Overlay(BaseMixin, Base):
     __tablename__ = 'overlay'
     latitudinal_srid = -1
@@ -282,14 +296,15 @@ class Points(BaseMixin, Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     _pointtype = Column("pointType", IntEnum(PointType), nullable=False)  # 2, 3, 4 - Could be an enum in the future, map str to int in a decorator
-    identifier = Column(String, unique=True)
+    identifier = Column(String)
     overlapid = Column(Integer, ForeignKey('overlay.id'))
     _geom = Column("geom", Geometry('POINT', srid=latitudinal_srid, dimension=2, spatial_index=True))
     cam_type = Column(String)
     ignore = Column("pointIgnore", Boolean, default=False)
     _apriori = Column("apriori", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
     _adjusted = Column("adjusted", Geometry('POINTZ', srid=rectangular_srid, dimension=3, spatial_index=False))
-    measures = relationship('Measures')
+    measures = relationship('Measures', back_populates="point")
+    reference_index = Column("referenceIndex", Integer, default=0)
 
     @hybrid_property
     def geom(self):
@@ -385,6 +400,7 @@ class Measures(BaseMixin, Base):
     linesigma = Column(Float)
     weight = Column(Float, default=None)
     rms = Column(Float)
+    point = relationship("Points", back_populates="measures")
 
     @hybrid_property
     def measuretype(self):
@@ -395,6 +411,10 @@ class Measures(BaseMixin, Base):
         if isinstance(v, int):
             v = MeasureType(v)
         self._measuretype = v
+
+    @property
+    def reference_index(self):
+        return self.point.reference_index
 
 def try_db_creation(engine, config):
     from autocnet.io.db.triggers import valid_point_function, valid_point_trigger, valid_geom_function, valid_geom_trigger, ignore_image_function, ignore_image_trigger

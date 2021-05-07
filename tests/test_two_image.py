@@ -51,7 +51,7 @@ class TestTwoImageMatching():
         assert 1 == cg.number_of_edges()
 
         # Step: Extract image data and attribute nodes
-        cg.extract_features(extractor_method='vlfeat', extractor_parameters={"nfeatures":500})
+        cg.extract_features(extractor_method='vlfeat')
         for i, node in cg.nodes.data('data'):
             assert node.nkeypoints in range(4000, 6000)
 

@@ -1,0 +1,49 @@
+name: Pull-Request-CI
+
+on:
+  pull_request:
+    branches:
+      - dev
+  push:
+    branches:
+      - dev
+
+jobs:
+  Build-and-Test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+       os: [ubuntu-latest, macos-latest]
+       python-version: ["3.7", "3.8", "3.9"]
+    defaults:
+      run:
+        shell: bash -l {0}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: "latest"
+          mamba-verion: "*"
+          use-mamba: true
+          channels: conda-forge, defaults
+          channel-priority: true
+          activate-environment: autocnet
+          environment-file: environment.yml
+          python-version: ${{ matrix.python-version }}
+      - name: Check build environment
+        run: |
+          conda list
+      - name: Install Python Package
+        run: |
+          python setup.py install
+      - name: Test Python Package
+        run: |
+           pytest --cov-report=xml --cov=ale tests/pytests -vv
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: true
+          verbose: true
+        if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.9'

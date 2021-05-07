@@ -128,7 +128,7 @@ def spatial_suppression(df, bounds, xkey='x', ykey='y', k=60, error_k=0.05, nste
         if n_y_cells <= 0:
             n_y_cells = 1
 
-        grid = np.zeros((n_y_cells, n_x_cells), dtype=np.bool)
+        grid = np.zeros((n_y_cells, n_x_cells), dtype=bool)
         # Assign all points to bins
         x_edges = np.linspace(minx, maxx, n_x_cells)
         y_edges = np.linspace(miny, maxy, n_y_cells)

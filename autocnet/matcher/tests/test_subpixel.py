@@ -234,7 +234,7 @@ def test_subpixel_phase_cooked(x, y, x1, y1, image_size, expected):
                         (0, 0, 0, 0, 0, 0, 0),
                         (0, 0, 0, 0, 0, 0, 0)), dtype=np.uint8)
 
-    dx, dy, metrics = sp.subpixel_phase(x, y, x1, y1, 
+    dx, dy, metrics, _ = sp.subpixel_phase(x, y, x1, y1, 
                                                  test_image, t_shape,
                                                  image_size=image_size)
 
