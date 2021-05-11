@@ -59,8 +59,8 @@ def check_match_func(func):
     match_funcs = {
         "classic": subpixel_template_classic,
         "phase": iterative_phase,
-        "template": subpixel_template,
-        "mutualinformation": mutual_information
+        "template": subpixel_template
+        # "mutualinformation": mutual_information
     }
 
     if func in match_funcs.values():
@@ -753,6 +753,7 @@ def iterative_phase(sx, sy, dx, dy, s_img, d_img, size=(51, 51), reduction=11, c
            delta_dy<= convergence_threshold and\
            abs(dist) <= max_dist:
            break
+
     return dx, dy, metrics
 
 
@@ -934,7 +935,14 @@ def geom_match_simple(base_cube,
     t4 = time.time()
     print(f'Matching took {t4-t3} seconds')
 
-    x,y,maxcorr,temp_corrmap = restemplate
+    try: 
+        x,y,maxcorr,temp_corrmap = restemplate
+    except: 
+        # did not return a corrmap 
+        x,y,maxcorr = restemplate 
+        temp_corrmap = np.empty((size_x, size_y))
+        temp_corrmap[:] = np.nan
+    
     if x is None or y is None:
         return None, None, None, None, None
     metric = maxcorr
