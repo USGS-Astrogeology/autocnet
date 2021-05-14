@@ -7,8 +7,14 @@ import warnings
 import numbers
 
 import sys
-from skimage.feature import register_translation
+
+from skimage import registration as reg
 from skimage import transform as tf
+from skimage import data
+from skimage import registration 
+from skimage import filters
+from scipy import fftpack 
+
 
 from matplotlib import pyplot as plt
 
@@ -266,7 +272,7 @@ def subpixel_phase(sx, sy, dx, dy,
         if (s_image is None) or (d_template is None):
             return None, None, None
 
-    (shift_y, shift_x), error, diffphase = register_translation(s_image, d_template, **kwargs)
+    (shift_y, shift_x), error, diffphase = reg.phase_cross_correlation(s_image, d_template, **kwargs)
     dx = d_roi.x - shift_x
     dy = d_roi.y - shift_y
 
@@ -1753,3 +1759,189 @@ def register_to_base(pointid,
        point.ref_measure = best_results[1]
     return
     
+
+
+def estimate_logpolar_transform(img1, img2, low_sigma=1, high_sigma=5, verbose=False): 
+    """
+    Estimates the rotation and scale difference for img1 that maps to img2 using phase cross correlation on a logscale projection. 
+    
+    Essentially, scale and angular changes in cartesian space become translation in log-polar space. Translation from subpixel registration 
+    in log-polar space can then be translated into scale/rotation change in the original cartesian images. This scale + roation 
+    change estimation is then returned as an affine transform object. This can then be used before other subpixel registration 
+    methods to enable scale+rotation invariance. 
+    
+    
+    References
+    ----------
+    
+    .. [1] Rittavee Matungka. 2009. Studies on log-polar transform for image registration and improvements 
+       using adaptive sampling and logarithmic spiral. Ph.D. Dissertation. Ohio State University, USA. Advisor(s) Yuan F. Zheng. 
+       Order Number: AAI3376091.
+    .. [2] https://github.com/polakluk/fourier-mellin
+    .. [3] https://scikit-image.org/docs/stable/auto_examples/registration/plot_register_rotation.html 
+    
+    Parameters
+    ----------
+    
+    img1: np.ndarray 
+          The source image, this is the image that is used as a base as img2 is registered to the center on img1
+    
+    img2: np.ndarray 
+          The image that will be moved to match img1
+
+    low_sigma : float, list, np.array
+                Standard deviation(s) for the Gaussian kernel used in the difference of gaussians filter
+    
+    high_sigma : float, list, np.array
+                 Standard deviation(s) for the Gaussian kernel with the larger sigmas across all axes used in the difference of gaussians filter
+    verbose : bool 
+              If true, prints out information detailing the registration process 
+    
+    Returns 
+    -------
+    : skimage.transform.SimilarityTansform
+      Scikit-image affine transformation object containing rotation and scale information to warp img1 to img2
+      
+    """
+    # First, band-pass filter both images
+    img1 = filters.difference_of_gaussians(img1, low_sigma, high_sigma)
+    img2 = filters.difference_of_gaussians(img2, low_sigma, high_sigma)
+
+    # window images
+    wimg1 = img1 * filters.window('hann', img1.shape)
+    wimg2 = img2 * filters.window('hann', img2.shape)
+
+    # work with shifted FFT magnitudes
+    img1_fs = np.abs(fftpack.fftshift(fftpack.fft2(wimg1)))
+    img2_fs = np.abs(fftpack.fftshift(fftpack.fft2(wimg2)))
+
+    # Create log-polar transformed FFT mag images and register
+    shape = img1_fs.shape
+    radius = shape[0] // 4  # only take lower frequencies
+    warped_img1_fs = tf.warp_polar(img1_fs, radius=radius, output_shape=shape,
+                                 scaling='log', order=0)
+    warped_img2_fs = tf.warp_polar(img2_fs, radius=radius, output_shape=shape,
+                               scaling='log', order=0)
+
+    warped_img1_fs = warped_img1_fs[:shape[0] // 2, :]
+    warped_img2_fs = warped_img2_fs[:shape[0] // 2, :]
+    shifts, error, phasediff = registration.phase_cross_correlation(warped_img1_fs,
+                                                       warped_img2_fs,
+                                                       upsample_factor=10)
+
+    # Use translation parameters to calculate rotation and scaling parameters
+    shiftr, shiftc = shifts[:2]
+    recovered_angle = -(360 / shape[0]) * shiftr
+    klog = shape[1] / np.log(radius)
+    shift_scale = np.exp(shiftc / klog)
+    if recovered_angle < - 45:
+        recovered_angle += 180
+    else:
+        if recovered_angle > 90.0:
+            recovered_angle -= 180
+            
+    if verbose: 
+        fig, axes = plt.subplots(2, 2, figsize=(8, 8))
+        ax = axes.ravel()
+        ax[0].set_title("Original Image FFT\n(magnitude; zoomed)")
+        center = np.array(shape) // 2
+        ax[0].imshow(img1_fs[center[0] - radius:center[0] + radius,
+                              center[1] - radius:center[1] + radius],
+                     cmap='magma')
+        ax[1].set_title("Modified Image FFT\n(magnitude; zoomed)")
+        ax[1].imshow(img2_fs[center[0] - radius:center[0] + radius,
+                            center[1] - radius:center[1] + radius],
+                     cmap='magma')
+        ax[2].set_title("Log-Polar-Transformed\nOriginal FFT")
+        ax[2].imshow(warped_img1_fs, cmap='magma')
+        ax[3].set_title("Log-Polar-Transformed\nModified FFT")
+        ax[3].imshow(warped_img2_fs, cmap='magma')
+        fig.suptitle('Working in frequency domain can recover rotation and scaling')
+        plt.show()
+
+        print(f"Recovered value for cc rotation: {recovered_angle}")
+        print()
+        print(f"Recovered value for scaling difference: {shift_scale}")
+
+    shift_y, shift_x = np.asarray(img1.shape) / 2 - 0.5
+    tf_scale = tf.SimilarityTransform(scale=shift_scale)
+    tf_rotate = tf.SimilarityTransform(rotation=np.deg2rad(recovered_angle))
+    tf_shift = tf.SimilarityTransform(translation=[-shift_x, -shift_y])
+    tf_shift_inv = tf.SimilarityTransform(translation=[shift_x, shift_y])
+
+    tf_rotate_from_center = (tf_shift + (tf_rotate + tf_shift_inv))
+    return tf.SimilarityTransform((tf_rotate_from_center + tf_scale)._inv_matrix)
+    
+    
+def fourier_mellen(img1, img2, verbose=False, phase_kwargs={}):
+    """
+    Iterative phase registration using a log-polar projection to estimate an affine for scale and roation invariance. 
+
+    
+    Parameters 
+    ----------
+    
+    img1: np.ndarray 
+          The source image, this is the image that is used as a base as img2 is registered to the center on img1
+    
+    img2: np.ndarray 
+          The image that will be moved to match img1
+        
+    verbose : bool 
+              If true, prints out information detailing the registration process 
+    
+    phase_kwargs : dict
+                   Parameters to be passed into the iterative_phase matcher 
+                   
+    Returns 
+    -------
+    
+    : float
+      The new x coordinate for img2 that registers to the center of img1 
+      
+    : float 
+      The new y coordinate for img2 that registers to the center of img1 
+    
+    : float 
+      Error returned by the iterative phase matcher 
+    """
+    # Get the affine transformation for scale + rotation invariance  
+    affine = estimate_logpolar_transform(img1, img2, verbose=verbose)
+    
+    # warp the source image to match the destination
+    img1_warped = tf.warp(img1, affine)
+    sx, sy = affine.inverse(np.asarray(img1.shape)/2)[0]
+    
+    # get translation with iterative phase 
+    newx, newy, error = iterative_phase(sx, sy, sx, sy, img1_warped, img2, **phase_kwargs)
+    
+    if verbose:
+        fig, axes = plt.subplots(2, 2, figsize=(8, 8))
+        ax = axes.ravel()
+        
+        ax[0].imshow(img1_warped)
+        ax[0].set_title("Image 1 Transformed")
+        ax[0].axhline(y=sy, color="red", linestyle="-", alpha=1, linewidth=1)
+        ax[0].axvline(x=sx, color="red", linestyle="-", alpha=1, linewidth=1)
+        
+        ax[1].imshow(img2)
+        ax[1].set_title("Image 2")
+        ax[1].axhline(y=sy, color="red", linestyle="-", alpha=1, linewidth=1)
+        ax[1].axvline(x=sx, color="red", linestyle="-", alpha=1, linewidth=1)
+        
+        ax[2].imshow(img1)
+        ax[2].set_title("Image 1")
+        ax[2].axhline(y=img1.shape[0]/2, color="red", linestyle="-", alpha=1, linewidth=1)
+        ax[2].axvline(x=img1.shape[1]/2, color="red", linestyle="-", alpha=1, linewidth=1)
+        
+        
+        ax[3].imshow(img2)
+        
+        if not newx or not newy:
+            ax[3].set_title("Image 2 REGISTRATION FAILED")
+        else :
+            ax[3].set_title("Image 2 registered")
+            ax[3].axhline(y=newy, color="red", linestyle="-", alpha=1, linewidth=1)
+            ax[3].axvline(x=newx, color="red", linestyle="-", alpha=1, linewidth=1)
+        
+    return newx, newy, error
