@@ -8,7 +8,6 @@ import numbers
 
 import sys
 
-from skimage import registration as reg
 from skimage import transform as tf
 from skimage import data
 from skimage import registration 
@@ -272,7 +271,7 @@ def subpixel_phase(sx, sy, dx, dy,
         if (s_image is None) or (d_template is None):
             return None, None, None
 
-    (shift_y, shift_x), error, diffphase = reg.phase_cross_correlation(s_image, d_template, **kwargs)
+    (shift_y, shift_x), error, diffphase = registration.phase_cross_correlation(s_image, d_template, **kwargs)
     dx = d_roi.x - shift_x
     dy = d_roi.y - shift_y
 
@@ -1761,16 +1760,21 @@ def register_to_base(pointid,
     
 
 
-def estimate_logpolar_transform(img1, img2, low_sigma=1, high_sigma=5, verbose=False): 
+def estimate_logpolar_transform(img1, img2, low_sigma=0.5, high_sigma=30, verbose=False): 
     """
     Estimates the rotation and scale difference for img1 that maps to img2 using phase cross correlation on a logscale projection. 
     
-    Essentially, scale and angular changes in cartesian space become translation in log-polar space. Translation from subpixel registration 
+    Scale and angular changes in cartesian space become translation in log-polar space. Translation from subpixel registration 
     in log-polar space can then be translated into scale/rotation change in the original cartesian images. This scale + roation 
     change estimation is then returned as an affine transform object. This can then be used before other subpixel registration 
     methods to enable scale+rotation invariance. 
     
-    
+    See Also 
+    --------
+
+    skimage.filters.difference_of_gaussians : Bandpass filtering using a difference of gaussians 
+    skimage.filters.window : Simple wondowing function to remove spectral leakage along the axes in the fourier transform
+
     References
     ----------
     
@@ -1790,10 +1794,17 @@ def estimate_logpolar_transform(img1, img2, low_sigma=1, high_sigma=5, verbose=F
           The image that will be moved to match img1
 
     low_sigma : float, list, np.array
-                Standard deviation(s) for the Gaussian kernel used in the difference of gaussians filter
+                The low standard deviation for the Gaussian kernel used in the difference of gaussians filter. This reccomended
+                to remove high frequency noise from the image before the log-polar projection as high frequency noise negatively impact registration
+                in log-polar space. The lower the sigma, the sharper the resulting image will be. Use a small low_sigma with a large high_sigma 
+                to remove high frequency noise. Default is 0.5.
     
     high_sigma : float, list, np.array
-                 Standard deviation(s) for the Gaussian kernel with the larger sigmas across all axes used in the difference of gaussians filter
+                Standard deviation for the Gaussian kernel with the larger sigmas across all axes used in the difference of gaussians filter. This reccomended
+                to remove high frequency noise from the image before the log-polar projection as high frequency noise negatively impact registration
+                in log-polar space. The higher this sigma compared to the low_sigma, the more detail will be preserved. Use a small low_sigma with a large high_sigma 
+                to remove high frequency noise. A high sigma equal to ~1.6x the low sigma is reccomended for edge detection, so consider high_sigmas >= low_sigma*1.6. Default is 30.
+
     verbose : bool 
               If true, prints out information detailing the registration process 
     
@@ -1808,8 +1819,8 @@ def estimate_logpolar_transform(img1, img2, low_sigma=1, high_sigma=5, verbose=F
     img2 = filters.difference_of_gaussians(img2, low_sigma, high_sigma)
 
     # window images
-    wimg1 = img1 * filters.window('hann', img1.shape)
-    wimg2 = img2 * filters.window('hann', img2.shape)
+    wimg1 = img1 * (filters.window('hann', img1.shape))
+    wimg2 = img2 * (filters.window('hann', img2.shape))
 
     # work with shifted FFT magnitudes
     img1_fs = np.abs(fftpack.fftshift(fftpack.fft2(wimg1)))
@@ -1863,6 +1874,7 @@ def estimate_logpolar_transform(img1, img2, low_sigma=1, high_sigma=5, verbose=F
         print()
         print(f"Recovered value for scaling difference: {shift_scale}")
 
+    # offset by the center of the image, scikit's ceter image rotation is defined by `axis / 2 - 0.5` 
     shift_y, shift_x = np.asarray(img1.shape) / 2 - 0.5
     tf_scale = tf.SimilarityTransform(scale=shift_scale)
     tf_rotate = tf.SimilarityTransform(rotation=np.deg2rad(recovered_angle))
@@ -1924,23 +1936,21 @@ def fourier_mellen(img1, img2, verbose=False, phase_kwargs={}):
         ax[0].axhline(y=sy, color="red", linestyle="-", alpha=1, linewidth=1)
         ax[0].axvline(x=sx, color="red", linestyle="-", alpha=1, linewidth=1)
         
-        ax[1].imshow(img2)
-        ax[1].set_title("Image 2")
-        ax[1].axhline(y=sy, color="red", linestyle="-", alpha=1, linewidth=1)
-        ax[1].axvline(x=sx, color="red", linestyle="-", alpha=1, linewidth=1)
-        
         ax[2].imshow(img1)
         ax[2].set_title("Image 1")
         ax[2].axhline(y=img1.shape[0]/2, color="red", linestyle="-", alpha=1, linewidth=1)
         ax[2].axvline(x=img1.shape[1]/2, color="red", linestyle="-", alpha=1, linewidth=1)
         
-        
+        ax[1].imshow(img2)
         ax[3].imshow(img2)
         
         if not newx or not newy:
+            ax[1].set_title("Image 2 REGISTRATION FAILED")
             ax[3].set_title("Image 2 REGISTRATION FAILED")
         else :
-            ax[3].set_title("Image 2 registered")
+            ax[3].set_title("Image 2 Registered")
+            ax[1].axhline(y=newy, color="red", linestyle="-", alpha=1, linewidth=1)
+            ax[1].axvline(x=newx, color="red", linestyle="-", alpha=1, linewidth=1)
             ax[3].axhline(y=newy, color="red", linestyle="-", alpha=1, linewidth=1)
             ax[3].axvline(x=newx, color="red", linestyle="-", alpha=1, linewidth=1)
         

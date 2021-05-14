@@ -136,7 +136,6 @@ def test_subpixel_transformed_template(apollo_subsets):
 def test_estimate_logpolar_transform(iris_pair):
     img1, img2 = iris_pair 
     affine = sp.estimate_logpolar_transform(img1, img2) 
-    print(affine.scale, affine.rotation, affine.translation)
 
     assert pytest.approx(affine.scale, 0.1) == 0.71
     assert pytest.approx(affine.rotation, 0.1) == 0.34 

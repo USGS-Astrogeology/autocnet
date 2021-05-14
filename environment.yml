@@ -32,7 +32,7 @@ dependencies:
   - pysis
   - pvl < 1.0
   - richdem
-  - scikit-image
+  - scikit-image>=0.17
   - scikit-learn
   - scipy<=1.2.1
   - shapely
