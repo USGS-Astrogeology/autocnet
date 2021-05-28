@@ -142,6 +142,11 @@ are loaded into the database sequentially and then a spatial overlay operation i
 to determine how individual images overlap with one another (using the footprints
 generated from the a priori sensor pointing.)
 
+This method performs the following actions:
+- Load each image, as a row, into the Images table of the database. This includes attempting to extract a footprint from the image. The footprint can be read from an ISIS cube if footprint init has been run. Alternatively, experimental support exists for Community Sensor Model sensors developed by USGS.
+- Use the database to compute the overlapping geometries between each of the images. For large data sets this can be a costly, one time operation. Limiting the number of geometries in image footprints can significantly improve performance. For each overlap, a row is added to the Overlay table. This table tracks the overlapping geometries and the images that intersect those geometries.
+- Return a NewtorkCandidateGraph where each node represents and image and each edge represents a spatial overlap between said images.
+
 ### Operations on the NCG: Database Rows
 After we have an NCG, we want to perform operations on the graph or on database
 rows associated with the graph (e.g., the Points, Measures, or Image Overlaps).
