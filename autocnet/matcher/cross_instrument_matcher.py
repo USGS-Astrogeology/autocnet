@@ -1,52 +1,22 @@
-from shapely.geometry import MultiPoint
 from plio.io.io_gdal import GeoDataset
 import numpy as np
-import matplotlib.pyplot as plt
-
-import ctypes
-import enum
-import glob
-import json
 import os
 import os.path
-import socket
-from ctypes.util import find_library
 
 import pandas as pd
-import scipy
-from sqlalchemy import (Boolean, Column, Float, ForeignKey, Integer,
-                        LargeBinary, String, UniqueConstraint, create_engine,
-                        event, orm, pool)
-from sqlalchemy.ext.declarative import declarative_base
 
 import geopandas as gpd
-import plio
-import pvl
-import pyproj
-import pysis
-import cv2
 
-from gdal import ogr
-
-import geoalchemy2
-from geoalchemy2 import Geometry, WKTElement
-from geoalchemy2.shape import to_shape
 from geoalchemy2 import functions
 
-from knoten import csm
 
-from plio.io.io_controlnetwork import from_isis, to_isis
 
 from shapely import wkt
-from shapely.geometry.multipolygon import MultiPolygon
 from shapely.geometry import Point
-
-from plurmy import Slurm
 
 from autocnet.matcher.subpixel import check_match_func
 from autocnet.io.db.model import Images, Points, Measures, JsonEncoder
 from autocnet.cg.cg import distribute_points_in_geom, xy_in_polygon
-from autocnet.io.db.connection import new_connection
 from autocnet.spatial import isis
 from autocnet.transformation.spatial import reproject, oc2og
 from autocnet.matcher.cpu_extractor import extract_most_interesting

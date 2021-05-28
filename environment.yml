@@ -30,7 +30,6 @@ dependencies:
   - pytest
   - pytest-cov
   - pysis
-  - pvl < 1.0
   - richdem
   - scikit-image>=0.17
   - scikit-learn

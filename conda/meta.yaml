@@ -50,7 +50,6 @@ requirements:
       - plio>=1.1.0
       - plurmy
       - psycopg2
-      - pvl<1.0.0
       - pyproj
       - pysis
       - pytest
