@@ -1586,6 +1586,7 @@ class NetworkCandidateGraph(CandidateGraph):
             reapply=False,
             log_dir=None,
             queue=None,
+            redis_queue='processing_queue',
             exclude=None,
             **kwargs):
         """
@@ -1652,6 +1653,8 @@ class NetworkCandidateGraph(CandidateGraph):
                 The processing queue to use. If None (default), use the processing queue from
                 the config file.
 
+        redis_queue : str
+                      The redis queue to read message from (default self.processing_queue)
         Returns
         -------
         job_str : str
@@ -1684,6 +1687,8 @@ class NetworkCandidateGraph(CandidateGraph):
 
         job_counter = self.queue_length
 
+        # TODO: reapply uses the queue name and reapplies on that queue.
+
         if not reapply:
             # Determine which obj will be called
             if isinstance(on, str):
@@ -1711,8 +1716,11 @@ class NetworkCandidateGraph(CandidateGraph):
         rconf = self.config['redis']
         rhost = rconf['host']
         rport = rconf['port']
-        processing_queue = rconf['processing_queue']
-
+        try:
+            processing_queue = getattr(self, redis_queue)
+        except AttributeError:
+            print(f'Unable to find attribute {redis_queue} on this object. Valid queue names are: "processing_queue" and "working_queue".')
+        
         env = self.config['env']
         condaenv = env['conda']
         isisroot = env['ISISROOT']
@@ -1720,7 +1728,7 @@ class NetworkCandidateGraph(CandidateGraph):
 
         isissetup = f'export ISISROOT={isisroot} && export ISISDATA={isisdata}'
         condasetup = f'conda activate {condaenv}'
-        job = f'acn_submit -r={rhost} -p={rport} {processing_queue}'
+        job = f'acn_submit -r={rhost} -p={rport} {processing_queue} {self.working_queue}'
         command = f'{condasetup} && {isissetup} && {job}'
 
         if queue == None:
@@ -2224,6 +2232,17 @@ class NetworkCandidateGraph(CandidateGraph):
         """
         llen = self.redis_queue.llen(self.config['redis']['processing_queue'])
         return llen
+
+    def get_work_queue_messages(self):
+        return self.redis_queue.lrange(self.working_queue, 0, -1)
+
+    def get_timed_out_jobs(self, clear=False):
+        running_jobs = self.get_work_queue_messages()
+        timed_out = []
+        for message in running_jobs:
+            if time.time() > message['max_time']:
+                timed_out.append(message)
+        return timed_out
 
     @property
     def union(self):

@@ -23,7 +23,7 @@ def setup_package():
 
     setup(
         name = "autocnet",
-        version = '0.4.0',
+        version = '0.5.0',
         author = "Jay Laura",
         author_email = "jlaura@usgs.gov",
         description = ("I/O API to support planetary data formats."),
@@ -34,7 +34,6 @@ def setup_package():
         packages=find_packages(),
         include_package_data=True,
         package_data={'autocnet' : list(examples)},
-        scripts= glob("bin/*"), # [ 'bin/acn_submit'],
         zip_safe=False,
         install_requires=[],
         classifiers=[
@@ -47,6 +46,9 @@ def setup_package():
             'Programming Language :: Python :: 3.4',
             'Programming Language :: Python :: 3.5',
         ],
+        entry_points={"console_scripts": [
+        "acn_submit = autocnet.cluster_submit:main"], 
+        }
     )
 
 if __name__ == '__main__':

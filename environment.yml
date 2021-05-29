@@ -9,6 +9,7 @@ dependencies:
   - csmapi
   - cyvlfeat
   - dill
+  - fakeredis
   - geoalchemy2
   - geopandas
   - hoggorm
@@ -29,6 +30,7 @@ dependencies:
   - pyproj
   - pytest
   - pytest-cov
+  - pytest-mock
   - pysis
   - pvl < 1.0
   - richdem

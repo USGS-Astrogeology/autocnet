@@ -49,7 +49,7 @@ def _instantiate_row(msg, ncg):
         session.expunge(res) # Disconnect the object from the session
     return res
 
-def main(msg):
+def process(msg):
     ncg = NetworkCandidateGraph()
     ncg.config_from_dict(msg['config'])
     if msg['along'] in ['node', 'edge']:
@@ -88,10 +88,52 @@ def main(msg):
 
     return msg
 
+def transfer_message_to_work_queue(queue, queue_from, queue_to):
+    """
+    Atomic pop/push from one redis list to another
+
+    Parameters
+    ----------
+    queue : object
+            PyRedis queue
+    
+    queue_from : str
+                 The name of the queue to pop a message from
+    
+    queue_to : str
+               The name of the queue to push a message to
+
+    Returns
+    -------
+      : str
+        The message from the queue
+    """
+    return queue.rpoplpush(queue_from, queue_to)
+
+def finalize_message_from_work_queue(queue, queue_name, remove_key):
+    """
+    Remove a message from a queue
+
+    Parameters
+    ----------
+    queue : object
+            PyRedis queue
+
+    queue_name : str
+                 The name of the queue to remove an object from
+
+    remove_key : obj
+                 The message to remove from the list
+    """
+    # The operation completed. Remove this message from the working queue.  
+    queue.lrem(queue_name, 0, remove_key)
+
 def manage_messages(args, queue):
 
     # Pop the message from the left queue and push to the right queue; atomic operation
-    msg = queue.rpoplpush(args['processing_queue'], args['working_queue'])
+    msg = transfer_message_to_work_queue(queue, 
+                                         args['processing_queue'],
+                                         args['working_queue'])
 
     if msg is None:
         warnings.warn('Expected to process a cluster job, but the message queue is empty.')
@@ -99,17 +141,16 @@ def manage_messages(args, queue):
 
     # The key to remove from the working queue is the message. Essentially, find this element
     # in the list where the element is the JSON representation of the message. Maybe swap to a hash?
-    remove_key = json.dumps(msg, cls=JsonEncoder)
+    remove_key = msg
 
     # Apply the algorithm
-    response = main(msg)
+    response = process(msg)
     # Should go to a logger someday!
     print(response)
 
-    # The operation completed. Remove this message from the working queue.
-    queue.lrem(args['working_queue'], 0, remove_key)
+    finalize_message_from_work_queue(queue, args['working_queue'], remove_key)
 
-if __name__ == '__main__':
+def main():
     args = vars(parse_args())
     
     # Get the message
