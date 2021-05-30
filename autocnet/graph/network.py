@@ -1420,6 +1420,14 @@ class NetworkCandidateGraph(CandidateGraph):
         else:
             self.dem = None
 
+    @property 
+    def Session(self):
+        return self._Session
+
+    @Session.setter
+    def Session(self, Session):
+        self._Session = Session
+
     def _setup_database(self):
         db = self.config['database']
         self.Session, self.engine = new_connection(self.config['database'])

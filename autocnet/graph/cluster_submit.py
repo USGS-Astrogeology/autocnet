@@ -17,7 +17,7 @@ from autocnet.utils.utils import import_func
 from autocnet.utils.serializers import JsonEncoder, object_hook
 
 
-def parse_args():
+def parse_args():  # pargma: no cover
     parser = argparse.ArgumentParser()
     parser.add_argument('-r', '--host', help='The host URL for the redis queue to to pull messages from.')
     parser.add_argument('-p', '--port', help='The port for used by redis.')
@@ -137,7 +137,7 @@ def manage_messages(args, queue):
 
     if msg is None:
         warnings.warn('Expected to process a cluster job, but the message queue is empty.')
-        sys.exit()
+        return
 
     # The key to remove from the working queue is the message. Essentially, find this element
     # in the list where the element is the JSON representation of the message. Maybe swap to a hash?
@@ -150,7 +150,7 @@ def manage_messages(args, queue):
 
     finalize_message_from_work_queue(queue, args['working_queue'], remove_key)
 
-def main():
+def main():  # pragma: no cover
     args = vars(parse_args())
     
     # Get the message
