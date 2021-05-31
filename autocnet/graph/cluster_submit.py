@@ -17,7 +17,7 @@ from autocnet.utils.utils import import_func
 from autocnet.utils.serializers import JsonEncoder, object_hook
 
 
-def parse_args():  # pargma: no cover
+def parse_args():  # pragma: no cover
     parser = argparse.ArgumentParser()
     parser.add_argument('-r', '--host', help='The host URL for the redis queue to to pull messages from.')
     parser.add_argument('-p', '--port', help='The port for used by redis.')

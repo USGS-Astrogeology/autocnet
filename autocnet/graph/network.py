@@ -1326,7 +1326,7 @@ class NetworkCandidateGraph(CandidateGraph):
         for s, d, e in self.edges(data='data'):
             e.parent = self
 
-        self. apply_iterable_options = {
+        self.apply_iterable_options = {
                 'edge' : self.edges,
                 'edges' : self.edges,
                 'e' : self.edges,

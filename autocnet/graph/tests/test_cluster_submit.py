@@ -6,6 +6,10 @@ import pytest
 
 from autocnet.utils.serializers import JsonEncoder, object_hook
 from autocnet.graph import cluster_submit
+from autocnet.graph.node import NetworkNode
+from autocnet.graph.edge import NetworkEdge
+from autocnet.io.db.model import Points
+
 
 @pytest.fixture
 def args():
@@ -112,3 +116,65 @@ def test_process_obj(along, func, msg_additions, mocker):
     assert msg['results'] == True
     
     cluster_submit._instantiate_obj.assert_called_once()
+
+@pytest.mark.parametrize("along, func, msg_additions", [
+    ('points', _do_nothing, {}),
+    ('measures', _do_nothing, {}),
+    ('overlaps', _do_nothing, {}),
+    ('images', _do_nothing, {})
+])
+def test_process_row(along, func, msg_additions, mocker):
+    msg = {'along':along,
+        'config':{},
+        'func':func,
+        'args':[],
+        'kwargs':{}}
+    msg ={**msg, **msg_additions}
+    mocker.patch('autocnet.graph.cluster_submit._instantiate_row', side_effect=_generate_obj)
+    mocker.patch('autocnet.graph.network.NetworkCandidateGraph.Session', return_value=True)
+    mocker.patch('autocnet.graph.network.NetworkCandidateGraph.config_from_dict')
+    msg = cluster_submit.process(msg)
+    
+    # Message result should be the same as 
+    assert msg['results'] == True
+    
+    cluster_submit._instantiate_row.assert_called_once()
+
+@pytest.mark.parametrize("along, func, msg_additions",[
+                        ([1,2,3,4,5], _do_nothing, {})
+                        ])
+def test_process_generic(along, func, msg_additions, mocker):
+    msg = {'along':along,
+        'config':{},
+        'func':func,
+        'args':[],
+        'kwargs':{}}
+    msg ={**msg, **msg_additions}
+    mocker.patch('autocnet.graph.cluster_submit._instantiate_row', side_effect=_generate_obj)
+    mocker.patch('autocnet.graph.cluster_submit._instantiate_obj', side_effect=_generate_obj)
+    mocker.patch('autocnet.graph.network.NetworkCandidateGraph.Session', return_value=True)
+    mocker.patch('autocnet.graph.network.NetworkCandidateGraph.config_from_dict')
+    
+    assert not cluster_submit._instantiate_row.called
+    assert not cluster_submit._instantiate_obj.called
+
+    msg = cluster_submit.process(msg)
+
+    # Message result should be the same as 
+    assert msg['results'] == True
+
+@pytest.mark.parametrize("msg, expected", [
+                            ({'along':'node','id':0, 'image_path':'/foo.img'}, NetworkNode),
+                            ({'along':'edge','id':(0,1), 'image_path':('/foo.img', '/foo2.img')}, NetworkEdge)
+                            ])
+def test_instantiate_obj(msg, expected):
+    obj = cluster_submit._instantiate_obj(msg, None)
+    assert isinstance(obj, expected)
+
+@pytest.mark.parametrize("msg, expected", [
+                            ({'along':'points','id':0}, Points),
+                            ])
+@pytest.mark.xfail
+def test_instantiate_row(msg, expected, mocker):
+    # TODO: Figur eout how to mock a ncg.session_scope() and the query executed in the scope
+    assert False
