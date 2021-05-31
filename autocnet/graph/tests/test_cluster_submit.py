@@ -1,4 +1,5 @@
 import json
+from unittest.mock import patch
 
 import fakeredis
 import numpy as np
@@ -174,7 +175,12 @@ def test_instantiate_obj(msg, expected):
 @pytest.mark.parametrize("msg, expected", [
                             ({'along':'points','id':0}, Points),
                             ])
-@pytest.mark.xfail
+
 def test_instantiate_row(msg, expected, mocker):
-    # TODO: Figur eout how to mock a ncg.session_scope() and the query executed in the scope
-    assert False
+    mock_ncg = mocker.MagicMock()
+    # Mock the db query to return a row of the requested type
+    mock_ncg.apply_iterable_options.return_value = {'points':Points}
+    mock_ncg.session_scope.return_value.__enter__.return_value.query.return_value.filter.return_value.one.return_value = expected()
+
+    obj = cluster_submit._instantiate_row(msg, mock_ncg)
+    assert isinstance(obj, expected)
