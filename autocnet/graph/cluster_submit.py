@@ -55,7 +55,7 @@ def _instantiate_row(msg, ncg):
     obj = objdict[msg['along']]
     with ncg.session_scope() as session:
         res = session.query(obj).filter(getattr(obj, 'id')==msg['id']).one()
-        session.expunge(res) # Disconnect the object from the session
+        session.expunge_all() # Disconnect the object from the session
     return res
 
 def process(msg):
@@ -99,7 +99,7 @@ def process(msg):
 
     # Now run the function.
     res = func(*msg['args'], **msg['kwargs'])
-
+    
     # Update the message with the True/False
     msg['results'] = res
     # Update the message with the correct callback function

@@ -5,6 +5,7 @@ import json
 import math
 import os
 from shutil import copyfile
+import threading
 from time import gmtime, strftime, time
 import warnings
 from itertools import combinations
@@ -38,6 +39,7 @@ from plurmy import Slurm
 import autocnet
 from autocnet.config_parser import parse_config
 from autocnet.cg import cg
+from autocnet.graph.asynchronous_funcs import watch_insert_queue, watch_update_queue
 from autocnet.graph import markov_cluster
 from autocnet.graph.edge import Edge, NetworkEdge
 from autocnet.graph.node import Node, NetworkNode
@@ -1356,7 +1358,7 @@ class NetworkCandidateGraph(CandidateGraph):
                 6: CandidateGroundPoints
             }
 
-    def config_from_file(self, filepath):
+    def config_from_file(self, filepath, async_watchers=False):
         """
         A NetworkCandidateGraph uses a database. This method parses a config
         file to set up the connection. Additionally, this loads planetary
@@ -1367,11 +1369,16 @@ class NetworkCandidateGraph(CandidateGraph):
         ----------
         filepath : str
                    The path to the config file
+
+        async_watchers : bool
+                         If True the ncg will also spawn redis queue watching threads
+                         that manage asynchronous database inserts. This is primarily
+                         used for increased write performance.
         """
         # The YAML library will raise any parse errors
-        self.config_from_dict(parse_config(filepath))
+        self.config_from_dict(parse_config(filepath), async_watchers=async_watchers)
 
-    def config_from_dict(self, config_dict):
+    def config_from_dict(self, config_dict, async_watchers=False):
         """
         A NetworkCandidateGraph uses a database. This method loads a config
         dict to set up the connection. Additionally, this loads planetary
@@ -1382,14 +1389,23 @@ class NetworkCandidateGraph(CandidateGraph):
         ----------
         filepath : str
                    The path to the config file
+
+        async_watchers : bool
+                         If True the ncg will also spawn redis queue watching threads
+                         that manage asynchronous database inserts. This is primarily
+                         used for increased write performance.
         """
         self.config = config_dict
-
+        self.async_watchers = async_watchers
         # Setup REDIS
         self._setup_queues()
 
         # Setup the database
         self._setup_database()
+
+        # Setup threaded queue watchers
+        if self.async_watchers == True:
+            self._setup_asynchronous_workers()
 
         # Setup the DEM
         # I dislike having the DEM on the NCG, but in the short term it
@@ -1470,19 +1486,70 @@ class NetworkCandidateGraph(CandidateGraph):
         self.redis_queue = StrictRedis(host=conf['host'],
                                        port=conf['port'],
                                        db=0)
-        self.processing_queue = conf['processing_queue']
-        self.completed_queue = conf['completed_queue']
-        self.working_queue = conf['working_queue']
+        self.processing_queue = conf['basename'] + ':processing'
+        self.completed_queue = conf['basename'] + ':completed'
+        self.working_queue = conf['basename'] + ':working'
+        self.point_insert_queue = conf['basename'] + ':point_insert_queue'
+        self.point_insert_counter = conf['basename'] + ':point_insert_counter'
+        self.measure_update_queue = conf['basename'] + ':measure_update_queue'
+        self.measure_update_counter = conf['basename'] + ':measure_update_counter'
+
+        self.queue_names = [self.processing_queue, self.completed_queue, self.working_queue,
+                           self.point_insert_queue, self.point_insert_counter, 
+                           self.measure_update_queue, self.measure_update_counter]
+         
+    def _setup_asynchronous_workers(self):
+        
+        # Default the counters to zero, unless they are already set from a run
+        # where the NCG did not exit cleanly
+        if self.redis_queue.get(self.point_insert_counter) is None:
+            self.redis_queue.set(self.point_insert_counter, 0)
+
+        if self.redis_queue.get(self.measure_update_counter) is None:
+            self.redis_queue.set(self.measure_update_counter, 0)
+
+
+        # Start the insert watching thread
+        self.point_inserter_stop_event = threading.Event()
+        self.point_inserter = threading.Thread(target=watch_insert_queue, 
+                                               args=(self.redis_queue,
+                                                     self.point_insert_queue, 
+                                                     self.point_insert_counter, 
+                                                     self.engine,
+                                                     self.point_inserter_stop_event))
+        self.point_inserter.setDaemon(True)
+        self.point_inserter.start()
+
+        # Start the update watching thread
+        self.measure_updater_stop_event = threading.Event()
+        self.measure_updater = threading.Thread(target=watch_update_queue, 
+                                               args=(self.redis_queue,
+                                                     self.measure_update_queue, 
+                                                     self.measure_update_counter, 
+                                                     self.engine,
+                                                     self.measure_updater_stop_event))
+        self.measure_updater.setDaemon(True)
+        self.measure_updater.start()        
 
     def clear_queues(self):
         """
         Delete all messages from the redis queue. This a convenience method.
         The `redis_queue` object is a redis-py StrictRedis object with API
         documented at: https://redis-py.readthedocs.io/en/latest/#redis.StrictRedis
+
+        This also needs to restart any threaded watchers of the queues.
         """
-        queues = [self.processing_queue, self.completed_queue, self.working_queue]
-        for q in queues:
+        if self.async_watchers:
+            self.point_inserter_stop_event.set()
+            self.measure_updater_stop_event.set()
+        
+        for q in self.queue_names:
             self.redis_queue.delete(q)
+        
+        self._setup_queues()
+        if self.async_watchers:
+            self._setup_asynchronous_workers()
+
 
     def _execute_sql(self, sql):
         """
@@ -2042,13 +2109,14 @@ class NetworkCandidateGraph(CandidateGraph):
         sourcesession = sourceSession()
 
         sourceimages = sourcesession.execute(query_string).fetchall()
-
+        # Change for SQLAlchemy >= 1.4, results are now row objects
+        sourceimages = [sourceimage._asdict() for sourceimage in sourceimages]
         with self.session_scope() as destinationsession:
             destinationsession.execute(Images.__table__.insert(), sourceimages)
 
             # Get the camera objects to manually join. Keeps the caller from
             # having to remember to bring cameras as well.
-            ids = [i[0] for i in sourceimages]
+            #ids = [i[0] for i in sourceimages]
             #cameras = sourcesession.query(Cameras).filter(Cameras.image_id.in_(ids)).all()
             #for c in cameras:
             #    destinationsession.merge(c)
@@ -2240,7 +2308,7 @@ class NetworkCandidateGraph(CandidateGraph):
         jobs are then called on next cluster job launch, causing failures. This
         method provides a check for left over jobs.
         """
-        llen = self.redis_queue.llen(self.config['redis']['processing_queue'])
+        llen = self.redis_queue.llen(self.processing_queue)
         return llen
 
     @property
