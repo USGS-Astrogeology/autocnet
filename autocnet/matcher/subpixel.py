@@ -66,12 +66,8 @@ def check_match_func(func):
     match_funcs = {
         "classic": subpixel_template_classic,
         "phase": iterative_phase,
-<<<<<<< HEAD
-        "template": subpixel_template,
-=======
         "template": subpixel_template
         # "mutualinformation": mutual_information
->>>>>>> master
     }
 
     if func in match_funcs.values():
@@ -1792,10 +1788,6 @@ def register_to_base(pointid,
        point.ref_measure = best_results[1]
     return
     
-<<<<<<< HEAD
-=======
-
-
 def estimate_logpolar_transform(img1, img2, low_sigma=0.5, high_sigma=30, verbose=False): 
     """
     Estimates the rotation and scale difference for img1 that maps to img2 using phase cross correlation on a logscale projection. 
@@ -1991,4 +1983,3 @@ def fourier_mellen(img1, img2, verbose=False, phase_kwargs={}):
             ax[3].axvline(x=newx, color="red", linestyle="-", alpha=1, linewidth=1)
         
     return newx, newy, error
->>>>>>> master
