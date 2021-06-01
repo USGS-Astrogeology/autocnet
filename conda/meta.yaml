@@ -1,6 +1,6 @@
 package:
   name: autocnet
-  version: 0.4.0
+  version: 0.4.1
   
 channels:
   - conda-forge
@@ -50,6 +50,7 @@ requirements:
       - plio>=1.3
       - plurmy
       - proj >= 7.0.0, <8
+      - pvl >= 1.0
       - psycopg2
       - pyproj
       - pysis

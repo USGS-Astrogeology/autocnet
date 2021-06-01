@@ -26,6 +26,7 @@ dependencies:
   - plurmy
   - psycopg2
   - proj>=7.0.0,<8
+  - pvl>=1.0
   - pyproj
   - pytest
   - pytest-cov
