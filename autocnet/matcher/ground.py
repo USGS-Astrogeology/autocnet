@@ -4,6 +4,7 @@ import warnings
 import numpy as np
 import pandas as pd
 from plio.io.io_gdal import GeoDataset
+import pvl
 from shapely.geometry import Point
 from geoalchemy2.functions import ST_DWithin
 
@@ -18,6 +19,12 @@ from autocnet.spatial import isis
 from autocnet.transformation.spatial import reproject, oc2og
 from autocnet.io.db.model import Images
 from autocnet.transformation import roi
+
+isis2np_types = {
+                "UnsignedByte" : "uint8",
+                "SignedWord" : "int16",
+                "Real" : "float64"
+}
 
 def propagate_ground_point(point,
                            match_func='classic',
@@ -189,7 +196,6 @@ def find_most_interesting_ground(apriori_lon_lat,
                                  ground_mosaic, 
                                  cam_type='isis',
                                  size=71, 
-                                 base_dtype='int8',
                                  threshold=0.01,
                                  ncg=None, 
                                  Session=None):
@@ -221,6 +227,11 @@ def find_most_interesting_ground(apriori_lon_lat,
     linessamples = isis.point_info(ground_mosaic.file_name, p.x, p.y, 'ground')
     line = linessamples[0].get('Line')
     sample = linessamples[0].get('Sample')
+
+    try:
+        base_dtype = isis2np_types[pvl.load(ground_mosaic.file_name)["IsisCube"]["Core"]["Pixels"]["Type"]]
+    except:
+        s_image_dtype = None
 
     # Get the most interesting feature in the area
     image = roi.Roi(ground_mosaic, sample, line, size_x=size, size_y=size)
