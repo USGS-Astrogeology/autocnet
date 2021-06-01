@@ -26,8 +26,7 @@ We suggest using Anaconda Python to install Autocnet within a virtual environmen
 
 1. Install Docker
 2. Get the Postgresql with Postgis container and run it `docker run --name testdb -e POSTGRES_PASSOWRD='NotTheDefault' -e POSTGRES_USER='postgres' -p 5432:5432 -d mdillon/postgis`
-3. create database template_postgis: `docker exec testdb psql -c 'create database template_postgis;' -U postgres`
-4. Run the test suite: `pytest autocnet`
+3. Run the test suite: `pytest autocnet`
 
 ## Simple Network Examples:
 
@@ -141,6 +140,11 @@ This method can take a bit of time to run if the filelist is large as the data
 are loaded into the database sequentially and then a spatial overlay operation is performed
 to determine how individual images overlap with one another (using the footprints
 generated from the a priori sensor pointing.)
+
+This method performs the following actions:
+- Load each image, as a row, into the Images table of the database. This includes attempting to extract a footprint from the image. The footprint can be read from an ISIS cube if footprint init has been run. Alternatively, experimental support exists for Community Sensor Model sensors developed by USGS.
+- Use the database to compute the overlapping geometries between each of the images. For large data sets this can be a costly, one time operation. Limiting the number of geometries in image footprints can significantly improve performance. For each overlap, a row is added to the Overlay table. This table tracks the overlapping geometries and the images that intersect those geometries.
+- Return a NewtorkCandidateGraph where each node represents and image and each edge represents a spatial overlap between said images.
 
 ### Operations on the NCG: Database Rows
 After we have an NCG, we want to perform operations on the graph or on database
