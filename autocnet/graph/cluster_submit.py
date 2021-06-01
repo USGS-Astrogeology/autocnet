@@ -27,6 +27,11 @@ def parse_args():  # pragma: no cover
     return parser.parse_args()
 
 def _instantiate_obj(msg, ncg):
+    """
+    Instantiate either a NetworkNode or a NetworkEdge that is the 
+    target of processing.
+
+    """
     along = msg['along']
     id = msg['id']
     image_path = msg['image_path']
@@ -40,6 +45,10 @@ def _instantiate_obj(msg, ncg):
     return obj
 
 def _instantiate_row(msg, ncg):
+    """
+    Instantiate some db.io.model row object that is the target
+    of processing.
+    """
     # Get the dict mapping iterable keyword types to the objects
     objdict = ncg.apply_iterable_options
     rowid = msg['id']
@@ -50,6 +59,15 @@ def _instantiate_row(msg, ncg):
     return res
 
 def process(msg):
+    """
+    Given a message, instantiate the necessary processing objects and 
+    apply some generic function or method.
+
+    Parameters
+    ----------
+    msg : dict
+          The message that parametrizes the job.
+    """
     ncg = NetworkCandidateGraph()
     ncg.config_from_dict(msg['config'])
     if msg['along'] in ['node', 'edge']:
@@ -129,7 +147,22 @@ def finalize_message_from_work_queue(queue, queue_name, remove_key):
     queue.lrem(queue_name, 0, remove_key)
 
 def manage_messages(args, queue):
+    """
+    This function manages pulling a message from a redis list, atomically pushing 
+    the message to another redis list, launching a generic processing job, 
+    and finalizing the message by removing it from the intermediary redis list.
 
+    This function is an easily testable main for the cluster_submit CLI.
+
+    Parameters
+    ----------
+    args : dict
+           A dictionary with queue names that are parsed from the CLI
+
+    queue : obj
+            A py-Redis queue object
+
+    """
     # Pop the message from the left queue and push to the right queue; atomic operation
     msg = transfer_message_to_work_queue(queue, 
                                          args['processing_queue'],

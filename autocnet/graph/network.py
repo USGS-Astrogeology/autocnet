@@ -1658,8 +1658,8 @@ class NetworkCandidateGraph(CandidateGraph):
                  Of keyword arguments passed to the function being applied
 
         queue : str
-                The processing queue to use. If None (default), use the processing queue from
-                the config file.
+                The cluster processing queue to submit jobs to. If None (default), 
+                use the cluster processing queue from the config file.
 
         redis_queue : str
                       The redis queue to read message from (default self.processing_queue)
@@ -2240,17 +2240,6 @@ class NetworkCandidateGraph(CandidateGraph):
         """
         llen = self.redis_queue.llen(self.config['redis']['processing_queue'])
         return llen
-
-    def get_work_queue_messages(self):
-        return self.redis_queue.lrange(self.working_queue, 0, -1)
-
-    def get_timed_out_jobs(self, clear=False):
-        running_jobs = self.get_work_queue_messages()
-        timed_out = []
-        for message in running_jobs:
-            if time.time() > message['max_time']:
-                timed_out.append(message)
-        return timed_out
 
     @property
     def union(self):
