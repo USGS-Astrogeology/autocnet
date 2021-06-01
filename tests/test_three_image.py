@@ -1,5 +1,7 @@
 import unittest
 
+import pytest
+
 from autocnet.examples import get_path
 from plio.io.io_controlnetwork import to_isis
 from plio.io.io_controlnetwork import write_filelist

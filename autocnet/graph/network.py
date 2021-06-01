@@ -1436,6 +1436,14 @@ class NetworkCandidateGraph(CandidateGraph):
         else:
             self.dem = None
 
+    @property 
+    def Session(self):
+        return self._Session
+
+    @Session.setter
+    def Session(self, Session):
+        self._Session = Session
+
     def _setup_database(self):
         db = self.config['database']
         self.Session, self.engine = new_connection(self.config['database'])
@@ -1653,6 +1661,7 @@ class NetworkCandidateGraph(CandidateGraph):
             reapply=False,
             log_dir=None,
             queue=None,
+            redis_queue='processing_queue',
             exclude=None,
             **kwargs):
         """
@@ -1716,9 +1725,13 @@ class NetworkCandidateGraph(CandidateGraph):
                  Of keyword arguments passed to the function being applied
 
         queue : str
-                The processing queue to use. If None (default), use the processing queue from
-                the config file.
+                The cluster processing queue to submit jobs to. If None (default), 
+                use the cluster processing queue from the config file.
 
+        redis_queue : str
+                      The redis queue to push messages to that are then pulled by the
+                      cluster job this call launches. Options are: 'processing_queue' (default)
+                      or 'working_queue'
         Returns
         -------
         job_str : str
@@ -1751,6 +1764,8 @@ class NetworkCandidateGraph(CandidateGraph):
 
         job_counter = self.queue_length
 
+        # TODO: reapply uses the queue name and reapplies on that queue.
+
         if not reapply:
             # Determine which obj will be called
             if isinstance(on, str):
@@ -1778,8 +1793,16 @@ class NetworkCandidateGraph(CandidateGraph):
         rconf = self.config['redis']
         rhost = rconf['host']
         rport = rconf['port']
+<<<<<<< HEAD
         processing_queue = self.processing_queue
 
+=======
+        try:
+            processing_queue = getattr(self, redis_queue)
+        except AttributeError:
+            print(f'Unable to find attribute {redis_queue} on this object. Valid queue names are: "processing_queue" and "working_queue".')
+        
+>>>>>>> master
         env = self.config['env']
         condaenv = env['conda']
         isisroot = env['ISISROOT']
@@ -1787,7 +1810,7 @@ class NetworkCandidateGraph(CandidateGraph):
 
         isissetup = f'export ISISROOT={isisroot} && export ISISDATA={isisdata}'
         condasetup = f'conda activate {condaenv}'
-        job = f'acn_submit -r={rhost} -p={rport} {processing_queue}'
+        job = f'acn_submit -r={rhost} -p={rport} {processing_queue} {self.working_queue}'
         command = f'{condasetup} && {isissetup} && {job}'
 
         if queue == None:
@@ -2012,7 +2035,7 @@ class NetworkCandidateGraph(CandidateGraph):
         node = NetworkNode(image_path=img_path, image_name=image_name)
         node.parent = self
         node.populate_db()
-        return node.id
+        return node['node_id']
         
     def copy_images(self, newdir):
         """

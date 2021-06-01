@@ -5,6 +5,9 @@ import unittest
 from unittest.mock import patch
 
 from skimage import transform as tf
+from skimage.util import img_as_float   
+from skimage import color 
+from skimage import data
 
 import pytest
 
@@ -14,6 +17,28 @@ from imageio import imread
 from autocnet.examples import get_path
 import autocnet.matcher.subpixel as sp
 
+@pytest.fixture
+def iris_pair(): 
+    angle = 200
+    scale = 1.4
+    shiftr = 30
+    shiftc = 10
+
+    image = color.rgb2gray(data.retina())
+    translated = image[shiftr:, shiftc:]
+    rotated = tf.rotate(translated, angle)
+    rescaled = tf.rescale(rotated, scale)
+    sizer, sizec = image.shape
+    rts_image = rescaled[:sizer, :sizec] 
+    return image, rts_image
+
+
+@pytest.fixture
+def apollo_subsets():
+    # These need to be geodata sets or just use mocks...
+    arr1 = imread(get_path('AS15-M-0295_SML(1).png'))[100:201, 123:224]
+    arr2 = imread(get_path('AS15-M-0295_SML(2).png'))[235:336, 95:196]
+    return arr1, arr2
 
 @pytest.fixture
 def apollo_subsets():
@@ -106,6 +131,25 @@ def test_subpixel_transformed_template(apollo_subsets):
     assert strength >= 0.83
     assert nx == pytest.approx(50.576284)
     assert ny == pytest.approx(54.0081)
+
+
+def test_estimate_logpolar_transform(iris_pair):
+    img1, img2 = iris_pair 
+    affine = sp.estimate_logpolar_transform(img1, img2) 
+
+    assert pytest.approx(affine.scale, 0.1) == 0.71
+    assert pytest.approx(affine.rotation, 0.1) == 0.34 
+    assert pytest.approx(affine.translation[0], 0.1) == 283.68
+    assert pytest.approx(affine.translation[1], 0.1) == -198.62 
+
+
+def test_fourier_mellen(iris_pair):
+    img1, img2 = iris_pair 
+    nx, ny, error = sp.fourier_mellen(img1, img2, phase_kwargs = {"reduction" : 11, "size":(401, 401), "convergence_threshold" : 1, "max_dist":100}) 
+    
+    assert pytest.approx(nx, 0.01) == 996.39 
+    assert pytest.approx(ny, 0.01) ==  984.912 
+    assert pytest.approx(error, 0.01) == 0.0422 
 
 
 @pytest.mark.parametrize("loc, failure", [((0,4), True),
@@ -240,3 +284,5 @@ def test_subpixel_phase_cooked(x, y, x1, y1, image_size, expected):
 
     assert dx == expected[0]
     assert dy == expected[1]
+
+

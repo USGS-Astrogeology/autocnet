@@ -631,11 +631,9 @@ class NetworkNode(Node):
               The URI to a service that can create an ISD to instantiate
               a sensor.
         """
-        # Create the camera entry
-        import pvl
-        import requests
-        import json
+        raise NotImplementedError
 
+        # TODO: This should pass the straight metadata and not mess with mundging it.
         label = pvl.dumps(self.geodata.metadata).decode()
         response = requests.post(url, json={'label':label})
         response = response.json()

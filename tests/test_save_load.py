@@ -1,3 +1,5 @@
+import pytest
+
 from autocnet.examples import get_path
 from autocnet.graph.network import CandidateGraph
 from autocnet.io.network import load
@@ -6,6 +8,7 @@ import numpy as np
 
 import pandas as pd
 
+@pytest.mark.xfail(strict=True)
 def test_save_project(tmpdir, candidategraph):
     path = tmpdir.join('prject.proj')
     candidategraph.save(path.strpath)

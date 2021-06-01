@@ -27,7 +27,7 @@ class TestNaiveTemplateAutoReg(unittest.TestCase):
 
 
     def test_subpixel_shift(self):
-        result_x, result_y, result_strength = naive_template.pattern_match_autoreg(self._shape,
+        result_x, result_y, result_strength, _ = naive_template.pattern_match_autoreg(self._shape,
                                                                                    self._test_image)
         self.assertEqual(result_x, 0.5)
         self.assertEqual(result_y, -1.5)
