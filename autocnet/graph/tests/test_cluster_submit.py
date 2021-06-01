@@ -95,8 +95,8 @@ def _generate_obj(msg, ncg):
 @pytest.mark.parametrize("along, func, msg_additions", [
                             ('edge', _do_nothing, {'id':(0,1), 'image_path':('/foo.img', '/foo2.img')}),  # Case: callable func
                             ('node', _do_nothing, {'id':0, 'image_path':'/foo.img'}),   # Case: callable func
-                            ('edge', 'test', {'id':(0,1), 'image_path':('/foo.img', '/foo2.img')}),  # Case:method
-                            ('node', 'test', {'id':0, 'image_path':'/foo.img'}),   # Case: method
+                            ('edge', 'test', {'id':(0,1), 'image_path':('/foo.img', '/foo2.img')}),  # Case: method on obj
+                            ('node', 'test', {'id':0, 'image_path':'/foo.img'}),   # Case: method on obj
                             ('edge', 'graph.tests.test_cluster_submit._do_nothing', {'id':(0,1), 'image_path':('/foo.img', '/foo2.img')}),  # Case: imported func
                             ('node', 'graph.tests.test_cluster_submit._do_nothing', {'id':0, 'image_path':'/foo.img'}),   # Case: imported func
                         ])

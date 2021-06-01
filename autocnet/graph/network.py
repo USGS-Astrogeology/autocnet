@@ -1662,7 +1662,9 @@ class NetworkCandidateGraph(CandidateGraph):
                 use the cluster processing queue from the config file.
 
         redis_queue : str
-                      The redis queue to read message from (default self.processing_queue)
+                      The redis queue to push messages to that are then pulled by the
+                      cluster job this call launches. Options are: 'processing_queue' (default)
+                      or 'working_queue'
         Returns
         -------
         job_str : str
