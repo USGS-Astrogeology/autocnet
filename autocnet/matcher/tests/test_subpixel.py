@@ -32,14 +32,6 @@ def iris_pair():
     rts_image = rescaled[:sizer, :sizec] 
     return image, rts_image
 
-
-@pytest.fixture
-def apollo_subsets():
-    # These need to be geodata sets or just use mocks...
-    arr1 = imread(get_path('AS15-M-0295_SML(1).png'))[100:201, 123:224]
-    arr2 = imread(get_path('AS15-M-0295_SML(2).png'))[235:336, 95:196]
-    return arr1, arr2
-
 @pytest.fixture
 def apollo_subsets():
     # These need to be geodata sets or just use mocks...
