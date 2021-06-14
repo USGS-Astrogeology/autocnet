@@ -38,5 +38,5 @@ def new_connection(dbconfig):
                 poolclass=sqlalchemy.pool.NullPool,
                 connect_args={"application_name":f"AutoCNet_{hostname}"},
                 isolation_level="AUTOCOMMIT")
-    Session = orm.sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    Session = orm.sessionmaker(bind=engine, autoflush=False)
     return Session, engine

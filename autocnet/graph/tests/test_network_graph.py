@@ -83,6 +83,9 @@ def test_global_clear_db(ncg):
     with ncg.session_scope() as session:
         session.add(i)
 
+    # Have to let the previous context go out of scope as a test that autocommit on 
+    # context exit is working
+    with ncg.session_scope() as session:
         res = session.query(model.Images).all()
         assert len(res) == 1
 
