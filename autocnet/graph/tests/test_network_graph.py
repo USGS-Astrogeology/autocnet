@@ -103,6 +103,11 @@ def test_selective_clear_db(ncg):
         session.add(i)
         session.add(p)
 
+        # Use an explicit commit here, inside the context to test that the
+        # autoflush=False on the session is working as expected with an explicit
+        # commit. This should not also need a session.flush() call.
+        session.commit()
+
         res = session.query(model.Images).all()
         assert len(res) == 1
         res =  session.query(model.Points).all()
