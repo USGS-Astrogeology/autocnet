@@ -83,6 +83,9 @@ def test_global_clear_db(ncg):
     with ncg.session_scope() as session:
         session.add(i)
 
+    # Have to let the previous context go out of scope as a test that autocommit on 
+    # context exit is working
+    with ncg.session_scope() as session:
         res = session.query(model.Images).all()
         assert len(res) == 1
 
@@ -99,6 +102,11 @@ def test_selective_clear_db(ncg):
     with ncg.session_scope() as session:
         session.add(i)
         session.add(p)
+
+        # Use an explicit commit here, inside the context to test that the
+        # autoflush=False on the session is working as expected with an explicit
+        # commit. This should not also need a session.flush() call.
+        session.commit()
 
         res = session.query(model.Images).all()
         assert len(res) == 1
