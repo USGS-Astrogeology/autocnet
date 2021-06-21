@@ -26,7 +26,7 @@ import richdem as rd
 import pandas as pd
 import geopandas as gpd
 
-import pysis
+from kalasiris import specialpixels
 
 from autocnet.utils.utils import bytescale
 from autocnet.matcher.cpu_extractor import extract_features
@@ -57,7 +57,7 @@ def image_diff(arr1, arr2):
     arr1[arr1 == 0] = np.nan
     arr2[arr2 == 0] = np.nan
 
-    isis_null = pysis.specialpixels.SPECIAL_PIXELS['Real']['Null']
+    isis_null = specialpixels.Real.Null
     arr1[arr1 == isis_null] = np.nan
     arr2[arr2 == isis_null] = np.nan
 
@@ -92,7 +92,7 @@ def image_ratio(arr1, arr2):
     arr1[arr1 == 0] = np.nan
     arr2[arr2 == 0] = np.nan
 
-    isis_null = pysis.specialpixels.SPECIAL_PIXELS['Real']['Null']
+    isis_null = specialpixels.Real.Null
     arr1[arr1 == isis_null] = np.nan
     arr2[arr2 == isis_null] = np.nan
 

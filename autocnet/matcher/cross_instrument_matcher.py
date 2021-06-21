@@ -82,12 +82,12 @@ def generate_ground_points(Session, ground_mosaic, nspts_func=lambda x: int(roun
         if linessamples is None:
             print('unable to find point in ground image')
             continue
-        line = linessamples[0].get('Line')
-        sample = linessamples[0].get('Sample')
+        line = linessamples.get('Line')
+        sample = linessamples.get('Sample')
 
         oldpoint = isis.point_info(ground_mosaic.file_name, sample, line, 'image')
-        op = Point(oldpoint[0].get('PositiveEast360Longitude'),
-                   oldpoint[0].get('PlanetocentricLatitude'))
+        op = Point(oldpoint.get('PositiveEast360Longitude'),
+                   oldpoint.get('PlanetocentricLatitude'))
 
 
         image = roi.Roi(ground_mosaic, sample, line, size_x=size[0], size_y=size[1])
@@ -102,8 +102,8 @@ def generate_ground_points(Session, ground_mosaic, nspts_func=lambda x: int(roun
         newline = top_y + interesting.y
 
         newpoint = isis.point_info(ground_mosaic.file_name, newsample, newline, 'image')
-        p = Point(newpoint[0].get('PositiveEast360Longitude'),
-                  newpoint[0].get('PlanetocentricLatitude'))
+        p = Point(newpoint.get('PositiveEast360Longitude'),
+                  newpoint.get('PlanetocentricLatitude'))
 
         if not (xy_in_polygon(p.x, p.y, fp_poly)):
                 print('Interesting point not in mosaic area, ignore')

@@ -3,6 +3,8 @@
 import sys
 import os
 import argparse
+from subprocess import CalledProcessError
+import textwrap
 from argparse import RawTextHelpFormatter
 import yaml
 import tempfile
@@ -23,9 +25,7 @@ import numpy as np
 
 from affine import Affine
 
-import pysis
-from pysis.exceptions import ProcessError
-from pysis import isis
+import kalasiris as isis
 
 import warnings
 warnings.simplefilter("ignore")
@@ -128,25 +128,41 @@ if __name__ == "__main__":
         cg.to_isis(cnet_path)
 
         try:
-            output = isis.jigsaw(fromlist=filelist_path, cnet=cnet_path, onet=cnet_path, update="yes", **config['jigsaw'])
-            print(output.decode())
-        except ProcessError as e:
-            print(e.stdout.decode('utf-8'))
-            print(e.stderr)
-            exit()
+            print(isis.jigsaw(
+                fromlist=filelist_path,
+                cnet=cnet_path,
+                onet=cnet_path,
+                update="yes",
+                **config['jigsaw']
+            ).stdout)
 
-        if args.write_registered_cubes:
-            before_proj = os.path.splitext(args.before)[0] + ".proj.cub"
-            after_proj = os.path.splitext(args.after)[0] + ".proj.cub"
-        else: # use the temp directory
-            before_proj = os.path.join(dirpath, "before.cub")
-            after_proj = os.path.join(dirpath, "after.cub")
+            if args.write_registered_cubes:
+                before_proj = os.path.splitext(args.before)[0] + ".proj.cub"
+                after_proj = os.path.splitext(args.after)[0] + ".proj.cub"
+            else: # use the temp directory
+                before_proj = os.path.join(dirpath, "before.cub")
+                after_proj = os.path.join(dirpath, "after.cub")
 
-        try:
             isis.cam2map(from_=args.before, to=before_proj, map=args.map)
-            isis.cam2map(from_=args.after, to=after_proj, patchsize=8, map=before_proj, matchmap=True, warpalgorithm="REVERSEPATCH")
-        except ProcessError as e:
-            print(e.stderr)
+            isis.cam2map(
+                from_=args.after,
+                to=after_proj,
+                patchsize=8,
+                map=before_proj,
+                matchmap=True,
+                warpalgorithm="REVERSEPATCH"
+            )
+        except CalledProcessError as e:
+            print(
+                textwrap.dedent(
+                    f"""\
+                    Had a subprocess error:
+                    {' '.join(e.cmd)}
+                    {e.stdout}
+                    {e.stderr}
+                    """
+                )
+            )
             exit()
 
         args.before = before_proj
@@ -159,9 +175,22 @@ if __name__ == "__main__":
         # Requires sub solar azmith
         ssa_path = "/tmp/ssa.cub" # os.path.join(dirpath, 'ssa.cub')
         try:
-            isis.phocube(from_=args.before, to=ssa_path, subsolargroundazimuth=True)
-        except ProcessError as e:
-            print(e.stderr)
+            isis.phocube(
+                from_=args.before,
+                to=ssa_path,
+                subsolargroundazimuth=True
+            )
+        except CalledProcessError as e:
+            print(
+                textwrap.dedent(
+                    f"""\
+                    Had a subprocess error:
+                    {' '.join(e.cmd)}
+                    {e.stdout}
+                    {e.stderr}
+                    """
+                )
+            )
         print("created: ", ssa_path)
         ssa = GeoDataset(ssa_path).read_array(6)
         ret = _cd_functions_[args.algorithm.strip()](before_proj_geo, after_proj_geo, ssa, **config.get(args.algorithm, {}))

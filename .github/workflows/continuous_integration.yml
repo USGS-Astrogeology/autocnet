@@ -8,6 +8,11 @@ on:
     branches:
       - dev
 
+env:
+  isis-root: /usr/share/miniconda/envs/isis/
+  isis-data: test-resources/ISISDATA/
+  hirise-pds-url: https://hirise-pds.lpl.arizona.edu/PDS/EDR/PSP/ORB_010500_010599/PSP_010502_2090
+
 jobs:
   Build-and-Test:
     runs-on: ${{ matrix.os }}
@@ -29,6 +34,25 @@ jobs:
       run:
         shell: bash -l {0}
     steps:
+      - name: ISIS Conda Env
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: 3.6
+          activate-environment: isis
+          channels: usgs-astrogeology, conda-forge
+      - name: Install ISIS
+        run: |
+          conda install -q -y -c usgs-astrogeology isis
+      - name: Setup test-resources/
+        run: |
+          mkdir $GITHUB_WORKSPACE/test-resources/
+          mkdir $GITHUB_WORKSPACE/${{ env.isis-data }}
+      - name: Download IMG
+        run: |
+          curl "${{ env.hirise-pds-url }}/PSP_010502_2090_RED5_0.IMG" -o $GITHUB_WORKSPACE/test-resources/PSP_010502_2090_RED5_0.img
+          curl "${{ env.hirise-pds-url }}/PSP_010502_2090_RED5_1.IMG" -o $GITHUB_WORKSPACE/test-resources/PSP_010502_2090_RED5_1.img
+      - name: Exit isis env
+        run: conda deactivate
       - name: Checkout Code
         uses: actions/checkout@v2
       - name: Cache conda
@@ -53,6 +77,10 @@ jobs:
           environment-file: environment.yml
           use-only-tar-bz2: true
           python-version: ${{ matrix.python-version }}
+      - name: config ISIS vars
+        run: |
+          conda env config vars set ISISROOT=${{ env.isis-root }}
+          conda env config vars set ISISDATA=$GITHUB_WORKSPACE/${{ env.isis-data }}
       - name: Check build environment
         run: |
           conda list

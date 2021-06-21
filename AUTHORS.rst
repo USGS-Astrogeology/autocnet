@@ -15,4 +15,5 @@ Development Team
 Contributors
 ------------
 
-None yet. Why not be the first?
+`Ross Beyer <https://github.com/rbeyer>`_
+

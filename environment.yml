@@ -16,6 +16,7 @@ dependencies:
   - imageio
   - ipykernel
   - jupyter
+  - kalasiris
   - knoten>= 0.2.0,<1.0
   - ncurses
   - networkx >=2, <3
@@ -32,7 +33,6 @@ dependencies:
   - pytest
   - pytest-cov
   - pytest-mock
-  - pysis
   - richdem
   - scikit-image>=0.17
   - scikit-learn

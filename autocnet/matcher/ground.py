@@ -163,7 +163,7 @@ def propagate_ground_point(point,
             sample, line = image_coord.samp, image_coord.line
         if cam_type == "isis":
             try:
-                line, sample = isis.ground_to_image(image["path"], lon_oc, lat_oc)
+                sample, line = isis.ground_to_image(image["path"], lon_oc, lat_oc)
             except ProcessError as e:
                 if 'Requested position does not project in camera model' in e.stderr:
                     print(f'interesting point ({lon_oc},{lat_oc}) does not project to image {images["image_path"]}')
@@ -219,8 +219,8 @@ def find_most_interesting_ground(apriori_lon_lat,
 
     # Convert the apriori lon, lat into line,sample in the image
     linessamples = isis.point_info(ground_mosaic.file_name, p.x, p.y, 'ground')
-    line = linessamples[0].get('Line')
-    sample = linessamples[0].get('Sample')
+    line = linessamples.get('Line')
+    sample = linessamples.get('Sample')
 
     # Get the most interesting feature in the area
     image = roi.Roi(ground_mosaic, sample, line, size_x=size, size_y=size)
@@ -238,8 +238,8 @@ def find_most_interesting_ground(apriori_lon_lat,
 
     # @LAK - this needs eyeballs to confirm correct oc/og
     newpoint = isis.point_info(ground_mosaic.file_name, newsample, newline, 'image')
-    p = Point(newpoint[0].get('PositiveEast360Longitude'),
-              newpoint[0].get('PlanetocentricLatitude'))
+    p = Point(newpoint.get('PositiveEast360Longitude'),
+              newpoint.get('PlanetocentricLatitude'))
 
     with ncg.session_scope() as session:
         # Check to see if the point already exists
