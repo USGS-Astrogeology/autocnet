@@ -53,6 +53,7 @@ from autocnet.vis.graph_view import plot_graph, cluster_plot
 from autocnet.control import control
 from autocnet.spatial.overlap import compute_overlaps_sql
 from autocnet.spatial.isis import point_info
+from autocnet.spatial.surface import GdalDem, EllipsoidDem
 from autocnet.transformation.spatial import reproject, og2oc
 
 #np.warnings.filterwarnings('ignore')
@@ -1414,13 +1415,16 @@ class NetworkCandidateGraph(CandidateGraph):
 
     def _setup_dem(self):
         spatial = self.config['spatial']
+        semi_major = spatial.get('semimajor_rad')
+        semi_minor = spatial.get('semiminor_rad')
+        dem_type = spatial.get('dem_type')
         dem = spatial.get('dem', False)
         if dem:
-            self.dem = GeoDataset(dem)
+            self.dem = GdalDem(dem, semi_major, semi_minor, dem_type)
         else:
-            self.dem = None
+            self.dem = EllipsoidDem(semi_major, semi_minor)
 
-    @property 
+    @property
     def Session(self):
         return self._Session
 
@@ -1658,7 +1662,7 @@ class NetworkCandidateGraph(CandidateGraph):
                  Of keyword arguments passed to the function being applied
 
         queue : str
-                The cluster processing queue to submit jobs to. If None (default), 
+                The cluster processing queue to submit jobs to. If None (default),
                 use the cluster processing queue from the config file.
 
         redis_queue : str
@@ -1730,7 +1734,7 @@ class NetworkCandidateGraph(CandidateGraph):
             processing_queue = getattr(self, redis_queue)
         except AttributeError:
             print(f'Unable to find attribute {redis_queue} on this object. Valid queue names are: "processing_queue" and "working_queue".')
-        
+
         env = self.config['env']
         condaenv = env['conda']
         isisroot = env['ISISROOT']
@@ -1750,8 +1754,8 @@ class NetworkCandidateGraph(CandidateGraph):
                      time=walltime,
                      partition=queue,
                      output=log_dir+f'/autocnet.{function}-%j')
-        job_str = submitter.submit(array='1-{}%{}'.format(job_counter,arraychunk), 
-                                   chunksize=chunksize, 
+        job_str = submitter.submit(array='1-{}%{}'.format(job_counter,arraychunk),
+                                   chunksize=chunksize,
                                    exclude=exclude)
         return job_str
 
@@ -1842,8 +1846,8 @@ class NetworkCandidateGraph(CandidateGraph):
                            inplace=True)
         cnet.to_isis(df, path, targetname=target)
         cnet.write_filelist(fpaths, path=flistpath)
-        
-        # Even though this method writes, having a non-None return 
+
+        # Even though this method writes, having a non-None return
         # let's a user work with the data that is passed to plio
         return df
 
@@ -1864,9 +1868,9 @@ class NetworkCandidateGraph(CandidateGraph):
                        For example, autocnet_14 becomes 14.
         """
         isis_network = cnet.from_isis(path)
-        io_controlnetwork.update_from_jigsaw(isis_network, 
-                                             ncg.measures, 
-                                             ncg.connection, 
+        io_controlnetwork.update_from_jigsaw(isis_network,
+                                             ncg.measures,
+                                             ncg.connection,
                                              pointid_func=pointid_func)
 
     @classmethod
@@ -1957,14 +1961,14 @@ class NetworkCandidateGraph(CandidateGraph):
         Returns
         -------
         node.id : int
-                  The id of the newly added node. 
+                  The id of the newly added node.
         """
         image_name = os.path.basename(img_path)
         node = NetworkNode(image_path=img_path, image_name=image_name)
         node.parent = self
         node.populate_db()
         return node['node_id']
-        
+
     def copy_images(self, newdir):
         """
         Copy images from a given directory into a new directory and
@@ -1990,7 +1994,7 @@ class NetworkCandidateGraph(CandidateGraph):
                     session.commit()
                 else:
                     continue
-            
+
     def add_from_remote_database(self, source_db_config, path,  query_string='SELECT * FROM public.images LIMIT 10'):
         """
         This is a constructor that takes an existing database containing images and sensors,
@@ -2426,7 +2430,7 @@ class NetworkCandidateGraph(CandidateGraph):
         Distribute candidate ground points into the union of the image footprints. This
         function returns a list of 2d nd-arrays where the first element is the longitude
         and the second element is the latitude.
-        
+
         Parameters
         ----------
         distirbute_points_kwargs : dict
@@ -2436,7 +2440,7 @@ class NetworkCandidateGraph(CandidateGraph):
         -------
         valid : np.ndarray
                 n, 2 array with each row in the form lon, lat
-        
+
         Examples
         --------
         To use this method, one can first define the spacing of ground points in the north-
@@ -2447,18 +2451,18 @@ class NetworkCandidateGraph(CandidateGraph):
             def ew(x):
                 from math import ceil
                 return ceil(round(x,1)*3)
-        
+
         Next these arguments can be passed in in order to generate the grid of points:
             distribute_points_kwargs = {'nspts_func':ns, 'ewpts_func':ew, 'method':'classic'}
             valid = ncg.distribute_ground_uniform(distribute_points_kwargs=distribute_points_kwargs)
-        
+
         At this point, it is possible to visualize the valid points inside of a Jupyter notebook. This
         is frequently convenient when combined with the `ncg.union` property that displays the unioned
         geometries in the NetworkCandidateGraph.
         Finally, the valid points can be propagated using apply. The code below will use the defined base
         to find the most interesting ground feature in the region of the valid point and write that point
         to the table defined by CandidateGroundPoints (autocnet.io.db.model):
-        
+
             base = 'mc11_oxia_palus_dir_final.cub'
             ncg.apply('matcher.ground.find_most_interesting_ground', on=valid, args=(base,))
         """
@@ -2468,17 +2472,17 @@ class NetworkCandidateGraph(CandidateGraph):
 
     def distribute_ground_density(self, threshold=4, distribute_points_kwargs={}):
         """
-        Distribute candidate ground points into overlaps with a number of images greater than or equal 
-        to the threshold. This function returns a list of 2d nd-arrays where the first element is the 
+        Distribute candidate ground points into overlaps with a number of images greater than or equal
+        to the threshold. This function returns a list of 2d nd-arrays where the first element is the
         longitude and the second element is the latitude.
-        
+
         Parameters
         ----------
         distirbute_points_kwargs : dict
                                    Of arguments that are passed on the the
                                    distribute_points_in_geom argument in autocnet.cg.cg
         threshold : int
-                    Overlaps intersecting threshold images or greater have points placed. 
+                    Overlaps intersecting threshold images or greater have points placed.
                     Default 4.
         Returns
         -------
@@ -2526,4 +2530,4 @@ class NetworkCandidateGraph(CandidateGraph):
                                          self.dem,
                                          nodes,
                                          **kwargs)
-    
+

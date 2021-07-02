@@ -169,7 +169,7 @@ def place_points_in_overlap(overlap,
             nn = NetworkNode(node_id=id, image_path=res.path)
             nn.parent = ncg
             nodes.append(nn)
-    
+
     print(f'Attempting to place measures in {len(nodes)} images.')
     for v in valid:
         lon = v[0]
@@ -177,12 +177,11 @@ def place_points_in_overlap(overlap,
 
         # Calculate the height, the distance (in meters) above or
         # below the aeroid (meters above or below the BCBF spheroid).
-        px, py = ncg.dem.latlon_to_pixel(lat, lon)
-        height = ncg.dem.read_array(1, [px, py, 1, 1])[0][0]
+        height = ncg.dem.get_height(lat, lon)
 
         # Need to get the first node and then convert from lat/lon to image space
-        for reference_index, node in enumerate(nodes):  
-            # reference_index is the index into the list of measures for the image that is not shifted and is set at the 
+        for reference_index, node in enumerate(nodes):
+            # reference_index is the index into the list of measures for the image that is not shifted and is set at the
             # reference against which all other images are registered.
             if cam_type == "isis":
                 try:
@@ -213,7 +212,7 @@ def place_points_in_overlap(overlap,
             if interesting is not None:
                 # We have found an interesting feature and have identified the reference point.
                 break
- 
+
         if interesting is None:
             warnings.warn('Unable to find an interesting point, falling back to the a priori pointing')
             newsample = sample
@@ -252,8 +251,7 @@ def place_points_in_overlap(overlap,
                                                            semi_major, semi_minor, 'geocent', 'latlon')
             updated_lon, updated_lat = og2oc(updated_lon_og, updated_lat_og, semi_major, semi_minor)
 
-            px, py = ncg.dem.latlon_to_pixel(updated_lat, updated_lon)
-            updated_height = ncg.dem.read_array(1, [px, py, 1, 1])[0][0]
+            updated_height = ncg.dem.get_height(updated_lat, updated_lon)
 
 
             # Get the BCEF coordinate from the lon, lat
@@ -382,8 +380,7 @@ def place_points_in_image(image,
 
         # Calculate the height, the distance (in meters) above or
         # below the aeroid (meters above or below the BCBF spheroid).
-        px, py = ncg.dem.latlon_to_pixel(lat, lon)
-        height = ncg.dem.read_array(1, [px, py, 1, 1])[0][0]
+        height = ncg.dem.get_height(lat, lon)
 
         with ncg.session_scope() as session:
             intersecting_images = session.query(Images.id, Images.path).filter(Images.geom.ST_Intersects(point_geometry)).all()
@@ -456,8 +453,7 @@ def place_points_in_image(image,
                                                            semi_major, semi_minor, 'geocent', 'latlon')
             updated_lon, updated_lat = og2oc(updated_lon_og, updated_lat_og, semi_major, semi_minor)
 
-            px, py = ncg.dem.latlon_to_pixel(updated_lat, updated_lon)
-            updated_height = ncg.dem.read_array(1, [px, py, 1, 1])[0][0]
+            updated_height = ncg.dem.get_height(updated_lat, updated_lon)
 
 
             # Get the BCEF coordinate from the lon, lat
@@ -521,11 +517,11 @@ def place_points_in_image(image,
 def add_measures_to_point(pointid, cam_type='isis', ncg=None, Session=None):
     if not ncg.Session:
         raise BrokenPipeError('This func requires a database session from a NetworkCandidateGraph.')
-    
+
     if isinstance(pointid, Points):
         pointid = pointid.id
 
-    
+
     with ncg.session_scope() as session:
         point = session.query(Points).filter(Points.id == pointid).one()
         point_lon = point.geom.x
@@ -540,7 +536,7 @@ def add_measures_to_point(pointid, cam_type='isis', ncg=None, Session=None):
         for image in images:
             if image.id == reference_image_id:
                 continue  # This is the reference image, so pass on adding a new measure
-            
+
             if cam_type == "isis":
                 try:
                     line, sample = isis.ground_to_image(image.path, point_lon, point_lat)
@@ -555,11 +551,11 @@ def add_measures_to_point(pointid, cam_type='isis', ncg=None, Session=None):
                                            imageid=image.id,
                                            serial=image.serial,
                                            measuretype=3,
-                                           choosername='add_measures_to_point')) 
+                                           choosername='add_measures_to_point'))
             i = 0
             for m in point.measures:
                 if m.measuretype == 2 or m.measuretype == 3:
                     i += 1
             if i >= 2:
-                point.ignore = False      
+                point.ignore = False
     return

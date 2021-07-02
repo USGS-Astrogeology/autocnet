@@ -34,11 +34,11 @@ database:
     # The number of seconds to wait while attemping to connect to the DB.
     timeout: 500
 
-env: 
-  conda: 'autocnet'  # The name of a conda environment to initialize for cluster jobs 
+env:
+  conda: 'autocnet'  # The name of a conda environment to initialize for cluster jobs
   ISISROOT: '/path_to/isisx.y.z'  # PATH to the ISISROOT directory
   ISISDATA: '/usgs/cpkgs/isis3/data'  # PATH to the ISISDATA directory
-    
+
 ### Pfeffernusse / CSM Configuration ###
 pfeffernusse:
     # URL to the service that serves CSM compliant ISDs
@@ -79,8 +79,12 @@ spatial:
     # A compliant proj4 string. Checkout http://spatialreference.org for examples
     # for planetary bodies.
     proj4_str: '+proj:longlat +a:3396190 +b:3376200 +no_defs'
-    # DEM used to generate height values for projection
+    # Optional DEM used to generate height values
+    # If not specified an ellipsoid is used
     dem: '$ISISDATA/dems/molaMarsPlanetaryRadius.cub'
+    # Indicates what values are stored in the DEM, height or radius
+    # If not present, heights are assumed
+    dem_type: 'height'
     # Target for ISIS
     target: 'MARS'
 

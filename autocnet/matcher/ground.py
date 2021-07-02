@@ -25,10 +25,10 @@ def propagate_ground_point(point,
                            match_kwargs={'image_size': (39, 39), 'template_size': (21, 21)},
                            cost=lambda x, y: y == np.max(x),
                            threshold=0.01,
-                           ncg=None, 
+                           ncg=None,
                            Session=None):
-    print(f'Attempting to propagate point {point.id}.')    
-    
+    print(f'Attempting to propagate point {point.id}.')
+
     match_func = check_match_func(match_func)
 
     with ncg.session_scope() as session:
@@ -71,15 +71,15 @@ def propagate_ground_point(point,
 
         # Element 0 of each list is an id. We don't need this id because of how this was refactored to work
         # in parallel. If we set to none though, the check below fails because one of the elements is None...
-        match_results.append(['foo', 
-                              x, 
+        match_results.append(['foo',
+                              x,
                               y,
-                              metrics, 
-                              dist, 
-                              corrmap, 
-                              path, 
+                              metrics,
+                              dist,
+                              corrmap,
+                              path,
                               image["path"],
-                              image['id'], 
+                              image['id'],
                               image['serial']])
     print('Found the following matches: ', len(match_results))
     print("MATCH RESULTS: ", match_results)
@@ -112,12 +112,11 @@ def propagate_ground_point(point,
     if len(best_results[:,3])==1 and best_results[:,3][0] is None:
         print('Returning without a result as best is None.')
         return new_measure
-    
+
     dem = ncg.dem
     config = ncg.config
 
-    px, py = dem.latlon_to_pixel(lat, lon)
-    height = dem.read_array(1, [px, py, 1, 1])[0][0]
+    height = dem.get_height(lat, lon)
 
     semi_major = config['spatial']['semimajor_rad']
     semi_minor = config['spatial']['semiminor_rad']
@@ -143,19 +142,19 @@ def propagate_ground_point(point,
                    pointtype=3, # Would be 3 or 4 for ground
                    cam_type=cam_type,
                    reference_index=0)
-    
+
     # Add the measure that was the best match.
     # Set the line/sample and aprioriline/apriorisample to be identical.
     point.measures.append(Measures(sample=row[1],
                                    line=row[2],
-                                   apriorisample=row[1], 
+                                   apriorisample=row[1],
                                    aprioriline=row[2],
                                    imageid=row[8],
                                    serial=row[9],
                                    measuretype=2,
                                    weight=row[3],  # metric
                                    choosername='propagate_ground_point'))
-    
+
     for _, image in images.iterrows():
         if cam_type == "csm":
             # BROKEN
@@ -170,8 +169,8 @@ def propagate_ground_point(point,
                     continue
 
         if image['id'] == best_results[0][8]:
-            continue  # The measures was already added above, simply update the apriori line/sample 
-        
+            continue  # The measures was already added above, simply update the apriori line/sample
+
         point.measures.append(Measures(sample=sample,
                                         line=line,
                                         apriorisample=sample,
@@ -185,21 +184,21 @@ def propagate_ground_point(point,
         session.add(point)
     print('Done adding points')
 
-def find_most_interesting_ground(apriori_lon_lat, 
-                                 ground_mosaic, 
+def find_most_interesting_ground(apriori_lon_lat,
+                                 ground_mosaic,
                                  cam_type='isis',
-                                 size=71, 
+                                 size=71,
                                  base_dtype='int8',
                                  threshold=0.01,
-                                 ncg=None, 
+                                 ncg=None,
                                  Session=None):
     """
     This is the same functionality as cim.generate_ground_points. The difference here
     is that the data are pushed to a database table instead of being pushed to
-    a 
+    a
     Parameters
     ----------
-    cam_type : str 
+    cam_type : str
                Either 'isis' (Default;enabled) or 'csm' (Disabled). Defines which sensor model implementation to use.
     size : int
            The size of the area to extract from the data to search for interesting features.
@@ -225,7 +224,7 @@ def find_most_interesting_ground(apriori_lon_lat,
     # Get the most interesting feature in the area
     image = roi.Roi(ground_mosaic, sample, line, size_x=size, size_y=size)
     image_roi = image.clip(dtype=base_dtype)
-    
+
     interesting = extract_most_interesting(bytescale(image_roi),  extractor_parameters={'nfeatures':30})
 
     if interesting is None:
@@ -258,11 +257,11 @@ def find_most_interesting_ground(apriori_lon_lat,
         else:
             session.add(g)
 
-def find_ground_reference(point, 
-                           ncg=None, 
+def find_ground_reference(point,
+                           ncg=None,
                            Session=None,
-                           geom_func='simple', 
-                           match_func='classic', 
+                           geom_func='simple',
+                           match_func='classic',
                            match_kwargs={},
                            geom_kwargs={"size_x": 16, "size_y": 16},
                            threshold=0.9,
@@ -271,7 +270,7 @@ def find_ground_reference(point,
 
     geom_func = check_geom_func(geom_func)
     match_func = check_match_func(match_func)
-    
+
     # Get the roi to match from the base image
     with ncg.session_scope() as session:
         measures = session.query(Measures).filter(Measures.pointid == point.id).all()
@@ -284,24 +283,24 @@ def find_ground_reference(point,
         baseimage = base.serial # We are piggybacking the base image name onto the measure serial.
     if not os.path.exists(baseimage):
         raise FileNotFoundError(f'Unable to find {baseimage} to register the data to.')
-    
+
     # Get the base image and the roi extracted that the image data will register to
     baseimage = GeoDataset(baseimage)
-    
+
     # Select the images that the point is in.
     cost = -1
     sample = None
     line = None
     best_node = None
-    
+
     with ncg.session_scope() as session:
         images = session.query(Images).filter(Images.geom.ST_Intersects(point._geom)).all()
-        
+
         nodes = []
         for image in images:
             node = NetworkNode(node_id=image.id, image_path=image.path)
             nodes.append(node)
-      
+
     for node in nodes:
         node.geodata
         image_geodata = node.geodata
@@ -328,13 +327,13 @@ def find_ground_reference(point,
     if sample == None:
         print('Unable to register this point to a ground source.')
         return
-    
+
     # A reference measure has been identified. This measure matched successfully to the ground.
     # Get the lat/lon from the sample/line
     reference_node = best_node
     print('Success...')
     # Setup the measures
-    
+
     m = Measures(sample=sample,
                 line=line,
                 apriorisample=sample,
